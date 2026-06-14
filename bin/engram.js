@@ -13,6 +13,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const COMMANDS = {
   lint: 'lint-graph.js',
   search: 'search.js',
+  embed: 'embed.js',
   context: 'build-context.js',
   resume: 'resume.js',
   supersede: 'supersede.js',
@@ -32,7 +33,8 @@ Usage:  engram <command> [args]
 
 Commands:
   lint            graph integrity check (orphans, undated, unlinked, vocab)
-  search          full-text keyword search over the graph (bi-temporal aware)
+  search          hybrid search — keyword + semantic (if embedded), bi-temporal aware
+  embed           backfill semantic embeddings (needs: npm i @xenova/transformers)
   context         assemble a context block (--project/--domain/--tag/--recent)
   resume          cross-session "where were we" brief
   supersede       invalidate a fact bi-temporally (never deletes)

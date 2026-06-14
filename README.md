@@ -50,10 +50,14 @@ it honest.**
 - **Agent-native.** Built so an LLM can resume exactly where it left off
   (`npm run resume`) and tend the graph itself, not as a bolt-on.
 
-**Honest limitation:** retrieval here is structural (graph traversal + tags), not
-semantic. Vector/keyword recall is the natural next step and isn't built in yet —
-tracked as the top roadmap item in
-[#1](https://github.com/ricksinclair/engram/issues/1). Contributions welcome.
+- **Hybrid retrieval.** `search` fuses three lanes — keyword (BM25), **semantic**
+  (local embeddings, no API), and the graph — into one ranked, explainable result.
+  The semantic lane is opt-in and on-device (see below).
+
+**Honest note:** the semantic lane runs a *small on-device model*
+(`bge-small-en-v1.5`, 384-d) — excellent for personal-scale recall and fully
+owned, but it's not a hosted, billion-param reranker. That's the deliberate
+trade: transparency and zero lock-in over raw leaderboard score.
 
 ## Architecture
 
@@ -94,6 +98,16 @@ npm run review:supersession                # surface candidate stale facts
 > `lint:graph` reports a single `expired-fact-still-presented` **warning** — that's the
 > bi-temporal check working, not an error. Warnings never fail the run.
 
+**Optional — turn on semantic search:** `search` is keyword-only until you embed.
+To enable the hybrid (keyword + semantic) lane, install the local embedder and
+backfill once:
+
+```bash
+npm install @xenova/transformers   # optional dep; downloads a small model on first run
+npm run embed                      # local bge-small-en-v1.5, no API — writes vectors
+npm run search -- "how do I make money from this"   # now hybrid; finds concepts, not just words
+```
+
 To point it at your own knowledge: copy `examples/notion-ids.example.json` and
 `examples/document-sources.example.json` up to the repo root (dropping `.example`),
 edit them, and run the ingestion scripts. See
@@ -104,7 +118,8 @@ edit them, and run the ingestion scripts. See
 | Command | What it does |
 |---------|--------------|
 | `npm run lint:graph` | Integrity backstop — orphans, undated nodes, unlinked insights/sources, off-vocabulary `source_kind`. Exit 1 on any error. |
-| `npm run search -- "<query>"` | Full-text keyword search (Neo4j BM25/Lucene), ranked, bi-temporal-aware, with provenance. The lexical lane of [hybrid recall](https://github.com/ricksinclair/engram/issues/1). |
+| `npm run search -- "<query>"` | **Hybrid search** — keyword (BM25) + semantic (local embeddings) fused via RRF, ranked, bi-temporal-aware, with provenance. Degrades to keyword-only if not embedded. |
+| `npm run embed` | Backfill semantic embeddings (local `bge-small-en-v1.5`, no API). Needs the optional `@xenova/transformers` dep; run once, then `search` goes hybrid. |
 | `npm run resume` | Cross-session "where were we" brief. |
 | `npm run context` | Assemble a pasteable context block (`--project`, `--domain`, `--tag`, …). |
 | `npm run supersede` | Invalidate a fact bi-temporally (never deletes). |

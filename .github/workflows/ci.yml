@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci
+      - run: npm ci --omit=optional   # skip the heavy embedder; smoke tests the keyword-only path
       - name: Static checks (syntax + JSON)
         run: |
           for f in scripts/*.js scripts/lib/*.js; do node --check "$f"; done

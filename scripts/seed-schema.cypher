@@ -29,6 +29,14 @@ CREATE FULLTEXT INDEX knowledge_text IF NOT EXISTS
   FOR (n:Insight|Idea|Rule|Project|Resource|Goal|Person|Organization|Skill|Source)
   ON EACH [n.summary, n.full_text, n.name, n.title, n.description, n.purpose, n.role];
 
+// Vector index — the semantic lane (scripts/embed.js writes n.embedding + the
+// :Embeddable marker label; scripts/search.js queries it for hybrid recall).
+// 384 dims = bge-small-en-v1.5. Stays empty until you run `npm run embed`
+// (which needs the optional @xenova/transformers dependency).
+CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
+  FOR (n:Embeddable) ON (n.embedding)
+  OPTIONS { indexConfig: { `vector.dimensions`: 384, `vector.similarity_function`: 'cosine' } };
+
 // ============================================================================
 // NODE LABEL REFERENCE
 // ============================================================================
