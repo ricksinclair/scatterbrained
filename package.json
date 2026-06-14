@@ -11,7 +11,11 @@
   "license": "MIT",
   "author": "Ulric Todman (https://ulrictodman.com)",
   "type": "module",
-  "private": true,
+  "bin": { "engram": "bin/engram.js" },
+  "files": [
+    "bin/", "scripts/", "queries/", "examples/",
+    "docker-compose.yml", ".env.example"
+  ],
   "scripts": {
     "context": "node scripts/build-context.js",
     "add": "node scripts/add-node.js",
