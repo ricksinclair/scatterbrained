@@ -9,7 +9,8 @@ ingests, maintains, and consults the graph across sessions.
 > **[ulrictodman.com/engram](https://ulrictodman.com/engram)**.
 
 MIT licensed. No vendor, no framework to outgrow — plain Neo4j + Node scripts +
-git. You can read every line.
+git. You can read every line. New here? The [CHANGELOG](CHANGELOG.md) tells the
+story in plain English.
 
 **npm:** published as **[`engram-kg`](https://www.npmjs.com/package/engram-kg)** —
 `npx engram-kg <command>` or `npm install -g engram-kg` (the bare `engram` was
