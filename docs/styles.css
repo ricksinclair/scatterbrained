@@ -162,7 +162,7 @@ em { font-style: italic; color: #f3eee2; }
 
 /* quote band */
 .band-quote { background: var(--ink-2); }
-.band-quote blockquote { margin: 0; max-width: 24ch; }
+.band-quote blockquote { margin: 0; max-width: 32ch; }
 .band-quote p { font-family: "Fraunces", serif; font-size: clamp(1.8rem, 4vw, 2.9rem); line-height: 1.18; font-weight: 300; margin: 0; }
 .band-quote cite { display: block; margin-top: 1.6rem; font-style: normal; font-family: "JetBrains Mono", monospace; font-size: 0.8rem; color: var(--ember); max-width: none; }
 
@@ -187,6 +187,15 @@ em { font-style: italic; color: #f3eee2; }
   .problem-grid { grid-template-columns: 1fr; gap: 1.8rem; }
   .band { padding: 4.5rem 7vw; }
   .diff-list li { grid-template-columns: 40px 1fr; gap: 1rem; }
+  /* Comparison table fits a phone instead of overflowing to one column:
+     table-layout:fixed forces columns to wrap within the viewport. */
+  .compare { min-width: 0; width: 100%; table-layout: fixed; }
+  .compare th, .compare td { padding: 0.5rem 0.2rem; }
+  .compare td:first-child { word-break: break-word; }   /* wrap long row labels only */
+  .compare th:first-child, .compare td:first-child { width: 34%; }
+  .compare tbody td:first-child, .compare thead th:first-child { font-size: 0.76rem; }
+  .compare thead th { font-size: 0.54rem; }
+  .compare td.y, .compare td.m, .compare td.n { font-size: 1rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

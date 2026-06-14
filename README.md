@@ -127,7 +127,7 @@ edit them, and run the ingestion scripts. See
 | `npm run review:supersession` | Surface candidate stale facts for human review. |
 | `npm run check:notion` | Validate the Notion ID manifest before IDs rot. |
 | `npm run index` / `doc-index` | Deterministic "what changed?" probes (Notion / local files). |
-| `npm run export` / `import` | Versioned JSON backups in git. |
+| `npm run export` / `import` | Versioned JSON backups in git. Embeddings are excluded (they're large and regenerable) — re-run `embed` after a restore. |
 
 ## Layout
 
