@@ -18,6 +18,7 @@ const COMMANDS = {
   resume: 'resume.js',
   supersede: 'supersede.js',
   review: 'review-supersession.js',
+  'review-docs': 'review-doc-staleness.js',
   'check-notion': 'check-notion.js',
   'new-project': 'new-project.js',
   'setup-notion': 'setup-notion.js',
@@ -43,6 +44,7 @@ Commands:
   resume          cross-session "where were we" brief
   supersede       invalidate a fact bi-temporally (never deletes)
   review          surface candidate stale facts for review
+  review-docs     surface describing docs (page/README/site) that may have drifted
   check-notion    validate the Notion ID manifest
   add             MERGE a single node
   insight         record a synthesized Insight (reads stdin)
