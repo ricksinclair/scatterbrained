@@ -65,7 +65,7 @@ async function semanticLane(driver, vec, params, pull) {
   }
 }
 
-function rrfFuse(lanes) {
+export function rrfFuse(lanes) {
   const merged = new Map();
   for (const [name, rows] of Object.entries(lanes)) {
     (rows || []).forEach((row, i) => {
@@ -128,7 +128,10 @@ async function main() {
   console.log('');
 }
 
-main().catch((err) => {
-  console.error('search error:', err.message);
-  process.exit(1);
-});
+// Run as a CLI only when invoked directly (so tests can import the exports).
+if (process.argv[1] && process.argv[1].endsWith('search.js')) {
+  main().catch((err) => {
+    console.error('search error:', err.message);
+    process.exit(1);
+  });
+}

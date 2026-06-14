@@ -43,7 +43,7 @@ const GRAPH = `
   MERGE (s)-[:INFORMS]->(p)
   RETURN p.name AS project, g.name AS goal`;
 
-function claudeMd(name, workspaceUrl, e) {
+export function claudeMd(name, workspaceUrl, e) {
   const ds = (k) => (e[k] ? e[k].id : '<id>');
   return `# CLAUDE.md — ${name}
 
@@ -74,8 +74,7 @@ Branch from main; conventional commits; PR before merge.
 `;
 }
 
-function mergeManifest(name, block) {
-  const file = path.join(REPO_ROOT, 'notion-ids.json');
+export function mergeManifest(name, block, file = path.join(REPO_ROOT, 'notion-ids.json')) {
   let manifest = { projects: {} };
   if (fs.existsSync(file)) {
     try { manifest = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* start fresh */ }
@@ -148,4 +147,7 @@ async function main() {
   }
 }
 
-main().catch((err) => { console.error('new-project error:', err.message); process.exit(1); });
+// Run as a CLI only when invoked directly (so tests can import the exports).
+if (process.argv[1] && process.argv[1].endsWith('new-project.js')) {
+  main().catch((err) => { console.error('new-project error:', err.message); process.exit(1); });
+}
