@@ -131,6 +131,19 @@ edit them, and run the ingestion scripts. See
 | `npm run index` / `doc-index` | Deterministic "what changed?" probes (Notion / local files). |
 | `npm run export` / `import` | Versioned JSON backups in git. Embeddings are excluded (they're large and regenerable) — re-run `embed` after a restore. |
 
+## Two ways to set it up
+
+Pick the path that matches how you work — both end up at the same [one-root structure](#notion-setup-one-root-authorize-once):
+
+- **Claude + the Notion MCP (no token).** If you already use Claude with the Notion connection,
+  just ask it to set things up — it builds the workspace, registers the project in the graph, and
+  writes your `CLAUDE.md` directly over the MCP. **No integration token, no terminal.** Point it at
+  the recipes in [`skills/`](skills/) — [`new-project`](skills/new-project.md) and
+  [`graph-sync`](skills/graph-sync.md). *Best for non-technical users.*
+- **Token / CLI (headless, CI, or no Claude).** Create a Notion integration token, set
+  `NOTION_TOKEN` + `NOTION_PARENT_PAGE_ID` in `.env`, and run `npm run new:project -- --name "X"`.
+  Deterministic and scriptable. *Best for developers and automation.*
+
 ## Notion setup: one root, authorize once
 
 The Notion side follows a single rule: **one neutral root page is the home for _all_ your
@@ -174,13 +187,10 @@ problem this project is, ironically, built to prevent. See the
 effortless for **non-technical Notion + Claude users**: one root, no token required,
 a friendly front door.
 
-- [**#3** — One portfolio root for Notion](https://github.com/ricksinclair/engram/issues/3): authorize once; every project nests under a single root.
-- [**#4** — Two setup paths](https://github.com/ricksinclair/engram/issues/4): MCP (no token, for Claude + Notion users) *and* the integration-token / CLI path.
-- [**#6** — Agent recipes](https://github.com/ricksinclair/engram/issues/6): ship `graph-sync` and agent-driven `new-project` as skills, not just scripts.
 - [**#7** — Skills showcase](https://github.com/ricksinclair/engram/issues/7): a scannable "here's what you can just do" section.
 - [**#5** — Welcoming onboarding](https://github.com/ricksinclair/engram/issues/5): detailed, plain-English docs, non-technical-first.
 
-*(Done: [#2 unit-test suite](https://github.com/ricksinclair/engram/issues/2) — a non-brittle regression guard, in CI.)*
+*(Recently done: [#2 tests](https://github.com/ricksinclair/engram/issues/2), [#3 one root](https://github.com/ricksinclair/engram/issues/3), [#4 two setup paths](https://github.com/ricksinclair/engram/issues/4), [#6 agent recipes](https://github.com/ricksinclair/engram/issues/6).)*
 
 ## Credits
 

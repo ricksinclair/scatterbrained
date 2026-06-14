@@ -29,6 +29,11 @@ page that's stale *because* it was left alone — this catches that.)
   root page hosts *every* project, authorized once; each project nests under it and inherits
   access. `setup-notion`/`new-project` now also create a `Capture` page under each workspace
   as a home for ingestible notes. (#3)
+- **Two setup paths, documented** — README + site now present the choice: **Claude + Notion
+  MCP (no token)** vs the **token / CLI** path. (#4)
+- **Agent recipes** (`skills/`) — `graph-sync` and `new-project` as MCP recipes an agent
+  follows directly (no token), the no-terminal counterpart to the scripts. Shipped in the
+  package. (#6)
 
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 

@@ -13,7 +13,7 @@
   "type": "module",
   "bin": { "engram": "bin/engram.js" },
   "files": [
-    "bin/", "scripts/", "queries/", "examples/",
+    "bin/", "scripts/", "queries/", "examples/", "skills/",
     "docker-compose.yml", ".env.example", "CHANGELOG.md"
   ],
   "scripts": {
