@@ -1,0 +1,21 @@
+{
+  "_comment": "Curated allowlist of local directories whose documents are mapped into the graph by scripts/document-index.js. Copy this to ../document-sources.json and edit. The change-gate ONLY ever looks inside these roots, so the graph never fills with framework/tutorial boilerplate. `tags` apply to every Source ingested from that root. Paths may start with ~. Text (.md/.markdown/.txt/.rst) is hashed as UTF-8; binary (.pdf/.docx/.pptx) as bytes (extracted by your agent). Add an extension to enable it.",
+  "roots": [
+    {
+      "path": "~/Projects/acme",
+      "tags": ["acme", "software"]
+    },
+    {
+      "path": "~/notes",
+      "tags": ["personal", "research"]
+    }
+  ],
+  "extensions": [".md", ".markdown", ".txt", ".rst", ".pdf", ".docx", ".pptx"],
+  "excludeDirs": [
+    "node_modules", ".git", "dist", "build", "target", ".next",
+    "vendor", "backups", "coverage", ".venv", "__pycache__", "out"
+  ],
+  "excludeFiles": ["CHANGELOG.md", "LICENSE.md", "CODE_OF_CONDUCT.md", "3rdpartylicenses.txt"],
+  "maxFileBytes": 250000,
+  "maxBinaryBytes": 26214400
+}

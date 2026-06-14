@@ -1,0 +1,36 @@
+{
+  "name": "engram-kg",
+  "version": "1.0.0",
+  "description": "Engram — an agent-maintained, bi-temporal knowledge graph for AI memory. Neo4j canonical truth; Notion + local files as capture lanes.",
+  "keywords": [
+    "knowledge-graph", "neo4j", "ai-memory", "agent-memory",
+    "bi-temporal", "notion", "cypher", "llm", "rag"
+  ],
+  "homepage": "https://ulrictodman.com/engram",
+  "repository": { "type": "git", "url": "https://github.com/ricksinclair/engram.git" },
+  "license": "MIT",
+  "author": "Ulric Todman (https://ulrictodman.com)",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "context": "node scripts/build-context.js",
+    "add": "node scripts/add-node.js",
+    "insight": "node scripts/write-insight.js",
+    "export": "node scripts/export-graph.js",
+    "import": "node scripts/import-graph.js",
+    "index": "node scripts/notion-index.js",
+    "doc-index": "node scripts/document-index.js",
+    "lint:graph": "node scripts/lint-graph.js",
+    "supersede": "node scripts/supersede.js",
+    "review:supersession": "node scripts/review-supersession.js",
+    "check:notion": "node scripts/check-notion.js",
+    "resume": "node scripts/resume.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "neo4j-driver": "^5.28.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

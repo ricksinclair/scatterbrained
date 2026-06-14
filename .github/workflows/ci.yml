@@ -1,0 +1,65 @@
+name: CI
+
+# Two guarantees for the public repo as the methodology evolves:
+#   1. LEAK GATE — no private project name may ever appear in the tree.
+#   2. SMOKE TEST — the schema + demo graph still load and `lint:graph` passes.
+# If a future sync from the private source breaks either, this fails the push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  leak-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No private project names in the tree
+        # The denylist lives in an encrypted Actions secret (FORBIDDEN_TERMS), NOT
+        # in this file — otherwise the gate would publish the very names it guards.
+        # Forks have no secret; the gate skips cleanly there (they have no private data).
+        env:
+          FORBIDDEN_TERMS: ${{ secrets.FORBIDDEN_TERMS }}
+        run: |
+          if [ -z "$FORBIDDEN_TERMS" ]; then
+            echo "FORBIDDEN_TERMS not set (fork or unconfigured) — skipping leak gate."
+            exit 0
+          fi
+          if grep -rinE "$FORBIDDEN_TERMS" . --exclude-dir=.git --exclude-dir=node_modules ; then
+            echo "::error::Private term leaked into the public repo — scrub before merging."
+            exit 1
+          fi
+          echo "Leak gate clean."
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - name: Static checks (syntax + JSON)
+        run: |
+          for f in scripts/*.js scripts/lib/*.js; do node --check "$f"; done
+          for j in package.json examples/*.json; do node -e "JSON.parse(require('fs').readFileSync('$j','utf8'))"; done
+      - name: Start Neo4j
+        run: |
+          docker run -d --rm --name neo4j -p 7687:7687 -p 7474:7474 \
+            -e NEO4J_AUTH=neo4j/engram-local neo4j:5-community
+          for i in $(seq 1 60); do
+            docker exec neo4j cypher-shell -u neo4j -p engram-local "RETURN 1" >/dev/null 2>&1 && break
+            sleep 1
+          done
+      - name: Load schema + demo graph
+        run: |
+          cat scripts/seed-schema.cypher examples/seed-demo.cypher \
+            | docker exec -i neo4j cypher-shell -u neo4j -p engram-local
+      - name: Lint the graph (must have 0 errors)
+        env:
+          NEO4J_URI: bolt://localhost:7687
+          NEO4J_USER: neo4j
+          NEO4J_PASSWORD: engram-local
+        run: npm run lint:graph

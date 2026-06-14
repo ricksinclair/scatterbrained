@@ -1,0 +1,34 @@
+name: Deploy explainer site to Pages
+
+# Publishes docs/ to GitHub Pages. With the user site's CNAME (ulrictodman.com)
+# and no CNAME in this repo, the site is served at ulrictodman.com/engram.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/**', '.github/workflows/pages.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./docs
+      - id: deployment
+        uses: actions/deploy-pages@v4

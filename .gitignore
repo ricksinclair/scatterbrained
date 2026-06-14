@@ -1,0 +1,5 @@
+.env
+node_modules/
+logs/
+# Never commit real graph exports — they contain your private knowledge.
+backups/*.json

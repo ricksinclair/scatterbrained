@@ -1,0 +1,13 @@
+{
+  "_README": "Canonical manifest of your Notion IDs. Copy to ../notion-ids.json and edit. SINGLE SOURCE OF TRUTH — your agent instructions and scripts point here instead of hardcoding IDs inline, so a recreated database is fixed in one place. Validate with `npm run check:notion` (structural always; live resolution if NOTION_TOKEN is set). `kind` is 'page' or 'data_source' (a data_source_id is what create-pages/update-page target inside a database). The IDs below are placeholders — replace them.",
+  "projects": {
+    "Acme": {
+      "workspace_url": "https://www.notion.so/your-workspace",
+      "entries": {
+        "Tasks": { "kind": "data_source", "id": "00000000-0000-0000-0000-000000000001", "purpose": "Kanban data source" },
+        "Docs Index": { "kind": "data_source", "id": "00000000-0000-0000-0000-000000000002", "purpose": "Documentation index data source" },
+        "Architecture": { "kind": "page", "id": "00000000000000000000000000000003", "purpose": "Architecture page" }
+      }
+    }
+  }
+}

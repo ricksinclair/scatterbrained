@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Engram — an agent-maintained knowledge graph for AI memory</title>
+<meta name="description" content="A transparent, fully-owned, bi-temporal knowledge graph that an AI agent maintains across sessions. Neo4j as canonical truth; Notion and local files as capture lanes. Why it beats a Notion-only or Neo4j-only workflow." />
+<meta property="og:title" content="Engram — a knowledge graph for AI memory" />
+<meta property="og:description" content="Capture where it's natural. Query where it's powerful. Let an agent keep it honest." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Spectral:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ───────────────────────── HERO ───────────────────────── -->
+<header class="hero">
+  <svg class="hero-graph" viewBox="0 0 1200 700" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g class="edges">
+      <line x1="200" y1="180" x2="480" y2="320"/><line x1="480" y1="320" x2="760" y2="200"/>
+      <line x1="760" y1="200" x2="1000" y2="380"/><line x1="480" y1="320" x2="560" y2="560"/>
+      <line x1="200" y1="180" x2="300" y2="480"/><line x1="560" y1="560" x2="900" y2="560"/>
+      <line x1="760" y1="200" x2="560" y2="560"/><line x1="300" y1="480" x2="560" y2="560"/>
+      <line x1="1000" y1="380" x2="900" y2="560"/>
+    </g>
+    <g class="nodes">
+      <circle cx="200" cy="180" r="6"/><circle cx="480" cy="320" r="9"/>
+      <circle cx="760" cy="200" r="6"/><circle cx="1000" cy="380" r="7"/>
+      <circle cx="560" cy="560" r="9"/><circle cx="300" cy="480" r="6"/>
+      <circle cx="900" cy="560" r="6"/>
+    </g>
+  </svg>
+
+  <div class="hero-inner">
+    <p class="kicker">a knowledge graph that remembers for you</p>
+    <h1 class="wordmark">Engram</h1>
+    <p class="define">
+      <span class="ipa">/ˈɛnˌɡram/</span> &nbsp;·&nbsp; <span class="pos">noun</span><br/>
+      a physical trace a memory leaves behind — the unit in which knowledge is stored.
+    </p>
+    <p class="lede">
+      Capture where it's natural. Query where it's powerful. Let an agent keep it honest.
+      A transparent, fully-owned alternative to both the Notion-only workflow and the
+      black-box "AI memory" framework.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-solid" href="https://github.com/ricksinclair/engram">View on GitHub →</a>
+      <a class="btn btn-ghost" href="#why">Why it's different</a>
+    </div>
+  </div>
+  <div class="scroll-cue" aria-hidden="true"><span></span></div>
+</header>
+
+<main>
+
+<!-- ───────────────────────── PROBLEM ───────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <p class="section-tag">01 — the problem</p>
+    <h2>Three tools, three blind spots.</h2>
+    <div class="problem-grid">
+      <article>
+        <h3>Notion</h3>
+        <p>A wonderful place to <em>write things down</em> — and a hopeless place to ask
+        <em>"what across all my work connects to this?"</em> It can't traverse relationships.</p>
+      </article>
+      <article>
+        <h3>A graph database</h3>
+        <p>Traverses relationships beautifully. But nobody opens a terminal to journal
+        their day in Cypher. The capture friction kills it.</p>
+      </article>
+      <article>
+        <h3>Vector "memory"</h3>
+        <p>An opaque blob of embeddings. You can't see <em>why</em> it recalls something,
+        and you can't reach in and correct it when it's wrong.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── IDEA ───────────────────────── -->
+<section class="band band-alt">
+  <div class="wrap">
+    <p class="section-tag">02 — the idea</p>
+    <h2>Two capture lanes. One canonical graph.</h2>
+    <p class="prose">
+      You keep capturing where it's comfortable — Notion pages, plain Markdown, PDFs, decks.
+      An agent reads only what changed, extracts the entities, and writes them into a single
+      Neo4j graph where every fact carries a link back to its source. Notion is the notebook;
+      the graph is the mind.
+    </p>
+
+    <figure class="diagram">
+      <svg viewBox="0 0 760 360" role="img" aria-label="Architecture: Notion and local files feed change-gates, an agent extracts entities into a Neo4j graph with provenance edges, maintained by lint, resume, supersede and git backups.">
+        <!-- lanes -->
+        <g class="dia-lane">
+          <rect x="40" y="30" width="200" height="58" rx="8"/>
+          <text x="140" y="56" class="dia-t">Notion pages</text>
+          <text x="140" y="74" class="dia-s">notion-index</text>
+        </g>
+        <g class="dia-lane">
+          <rect x="520" y="30" width="200" height="58" rx="8"/>
+          <text x="620" y="56" class="dia-t">Local files</text>
+          <text x="620" y="74" class="dia-s">document-index</text>
+        </g>
+        <!-- gate label -->
+        <text x="140" y="112" class="dia-note">change-gate ↓</text>
+        <text x="620" y="112" class="dia-note">change-gate ↓</text>
+        <!-- agent -->
+        <g class="dia-agent">
+          <rect x="300" y="120" width="160" height="44" rx="22"/>
+          <text x="380" y="147" class="dia-t">agent · extract</text>
+        </g>
+        <!-- arrows to agent -->
+        <path class="dia-arrow" d="M140 120 L140 142 L300 142"/>
+        <path class="dia-arrow" d="M620 120 L620 142 L460 142"/>
+        <!-- graph -->
+        <g class="dia-graph">
+          <rect x="220" y="206" width="320" height="118" rx="10"/>
+          <text x="380" y="234" class="dia-t">Neo4j — canonical graph</text>
+          <text x="380" y="258" class="dia-s">Source ─INFORMS→ entity</text>
+          <text x="380" y="278" class="dia-s">Insight ─ABOUT→ Project · Idea · Goal</text>
+          <text x="380" y="298" class="dia-s">+ bi-temporal valid_until</text>
+        </g>
+        <path class="dia-arrow" d="M380 164 L380 206"/>
+        <text x="380" y="348" class="dia-foot">lint · resume · supersede · export → git</text>
+      </svg>
+    </figure>
+  </div>
+</section>
+
+<!-- ───────────────────────── DIFFERENTIATORS ───────────────────────── -->
+<section class="band" id="why">
+  <div class="wrap">
+    <p class="section-tag">03 — what makes it different</p>
+    <h2>Six ideas doing the work.</h2>
+    <ol class="diff-list">
+      <li>
+        <span class="n">i</span>
+        <div><h3>Two lanes, one graph</h3>
+        <p>A Notion lane and a filesystem lane (Markdown, text, PDF, Word, PowerPoint)
+        feed the same graph. Capture anywhere; the facts converge on their natural keys.</p></div>
+      </li>
+      <li>
+        <span class="n">ii</span>
+        <div><h3>Deterministic change-gating</h3>
+        <p>Hash and timestamp probes find only what actually moved — no LLM, no re-reading
+        unchanged content. Cheap, reproducible, and it scales to thousands of files.</p></div>
+      </li>
+      <li>
+        <span class="n">iii</span>
+        <div><h3>Provenance on every fact</h3>
+        <p>Everything ingested gets a <code>Source → INFORMS</code> edge. You can always
+        trace <em>why</em> the graph believes something — the thing vector memory can't show you.</p></div>
+      </li>
+      <li>
+        <span class="n">iv</span>
+        <div><h3>Invalidate, don't delete</h3>
+        <p>Superseded facts get a <code>valid_until</code> and a <code>superseded_by</code>
+        instead of vanishing. History is kept; contradictions resolve by recency. A palimpsest, not an overwrite.</p></div>
+      </li>
+      <li>
+        <span class="n">v</span>
+        <div><h3>Lint-enforced integrity</h3>
+        <p>Rules become checks. <code>lint:graph</code> fails on orphans, undated nodes,
+        unlinked insights, and off-vocabulary tags — so the graph can't silently rot.</p></div>
+      </li>
+      <li>
+        <span class="n">vi</span>
+        <div><h3>Agent-native &amp; owned</h3>
+        <p>Built so an LLM resumes exactly where it left off and tends the graph itself.
+        Plain Neo4j + scripts + git — no vendor, no framework to outgrow.</p></div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ───────────────────────── COMPARISON ───────────────────────── -->
+<section class="band band-alt">
+  <div class="wrap">
+    <p class="section-tag">04 — honestly, why not just…</p>
+    <h2>Where each approach lands.</h2>
+    <p class="prose">
+      Bi-temporal graphs for agents already exist — Graphiti/Zep, Mem0, Letta are good and
+      getting better. This isn't a claim to be first. It's a different set of trade-offs:
+      transparent, multi-modal, and yours.
+    </p>
+    <div class="table-scroll">
+      <table class="compare">
+        <thead>
+          <tr>
+            <th>&nbsp;</th>
+            <th>Notion<br/>only</th>
+            <th>Neo4j<br/>only</th>
+            <th>Vendor<br/>memory</th>
+            <th class="hl">Engram</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Effortless capture</td><td class="y">●</td><td class="n">○</td><td class="m">◐</td><td class="hl y">●</td></tr>
+          <tr><td>Relationship traversal</td><td class="n">○</td><td class="y">●</td><td class="y">●</td><td class="hl y">●</td></tr>
+          <tr><td>Inspectable provenance</td><td class="m">◐</td><td class="m">◐</td><td class="n">○</td><td class="hl y">●</td></tr>
+          <tr><td>Bi-temporal history</td><td class="n">○</td><td class="m">◐</td><td class="y">●</td><td class="hl y">●</td></tr>
+          <tr><td>Multi-modal capture</td><td class="n">○</td><td class="n">○</td><td class="m">◐</td><td class="hl y">●</td></tr>
+          <tr><td>Own the substrate</td><td class="n">○</td><td class="y">●</td><td class="n">○</td><td class="hl y">●</td></tr>
+          <tr><td>Enforced integrity</td><td class="n">○</td><td class="n">○</td><td class="n">○</td><td class="hl y">●</td></tr>
+          <tr><td>Semantic retrieval</td><td class="m">◐</td><td class="m">◐</td><td class="y">●</td><td class="hl n">○</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="legend"><span class="y">●</span> strong &nbsp; <span class="m">◐</span> partial / DIY &nbsp; <span class="n">○</span> weak or absent</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── HONEST GAP ───────────────────────── -->
+<section class="band band-quote">
+  <div class="wrap">
+    <blockquote>
+      <p>The last row is the honest one. Retrieval here is <em>structural</em> — graph
+      traversal and tags, not embeddings. Semantic recall is the obvious next frontier,
+      and it isn't built yet.</p>
+      <cite>— and saying so is what makes the rest credible.</cite>
+    </blockquote>
+  </div>
+</section>
+
+<!-- ───────────────────────── CTA ───────────────────────── -->
+<section class="band band-cta">
+  <div class="wrap">
+    <h2>Take it and make it yours.</h2>
+    <p class="prose">
+      Clone it, run <code>docker compose up</code>, load the demo graph, and watch the
+      toolkit work. MIT licensed — fork the ideas, the schema, the discipline.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-solid" href="https://github.com/ricksinclair/engram">github.com/ricksinclair/engram →</a>
+    </div>
+<pre class="code"><code><span class="c"># clone &amp; spin up</span>
+git clone https://github.com/ricksinclair/engram.git &amp;&amp; cd engram
+npm install &amp;&amp; docker compose up -d
+
+<span class="c"># schema + a synthetic demo graph</span>
+cat scripts/seed-schema.cypher examples/seed-demo.cypher \
+  | docker exec -i engram-neo4j cypher-shell -u neo4j -p engram-local
+
+npm run lint:graph        <span class="c"># integrity check — passes</span>
+npm run review:supersession</code></pre>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p><strong>Engram</strong> — built by <a href="https://ulrictodman.com">Ulric Todman</a>.
+    MIT licensed. Patterns informed by the 2026 agent-memory landscape; this is the
+    transparent, fully-owned take.</p>
+  </div>
+</footer>
+
+</body>
+</html>
