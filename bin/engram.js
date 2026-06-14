@@ -19,6 +19,8 @@ const COMMANDS = {
   supersede: 'supersede.js',
   review: 'review-supersession.js',
   'check-notion': 'check-notion.js',
+  'new-project': 'new-project.js',
+  'setup-notion': 'setup-notion.js',
   add: 'add-node.js',
   insight: 'write-insight.js',
   index: 'notion-index.js',
@@ -35,6 +37,8 @@ Commands:
   lint            graph integrity check (orphans, undated, unlinked, vocab)
   search          hybrid search — keyword + semantic (if embedded), bi-temporal aware
   embed           backfill semantic embeddings (needs: npm i @xenova/transformers)
+  new-project     stand up a project: Notion workspace + graph + repo CLAUDE.md
+  setup-notion    just the Notion operations workspace (Kanban, changelog, …)
   context         assemble a context block (--project/--domain/--tag/--recent)
   resume          cross-session "where were we" brief
   supersede       invalidate a fact bi-temporally (never deletes)

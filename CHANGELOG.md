@@ -8,6 +8,25 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
+## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
+
+**TL;DR (explain-like-I'm-5):** Engram used to give you the AI's *memory* (the graph).
+Now it also sets up the place *you* work. Run one command and you get a Notion
+workspace ready to go: a to-do board (Kanban), a changelog, a place to track tests,
+and a docs index — plus the project is registered in the graph and a settings file
+(`CLAUDE.md`) is dropped in your repo. The memory half and the working half, set up
+**together**, as one system. (Before, you had to wire all that up yourself.)
+
+**Technical**
+- `new-project` (`engram new-project --name "X"`) — orchestrates it end to end:
+  creates the Notion operations workspace, MERGEs a `Project` + `Goal` (+ a `Source`
+  for the workspace) in the graph, writes/updates `notion-ids.json`, and drops a wired
+  repo `CLAUDE.md`. `--dry-run` previews without creating anything.
+- `setup-notion` — the Notion-only path: workspace home + 5 databases (Kanban tracker,
+  Documentation Index, Changelog, Test Run Metrics, Problem Tests) + Implementation
+  Progress & Architecture pages, via the Notion API. Project-agnostic defaults.
+- Needs `NOTION_TOKEN` + `NOTION_PARENT_PAGE_ID`.
+
 ## [1.2.0] — Hybrid search: it understands *meaning*, not just words
 
 **TL;DR (explain-like-I'm-5):** Picture a giant box of your notes.

@@ -118,6 +118,8 @@ edit them, and run the ingestion scripts. See
 
 | Command | What it does |
 |---------|--------------|
+| `npm run new:project -- --name "X"` | Stand up a whole project at once: the Notion operations workspace (Kanban + Documentation Index + Changelog + Test Run Metrics + Problem Tests + status pages), a `Project`+`Goal` in the graph, `notion-ids.json`, and a repo `CLAUDE.md`. Graph + operations, one command. Needs `NOTION_TOKEN` + `NOTION_PARENT_PAGE_ID`; `--dry-run` to preview. |
+| `npm run setup:notion -- --name "X"` | Just the Notion operations workspace (no graph/CLAUDE.md). |
 | `npm run lint:graph` | Integrity backstop — orphans, undated nodes, unlinked insights/sources, off-vocabulary `source_kind`. Exit 1 on any error. |
 | `npm run search -- "<query>"` | **Hybrid search** — keyword (BM25) + semantic (local embeddings) fused via RRF, ranked, bi-temporal-aware, with provenance. Degrades to keyword-only if not embedded. |
 | `npm run embed` | Backfill semantic embeddings (local `bge-small-en-v1.5`, no API). Needs the optional `@xenova/transformers` dep; run once, then `search` goes hybrid. |
