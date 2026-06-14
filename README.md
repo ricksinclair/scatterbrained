@@ -143,6 +143,24 @@ seed-schema.cypher  uniqueness constraints
 docker-compose.yml  local Neo4j
 ```
 
+## Roadmap
+
+**Landing in the next release:** a **doc-drift review** (`review:docs`) that flags
+Engram's own describing pages when they fall behind what's shipped — the stale-doc
+problem this project is, ironically, built to prevent. See the
+[CHANGELOG](CHANGELOG.md).
+
+**Where it's headed** (tracked as GitHub issues) — the throughline is making this
+effortless for **non-technical Notion + Claude users**: one root, no token required,
+a friendly front door.
+
+- [**#3** — One portfolio root for Notion](https://github.com/ricksinclair/engram/issues/3): authorize once; every project nests under a single root.
+- [**#4** — Two setup paths](https://github.com/ricksinclair/engram/issues/4): MCP (no token, for Claude + Notion users) *and* the integration-token / CLI path.
+- [**#6** — Agent recipes](https://github.com/ricksinclair/engram/issues/6): ship `graph-sync` and agent-driven `new-project` as skills, not just scripts.
+- [**#7** — Skills showcase](https://github.com/ricksinclair/engram/issues/7): a scannable "here's what you can just do" section.
+- [**#5** — Welcoming onboarding](https://github.com/ricksinclair/engram/issues/5): detailed, plain-English docs, non-technical-first.
+- [**#2** — Unit-test suite](https://github.com/ricksinclair/engram/issues/2): a non-brittle regression guard for contributions.
+
 ## Credits
 
 Built by [Ulric Todman](https://ulrictodman.com). Patterns informed by the 2026

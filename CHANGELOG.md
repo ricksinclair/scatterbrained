@@ -8,6 +8,20 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
+## [Unreleased] — coming in the next release
+
+**TL;DR (explain-like-I'm-5):** Engram now notices when its *own notes go stale* —
+a page that's wrong not because someone changed it, but because nobody did, while
+the thing it describes moved on. (Ordinary "what changed?" detection is blind to a
+page that's stale *because* it was left alone — this catches that.)
+
+**Technical**
+- `review:docs` (`review-doc-staleness.js`) — surfaces, per project, the *describing*
+  artifacts (its Notion page, README, the live site) that predate a recent conclusion
+  (a new `Insight` about that project). Scoped to one project it's a short, actionable
+  re-read list; the global run is a broad audit. Wired into the graph-sync workflow
+  (re-read + fix any drift, per worked project).
+
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 
 **TL;DR (explain-like-I'm-5):** Engram used to give you the AI's *memory* (the graph).
