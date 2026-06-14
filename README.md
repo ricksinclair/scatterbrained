@@ -86,6 +86,7 @@ cat scripts/seed-schema.cypher examples/seed-demo.cypher \
 
 npm run lint:graph                         # 0 errors (1 warning is expected — see below)
 npm run context -- --project Acme          # assemble a context block
+npm run search -- "bi-temporal"            # ranked full-text search
 npm run review:supersession                # surface candidate stale facts
 ```
 
@@ -103,6 +104,7 @@ edit them, and run the ingestion scripts. See
 | Command | What it does |
 |---------|--------------|
 | `npm run lint:graph` | Integrity backstop — orphans, undated nodes, unlinked insights/sources, off-vocabulary `source_kind`. Exit 1 on any error. |
+| `npm run search -- "<query>"` | Full-text keyword search (Neo4j BM25/Lucene), ranked, bi-temporal-aware, with provenance. The lexical lane of [hybrid recall](https://github.com/ricksinclair/engram/issues/1). |
 | `npm run resume` | Cross-session "where were we" brief. |
 | `npm run context` | Assemble a pasteable context block (`--project`, `--domain`, `--tag`, …). |
 | `npm run supersede` | Invalidate a fact bi-temporally (never deletes). |

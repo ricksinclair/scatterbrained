@@ -23,6 +23,12 @@ CREATE CONSTRAINT goal_name          IF NOT EXISTS FOR (n:Goal)         REQUIRE 
 // file Sources by absolute path on every change-detection pass.
 CREATE INDEX source_file_path        IF NOT EXISTS FOR (n:Source)       ON (n.file_path);
 
+// Full-text (BM25/Lucene) index — the keyword retrieval lane (scripts/search.js).
+// Spans every text-bearing label/property; missing properties are simply skipped.
+CREATE FULLTEXT INDEX knowledge_text IF NOT EXISTS
+  FOR (n:Insight|Idea|Rule|Project|Resource|Goal|Person|Organization|Skill|Source)
+  ON EACH [n.summary, n.full_text, n.name, n.title, n.description, n.purpose, n.role];
+
 // ============================================================================
 // NODE LABEL REFERENCE
 // ============================================================================
