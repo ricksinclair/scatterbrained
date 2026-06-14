@@ -11,8 +11,9 @@ ingests, maintains, and consults the graph across sessions.
 MIT licensed. No vendor, no framework to outgrow — plain Neo4j + Node scripts +
 git. You can read every line.
 
-**npm:** the package name is **`engram-kg`** — `npm install engram-kg` once
-published (the bare `engram` was already taken). Today it's clone-and-run; see
+**npm:** published as **[`engram-kg`](https://www.npmjs.com/package/engram-kg)** —
+`npx engram-kg <command>` or `npm install -g engram-kg` (the bare `engram` was
+taken). Full setup (docker-compose Neo4j, schema, demo) is clone-and-run; see
 [Quickstart](#quickstart).
 
 ---
