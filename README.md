@@ -159,7 +159,8 @@ a friendly front door.
 - [**#6** — Agent recipes](https://github.com/ricksinclair/engram/issues/6): ship `graph-sync` and agent-driven `new-project` as skills, not just scripts.
 - [**#7** — Skills showcase](https://github.com/ricksinclair/engram/issues/7): a scannable "here's what you can just do" section.
 - [**#5** — Welcoming onboarding](https://github.com/ricksinclair/engram/issues/5): detailed, plain-English docs, non-technical-first.
-- [**#2** — Unit-test suite](https://github.com/ricksinclair/engram/issues/2): a non-brittle regression guard for contributions.
+
+*(Done: [#2 unit-test suite](https://github.com/ricksinclair/engram/issues/2) — a non-brittle regression guard, in CI.)*
 
 ## Credits
 

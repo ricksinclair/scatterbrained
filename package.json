@@ -17,6 +17,7 @@
     "docker-compose.yml", ".env.example", "CHANGELOG.md"
   ],
   "scripts": {
+    "test": "node --test",
     "context": "node scripts/build-context.js",
     "add": "node scripts/add-node.js",
     "insight": "node scripts/write-insight.js",

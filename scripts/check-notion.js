@@ -41,7 +41,7 @@ function getArg(flag) {
 const wantJson = process.argv.includes('--json');
 const onlyProject = getArg('--project');
 
-function flatten(manifest) {
+export function flatten(manifest, onlyProject = null) {
   const out = [];
   for (const [project, p] of Object.entries(manifest.projects || {})) {
     if (onlyProject && project !== onlyProject) continue;
@@ -50,6 +50,25 @@ function flatten(manifest) {
     }
   }
   return out;
+}
+
+// Pure structural validation (no network): kind ∈ {page,data_source}, id is a
+// well-formed Notion UUID, no duplicate ids. Returns a problems[] (empty = ok).
+export function validateStructural(manifest, onlyProject = null) {
+  const problems = [];
+  const seen = new Map();
+  for (const e of flatten(manifest, onlyProject)) {
+    if (!e.kind || !['page', 'data_source'].includes(e.kind))
+      problems.push({ level: 'structural', entry: `${e.project}/${e.name}`, issue: `kind must be 'page' or 'data_source' (got '${e.kind}')` });
+    if (!e.id || !(HEX32.test(e.id) || DASHED.test(e.id)))
+      problems.push({ level: 'structural', entry: `${e.project}/${e.name}`, issue: `id is not a valid Notion UUID: '${e.id}'` });
+    const norm = (e.id || '').replace(/-/g, '').toLowerCase();
+    if (norm) {
+      if (seen.has(norm)) problems.push({ level: 'structural', entry: `${e.project}/${e.name}`, issue: `duplicate id (also ${seen.get(norm)})` });
+      else seen.set(norm, `${e.project}/${e.name}`);
+    }
+  }
+  return problems;
 }
 
 async function resolveLive(token, id) {
@@ -74,21 +93,8 @@ async function main() {
     process.exit(1);
   }
   const manifest = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
-  const entries = flatten(manifest);
-  const problems = [];
-  const seen = new Map();
-
-  for (const e of entries) {
-    if (!e.kind || !['page', 'data_source'].includes(e.kind))
-      problems.push({ level: 'structural', entry: `${e.project}/${e.name}`, issue: `kind must be 'page' or 'data_source' (got '${e.kind}')` });
-    if (!e.id || !(HEX32.test(e.id) || DASHED.test(e.id)))
-      problems.push({ level: 'structural', entry: `${e.project}/${e.name}`, issue: `id is not a valid Notion UUID: '${e.id}'` });
-    const norm = (e.id || '').replace(/-/g, '').toLowerCase();
-    if (norm) {
-      if (seen.has(norm)) problems.push({ level: 'structural', entry: `${e.project}/${e.name}`, issue: `duplicate id (also ${seen.get(norm)})` });
-      else seen.set(norm, `${e.project}/${e.name}`);
-    }
-  }
+  const entries = flatten(manifest, onlyProject);
+  const problems = validateStructural(manifest, onlyProject);
 
   const token = process.env.NOTION_TOKEN;
   let liveChecked = 0;
@@ -117,7 +123,10 @@ async function main() {
   process.exit(1);
 }
 
-main().catch((err) => {
-  console.error('check-notion error:', err.message);
-  process.exit(2);
-});
+// Run as a CLI only when invoked directly (so tests can import the exports).
+if (process.argv[1] && process.argv[1].endsWith('check-notion.js')) {
+  main().catch((err) => {
+    console.error('check-notion error:', err.message);
+    process.exit(2);
+  });
+}

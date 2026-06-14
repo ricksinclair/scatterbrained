@@ -45,6 +45,8 @@ jobs:
         run: |
           for f in scripts/*.js scripts/lib/*.js; do node --check "$f"; done
           for j in package.json examples/*.json; do node -e "JSON.parse(require('fs').readFileSync('$j','utf8'))"; done
+      - name: Unit tests
+        run: node --test          # pure-function suite; no DB or network needed
       - name: Start Neo4j
         run: |
           docker run -d --rm --name neo4j -p 7687:7687 -p 7474:7474 \

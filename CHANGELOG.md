@@ -21,6 +21,10 @@ page that's stale *because* it was left alone — this catches that.)
   (a new `Insight` about that project). Scoped to one project it's a short, actionable
   re-read list; the global run is a broad audit. Wired into the graph-sync workflow
   (re-read + fix any drift, per worked project).
+- **Unit-test suite** (`node --test`, zero new deps) — covers the load-bearing pure
+  functions: Notion payload builders, RRF search fusion, the CLAUDE.md template +
+  manifest merge, the `source_kind` vocabulary, Notion-ID validation, and CLI dispatch.
+  Externals are mocked via `--dry-run`; runs in CI on every push. (#2)
 
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 
