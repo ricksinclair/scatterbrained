@@ -114,6 +114,25 @@ To point it at your own knowledge: copy `examples/notion-ids.example.json` and
 edit them, and run the ingestion scripts. See
 [ulrictodman.com/engram](https://ulrictodman.com/engram) for the full workflow.
 
+## Skills — what you can just *do*
+
+Everything Engram does is a **skill you reach for in plain language**. If you use Claude with the
+Notion connection, *just ask* — no token, no terminal (the agent follows the recipes in
+[`skills/`](skills/) over the MCP). Prefer the keyboard? Every skill has a one-line command. Same
+result; pick your lane.
+
+| Skill | Just ask Claude… | …or run |
+|-------|------------------|---------|
+| **Stand up a project** — Notion workspace + graph + repo `CLAUDE.md`, in one move | *"Set up a new Engram project called Acme."* | `npm run new:project -- --name "Acme"` |
+| **Refresh the whole graph** — re-ingest changed Notion + files, surface insights, check, back up | *"Run a graph-sync."* | `npm run resume` · `lint:graph` · `export` |
+| **Find anything by meaning** — keyword + semantic, blended and ranked | *"Search Engram for how this makes money."* | `npm run search -- "how do I make money"` |
+| **Pick up where you left off** — a "where were we" brief across every project | *"Where were we?"* | `npm run resume` |
+| **Keep it honest** — retire a replaced fact (marked superseded, never deleted) | *"Retire the old pricing decision; it changed."* | `npm run review:supersession` · `supersede` |
+| **Assemble context to paste** — a clean, scoped context block | *"Give me the context block for Acme."* | `npm run context -- --project Acme` |
+
+The full command reference is just below. The "ask Claude" recipes live in
+[`skills/`](skills/) ([`new-project`](skills/new-project.md), [`graph-sync`](skills/graph-sync.md)).
+
 ## The toolkit
 
 | Command | What it does |
@@ -187,10 +206,9 @@ problem this project is, ironically, built to prevent. See the
 effortless for **non-technical Notion + Claude users**: one root, no token required,
 a friendly front door.
 
-- [**#7** — Skills showcase](https://github.com/ricksinclair/engram/issues/7): a scannable "here's what you can just do" section.
 - [**#5** — Welcoming onboarding](https://github.com/ricksinclair/engram/issues/5): detailed, plain-English docs, non-technical-first.
 
-*(Recently done: [#2 tests](https://github.com/ricksinclair/engram/issues/2), [#3 one root](https://github.com/ricksinclair/engram/issues/3), [#4 two setup paths](https://github.com/ricksinclair/engram/issues/4), [#6 agent recipes](https://github.com/ricksinclair/engram/issues/6).)*
+*(Recently done: [#2 tests](https://github.com/ricksinclair/engram/issues/2), [#3 one root](https://github.com/ricksinclair/engram/issues/3), [#4 two setup paths](https://github.com/ricksinclair/engram/issues/4), [#6 agent recipes](https://github.com/ricksinclair/engram/issues/6), [#7 skills showcase](https://github.com/ricksinclair/engram/issues/7).)*
 
 ## Credits
 

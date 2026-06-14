@@ -146,6 +146,24 @@ em { font-style: italic; color: #f3eee2; }
 .diff-list h3 { font-size: 1.45rem; margin: 0 0 0.4rem; color: var(--paper); }
 .diff-list p { margin: 0; color: var(--paper-dim); font-size: 1.02rem; max-width: 56ch; }
 
+/* skills showcase */
+.skills { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.4rem; margin: 3rem 0 0; }
+.skill {
+  border: 1px solid var(--line-2); border-radius: 8px; padding: 1.7rem 1.6rem 1.5rem;
+  background: rgba(236,230,216,0.015); display: flex; flex-direction: column;
+  transition: border-color .2s, transform .2s;
+}
+.skill:hover { border-color: var(--ember); transform: translateY(-3px); }
+.skill h3 { font-family: "Fraunces", serif; font-size: 1.3rem; font-weight: 400; margin: 0 0 0.6rem; color: var(--paper); }
+.skill p { margin: 0; color: var(--paper-dim); font-size: 0.99rem; line-height: 1.55; }
+.skill .ask { margin-top: 1.1rem; color: var(--paper); font-style: italic; }
+.skill .ask span { font-family: "JetBrains Mono", monospace; font-style: normal; font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.18em; color: var(--ember); margin-right: 0.5em; }
+.skill .cli { margin-top: 0.7rem; }
+.skill .cli code { font-size: 0.72rem; }
+.skills-foot { margin-top: 2.4rem; }
+.skills-foot a, .skill p a { color: var(--ember); text-decoration: none; border-bottom: 1px solid var(--line-2); }
+.skills-foot a:hover { border-color: var(--ember); }
+
 /* comparison table */
 .table-scroll { overflow-x: auto; margin-top: 2.6rem; }
 .compare { width: 100%; border-collapse: collapse; min-width: 560px; }
