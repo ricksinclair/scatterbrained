@@ -11,6 +11,10 @@ ingests, maintains, and consults the graph across sessions.
 MIT licensed. No vendor, no framework to outgrow — plain Neo4j + Node scripts +
 git. You can read every line.
 
+**npm:** the package name is **`engram-kg`** — `npm install engram-kg` once
+published (the bare `engram` was already taken). Today it's clone-and-run; see
+[Quickstart](#quickstart).
+
 ---
 
 ## The problem
@@ -46,7 +50,9 @@ it honest.**
   (`npm run resume`) and tend the graph itself, not as a bolt-on.
 
 **Honest limitation:** retrieval here is structural (graph traversal + tags), not
-semantic. Vector/keyword recall is the natural next step and isn't built in yet.
+semantic. Vector/keyword recall is the natural next step and isn't built in yet —
+tracked as the top roadmap item in
+[#1](https://github.com/ricksinclair/engram/issues/1). Contributions welcome.
 
 ## Architecture
 
