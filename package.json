@@ -14,7 +14,7 @@
   "bin": { "engram": "bin/engram.js" },
   "files": [
     "bin/", "scripts/", "queries/", "examples/",
-    "docker-compose.yml", ".env.example"
+    "docker-compose.yml", ".env.example", "CHANGELOG.md"
   ],
   "scripts": {
     "context": "node scripts/build-context.js",
