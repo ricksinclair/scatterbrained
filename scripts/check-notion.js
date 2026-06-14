@@ -2,10 +2,10 @@
 // ============================================================================
 // check-notion.js — validate the Notion ID manifest before IDs rot silently.
 //
-// The brittleness this fixes: Notion data_source_ids tend to get scattered as
-// literals through prose (agent instructions, scripts). If a database is
-// recreated, the id rots and you only find out when a write fails mid-task.
-// notion-ids.json is the single source of truth; this checks it.
+// The brittleness this fixes: data_source_ids were scattered as literals through
+// prose (agent instructions, scripts). If a database is recreated, the ID rots and
+// the agent only finds out when a write fails mid-task. notion-ids.json is now
+// the single source of truth; this checks it.
 //
 // Two tiers, mirroring notion-index.js:
 //   • STRUCTURAL (always, no API): every entry has kind+id, ids are well-formed
