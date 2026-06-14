@@ -133,10 +133,92 @@
   </div>
 </section>
 
+<!-- ───────────────────────── INSIDE THE GRAPH ───────────────────────── -->
+<section class="band">
+  <div class="wrap">
+    <p class="section-tag">03 — inside the graph</p>
+    <h2>What the graph actually looks like.</h2>
+    <p class="prose">
+      Ten node types, joined by a small fixed vocabulary of edges. Every insight points at
+      what it's <em>about</em>; every fact points back at the <em>source</em> that informs it.
+      A slice:
+    </p>
+
+    <figure class="graphviz">
+      <svg viewBox="0 0 760 440" role="img" aria-label="Sample subgraph: a Goal is ACHIEVED_BY a Project; the Project CONTAINS an Idea and REQUIRES a Skill; a Rule CONSTRAINS the Idea; a Source INFORMS the Project; an Insight is ABOUT the Project and DERIVED_FROM the Source.">
+        <g class="gv-edges">
+          <line x1="110" y1="80" x2="380" y2="150"/><text class="gv-el" x="232" y="106">ACHIEVED_BY</text>
+          <line x1="380" y1="150" x2="650" y2="90"/><text class="gv-el" x="520" y="112">REQUIRES</text>
+          <line x1="120" y1="250" x2="380" y2="150"/><text class="gv-el" x="246" y="192">INFORMS</text>
+          <line x1="300" y1="370" x2="380" y2="150"/><text class="gv-el" x="356" y="266">ABOUT</text>
+          <line x1="300" y1="370" x2="120" y2="250"/><text class="gv-el" x="196" y="300">DERIVED_FROM</text>
+          <line x1="380" y1="150" x2="560" y2="330"/><text class="gv-el" x="486" y="232">CONTAINS</text>
+          <line x1="700" y1="410" x2="560" y2="330"/><text class="gv-el" x="640" y="364">CONSTRAINS</text>
+        </g>
+        <g class="gv-nodes">
+          <g class="gv-n"><rect x="58" y="61" width="104" height="38" rx="19"/><text x="110" y="85">Goal</text></g>
+          <g class="gv-n gv-source"><rect x="68" y="231" width="104" height="38" rx="19"/><text x="120" y="255">Source</text></g>
+          <g class="gv-n gv-insight"><rect x="248" y="351" width="104" height="38" rx="19"/><text x="300" y="375">Insight</text></g>
+          <g class="gv-n gv-project"><rect x="324" y="129" width="112" height="42" rx="21"/><text x="380" y="155">Project</text></g>
+          <g class="gv-n"><rect x="598" y="71" width="104" height="38" rx="19"/><text x="650" y="95">Skill</text></g>
+          <g class="gv-n"><rect x="508" y="311" width="104" height="38" rx="19"/><text x="560" y="335">Idea</text></g>
+          <g class="gv-n"><rect x="648" y="391" width="104" height="38" rx="19"/><text x="700" y="415">Rule</text></g>
+        </g>
+      </svg>
+    </figure>
+
+    <div class="legend-grid">
+      <div><span class="lg-dot d-ember"></span><b>Insight</b> a synthesized takeaway</div>
+      <div><span class="lg-dot d-teal"></span><b>Source</b> a page or file, with provenance</div>
+      <div><span class="lg-dot d-bright"></span><b>Project</b> a thing you're building</div>
+      <div><span class="lg-dot"></span><b>Idea</b> a possibility or open question</div>
+      <div><span class="lg-dot"></span><b>Rule</b> a constraint (law, policy)</div>
+      <div><span class="lg-dot"></span><b>Goal</b> an outcome with a timeframe</div>
+      <div><span class="lg-dot"></span><b>Skill</b> a capability</div>
+      <div><span class="lg-dot"></span><b>Resource</b> something to learn from</div>
+      <div><span class="lg-dot"></span><b>Person</b> · <b>Organization</b> people &amp; orgs</div>
+    </div>
+    <p class="edge-vocab"><span>the edge vocabulary is closed:</span> ABOUT · INFORMS · DERIVED_FROM · CONTAINS · REQUIRES · CONSTRAINS · TEACHES · DEPENDS_ON · ACHIEVED_BY · WORKS_AT · SUPPORTS — no inventing new ones, so traversals stay predictable.</p>
+  </div>
+</section>
+
+<!-- ───────────────────────── THE HUMAN SURFACE ───────────────────────── -->
+<section class="band band-alt">
+  <div class="wrap">
+    <p class="section-tag">04 — the human surface</p>
+    <h2>Notion does double duty.</h2>
+    <p class="prose">
+      The graph is the agent's memory. <em>Notion is where you work.</em> The same workspace
+      plays two roles: a <strong>capture lane</strong> (pages flow into the graph, §2) and an
+      <strong>operations desk</strong> — where the project is actually run.
+    </p>
+
+    <div class="notion-board" role="img" aria-label="A Kanban board with five stages: Backlog, To Do, In Progress, Review, Done.">
+      <div class="nb-col"><span>Backlog</span><i></i></div>
+      <div class="nb-col"><span>To Do</span><i></i><i></i></div>
+      <div class="nb-col"><span>In Progress</span><i class="hot"></i></div>
+      <div class="nb-col"><span>Review</span><i></i></div>
+      <div class="nb-col"><span>Done</span><i></i><i></i><i></i></div>
+    </div>
+
+    <div class="notion-dbs">
+      <span>Kanban tracker</span><span>Documentation Index</span><span>Changelog</span>
+      <span>Test Run Metrics</span><span>Problem Tests</span><span>Implementation Progress</span><span>Architecture</span>
+    </div>
+
+    <p class="prose">
+      That operations stack — Kanban, changelog, release &amp; test tracking, docs index — is a
+      <strong>project-agnostic standard</strong>: one command stands it up for any project.
+      It's a <em>companion</em> to the graph, not part of this repo. The graph remembers; Notion
+      runs the work; the capture lane keeps them in sync.
+    </p>
+  </div>
+</section>
+
 <!-- ───────────────────────── DIFFERENTIATORS ───────────────────────── -->
 <section class="band" id="why">
   <div class="wrap">
-    <p class="section-tag">03 — what makes it different</p>
+    <p class="section-tag">05 — what makes it different</p>
     <h2>Six ideas doing the work.</h2>
     <ol class="diff-list">
       <li>
@@ -182,7 +264,7 @@
 <!-- ───────────────────────── COMPARISON ───────────────────────── -->
 <section class="band band-alt">
   <div class="wrap">
-    <p class="section-tag">04 — honestly, why not just…</p>
+    <p class="section-tag">06 — honestly, why not just…</p>
     <h2>Where each approach lands.</h2>
     <p class="prose">
       Bi-temporal graphs for agents already exist — Graphiti/Zep, Mem0, Letta are good and

@@ -181,9 +181,47 @@ em { font-style: italic; color: #f3eee2; }
 .foot p { max-width: var(--measure); color: var(--muted); font-size: 0.9rem; margin: 0; }
 .foot strong { color: var(--paper); font-family: "Fraunces", serif; font-weight: 500; }
 
+/* ───────── graph visual (§3) ───────── */
+.graphviz { margin: 3rem 0 0; }
+.graphviz svg { width: 100%; height: auto; }
+.gv-edges line { stroke: var(--muted); stroke-width: 1.2; opacity: 0.55; }
+.gv-el { fill: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 9.5px; text-anchor: middle; letter-spacing: 0.02em; }
+.gv-n rect { fill: var(--ink-3); stroke: var(--line-2); }
+.gv-n text { fill: var(--paper); font-family: "JetBrains Mono", monospace; font-size: 13px; text-anchor: middle; }
+.gv-project rect { stroke: var(--ember); stroke-width: 1.5; }
+.gv-project text { font-size: 14px; }
+.gv-source rect { stroke: var(--teal); }
+.gv-insight rect { fill: var(--ember); stroke: var(--ember); }
+.gv-insight text { fill: #1a1206; font-weight: 500; }
+
+.legend-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.65rem 2rem; margin-top: 2.6rem; }
+.legend-grid div { display: flex; align-items: baseline; gap: 0.6rem; color: var(--paper-dim); font-size: 0.95rem; }
+.legend-grid b { color: var(--paper); font-weight: 400; font-family: "Spectral", serif; }
+.lg-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; border: 1px solid var(--muted); align-self: center; }
+.lg-dot.d-ember { background: var(--ember); border-color: var(--ember); }
+.lg-dot.d-teal { background: var(--teal); border-color: var(--teal); }
+.lg-dot.d-bright { background: var(--paper); border-color: var(--paper); }
+.edge-vocab { margin-top: 1.9rem; color: var(--muted); font-family: "JetBrains Mono", monospace; font-size: 0.78rem; line-height: 1.8; max-width: var(--measure); }
+.edge-vocab span { color: var(--ember); }
+
+/* ───────── notion / human surface (§4) ───────── */
+.notion-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.8rem; margin: 3rem 0 0; }
+.nb-col { background: var(--ink-3); border: 1px solid var(--line); border-radius: 8px; padding: 0.9rem 0.7rem; min-height: 132px; }
+.nb-col > span { display: block; font-family: "JetBrains Mono", monospace; font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 0.85rem; }
+.nb-col i { display: block; height: 22px; border-radius: 5px; background: rgba(236,230,216,0.06); border: 1px solid var(--line-2); margin-bottom: 0.5rem; }
+.nb-col i.hot { background: rgba(239,154,91,0.16); border-color: var(--ember-dk); }
+.notion-dbs { display: flex; flex-wrap: wrap; gap: 0.6rem; margin: 1.7rem 0 0; }
+.notion-dbs span { font-family: "JetBrains Mono", monospace; font-size: 0.74rem; color: var(--paper-dim); border: 1px solid var(--line-2); border-radius: 999px; padding: 0.4em 0.95em; }
+.band-alt .prose:last-child { margin-top: 2rem; }
+
 /* ───────── responsive ───────── */
 @media (max-width: 760px) {
   body { font-size: 17px; }
+  .legend-grid { grid-template-columns: 1fr; }
+  .nb-col { padding: 0.6rem 0.35rem; min-height: 96px; }
+  .nb-col > span { font-size: 0.5rem; letter-spacing: 0.02em; }
+  .nb-col i { height: 16px; }
+  .notion-board { gap: 0.4rem; }
   .problem-grid { grid-template-columns: 1fr; gap: 1.8rem; }
   .band { padding: 4.5rem 7vw; }
   .diff-list li { grid-template-columns: 40px 1fr; gap: 1rem; }
