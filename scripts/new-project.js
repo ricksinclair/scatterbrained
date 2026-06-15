@@ -71,7 +71,10 @@ or searching elsewhere (\`npm run resume\`, \`npm run context -- --project ${JSO
 \`npm run search\`). Treat **Notion as the secondary lane**: follow the \`Source\` references the graph
 surfaces rather than searching it blind. Capture decisions as Insights; MERGE never CREATE;
 invalidate-don't-delete; run \`npm run lint:graph\` after writes; sync the graph at the end of each
-completed unit of work.
+completed unit of work. **A "sync" is the full pass** — re-ingest changed docs
+(\`npm run doc-index -- --stats\`), MERGE a \`Source\` for *every* new/updated artifact (incl. ones
+the indexer can't see, like \`.html\`), then \`lint:graph\` to **0 errors before** backing up. Don't
+call it synced until the change-gate is clean.
 
 ## Git
 Branch from main; conventional commits; PR before merge.
