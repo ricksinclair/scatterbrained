@@ -232,6 +232,79 @@ em { font-style: italic; color: #f3eee2; }
 .notion-dbs span { font-family: "JetBrains Mono", monospace; font-size: 0.74rem; color: var(--paper-dim); border: 1px solid var(--line-2); border-radius: 999px; padding: 0.4em 0.95em; }
 .band-alt .prose:last-child { margin-top: 2rem; }
 
+/* ───────── getting-started page ───────── */
+.topbar {
+  position: relative; z-index: 3; display: flex; align-items: center; justify-content: space-between;
+  padding: 1.4rem 7vw; border-bottom: 1px solid var(--line);
+  font-family: "JetBrains Mono", monospace; font-size: 0.8rem;
+}
+.tb-home { color: var(--paper); letter-spacing: 0.02em; }
+.tb-home:hover { color: var(--ember); }
+.tb-here { color: var(--muted); text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.66rem; }
+
+.gs-hero {
+  border-top: none; padding-top: 5.5rem;
+  background:
+    radial-gradient(120% 90% at 82% 6%, rgba(239,154,91,0.10), transparent 55%),
+    radial-gradient(70% 60% at 6% 96%, rgba(121,180,171,0.06), transparent 60%);
+}
+.gs-title { font-size: clamp(2.4rem, 6vw, 4.2rem); line-height: 1.02; margin: 0 0 1.6rem; max-width: 16ch;
+  background: linear-gradient(180deg, #fbf4e6, #cbb89c 92%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; }
+.gs-lede { font-size: 1.3rem; color: var(--paper); max-width: 52ch; margin-bottom: 1.6rem; }
+.gs-why { margin-top: 2.2rem; font-size: 1rem; }
+
+/* glossary */
+.gloss { margin: 3rem 0 0; display: grid; gap: 0; }
+.gloss > div { display: grid; grid-template-columns: 230px 1fr; gap: 2rem; padding: 1.7rem 0; border-top: 1px solid var(--line); }
+.gloss dt { font-family: "Fraunces", serif; font-size: 1.35rem; color: var(--ember); }
+.gloss dd { margin: 0; color: var(--paper-dim); font-size: 1.04rem; line-height: 1.6; max-width: 56ch; }
+
+/* track chooser */
+.tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.6rem; margin: 3rem 0 0; }
+.track {
+  display: block; border: 1px solid var(--line-2); border-radius: 10px; padding: 2rem 1.9rem;
+  background: rgba(236,230,216,0.015); transition: border-color .2s, transform .2s, background .2s;
+}
+.track:hover { border-color: var(--ember); transform: translateY(-3px); }
+.track-primary { border-color: var(--ember-dk); background: rgba(239,154,91,0.05); }
+.track-badge { display: inline-block; font-family: "JetBrains Mono", monospace; font-size: 0.62rem;
+  text-transform: uppercase; letter-spacing: 0.18em; color: var(--ember); border: 1px solid var(--line-2);
+  border-radius: 999px; padding: 0.35em 0.85em; margin-bottom: 1.1rem; }
+.track h3 { font-family: "Fraunces", serif; font-size: 1.5rem; font-weight: 400; margin: 0 0 0.7rem; color: var(--paper); }
+.track p { margin: 0; color: var(--paper-dim); font-size: 1.02rem; line-height: 1.55; }
+.track p code { font-size: 0.78em; }
+.track-go { display: inline-block; margin-top: 1.2rem; font-family: "JetBrains Mono", monospace;
+  font-size: 0.78rem; color: var(--ember); }
+
+/* numbered steps */
+.steps { list-style: none; counter-reset: step; margin: 3rem 0 0; padding: 0; }
+.steps > li { counter-increment: step; display: grid; grid-template-columns: 56px 1fr; gap: 1.6rem;
+  padding: 2rem 0; border-top: 1px solid var(--line); align-items: start; }
+.steps > li::before { content: counter(step); font-family: "Fraunces", serif; font-style: italic;
+  font-size: 2rem; color: var(--ember); line-height: 1; }
+.step-body h3 { font-size: 1.5rem; margin: 0 0 0.7rem; color: var(--paper); }
+.step-body p { margin: 0 0 0.9rem; color: var(--paper-dim); font-size: 1.05rem; line-height: 1.6; max-width: 60ch; }
+.step-body p:last-child { margin-bottom: 0; }
+.step-body .code { max-width: 100%; }
+.step-tip { font-size: 0.95rem !important; color: var(--muted) !important; border-left: 2px solid var(--ember-dk);
+  padding-left: 1rem; }
+.step-tip span { font-family: "JetBrains Mono", monospace; font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.14em; color: var(--ember); margin-right: 0.5em; }
+
+/* "ask Claude" example line + list */
+.ask-line { font-family: "Fraunces", serif; font-style: italic; font-size: 1.2rem !important; color: var(--paper) !important;
+  border-left: 2px solid var(--ember); padding: 0.2rem 0 0.2rem 1.1rem; }
+.ask-list { margin: 0 0 0.9rem; padding-left: 1.1rem; color: var(--paper-dim); }
+.ask-list li { margin-bottom: 0.55rem; font-size: 1.02rem; line-height: 1.5; }
+.ask-list strong { color: var(--paper); font-weight: 400; font-style: italic; }
+
+/* honest-note callout */
+.note { margin-top: 3rem; border: 1px solid var(--line-2); border-radius: 8px; padding: 1.6rem 1.8rem;
+  background: var(--ink-3); font-size: 1.02rem; }
+.note-tag { display: block; font-family: "JetBrains Mono", monospace; font-size: 0.66rem; text-transform: uppercase;
+  letter-spacing: 0.18em; color: var(--ember); margin-bottom: 0.7rem; }
+
 /* ───────── responsive ───────── */
 @media (max-width: 760px) {
   body { font-size: 17px; }
@@ -243,6 +316,11 @@ em { font-style: italic; color: #f3eee2; }
   .problem-grid { grid-template-columns: 1fr; gap: 1.8rem; }
   .band { padding: 4.5rem 7vw; }
   .diff-list li { grid-template-columns: 40px 1fr; gap: 1rem; }
+  .gloss > div { grid-template-columns: 1fr; gap: 0.5rem; }
+  .steps > li { grid-template-columns: 36px 1fr; gap: 1rem; }
+  .steps > li::before { font-size: 1.6rem; }
+  .gs-lede { font-size: 1.15rem; }
+  .topbar { padding: 1.1rem 7vw; }
   /* Comparison table fits a phone instead of overflowing to one column:
      table-layout:fixed forces columns to wrap within the viewport. */
   .compare { min-width: 0; width: 100%; table-layout: fixed; }
