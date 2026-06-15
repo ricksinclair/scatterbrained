@@ -35,6 +35,18 @@ in order; report a concise summary at the end, not a play-by-play.
   `NOTION_TOKEN` and run `npm run index -- --since <last-sync>` — it uses `/v1/search` to list only
   the changed pages in one cheap metadata call (no KB database needed; the one-root share is what
   scopes it), then you only read those.
+- **Scope guard (wide change-sets):** a small change-set (≲10 pages) → read all of it. But two modes
+  diverge when the connector returns **dozens of changed pages**:
+  - *Explicit or catch-up run* (the user asked to sync / "catch what's been missed", or the last sync
+    is stale) → **read the whole set, even 30–40+ pages. Don't be reluctant** — reading many pages
+    one-by-one through the connector is tedious but it is the job.
+  - *Proactive end-of-work run* on a focused session → read the pages **related to the project(s) you
+    worked** (their `Source` already `INFORMS` that Project, or title/tags match) and **defer the
+    rest**. Deferral ≠ skip: **don't advance the last-sync marker** while pages are deferred, and
+    report them so a later run picks them up. If you can't tell what the session was about, read
+    everything.
+  The wider pass is always available on request; offer it when a deferred backlog or a stale last-sync
+  has accumulated. The guard is a focus optimization, never a standing excuse to let the graph drift.
 - Rules: `MERGE` only; every node gets ≥1 edge (no orphans); don't invent labels or edge types.
 
 ## 3 — Synthesize (the payoff)
@@ -63,4 +75,6 @@ page, `CHANGELOG.md`) so the graph doesn't get rich behind stale human docs.
 
 ## 5 — Report
 Health + node counts, what was ingested vs. skipped, new insights, any supersession / doc-drift
-candidates left for you, and the backup result.
+candidates left for you, and the backup result. State the **mode** — full/wide vs session-scoped —
+and if the scope guard deferred any Notion pages, say how many and that the last-sync marker was held
+back, so a later "wider sync" clears them.
