@@ -19,6 +19,19 @@ taken). Full setup (docker-compose Neo4j, schema, demo) is clone-and-run; see
 
 ---
 
+## Start here
+
+**New to all this?** There's a friendly, plain-English walkthrough — no prior knowledge assumed —
+at **[ulrictodman.com/engram/getting-started.html](https://ulrictodman.com/engram/getting-started.html)**.
+It has two clearly-signposted tracks:
+
+- **You use Notion + Claude (no terminal).** The friendliest path: connect Claude to Notion, make
+  one home page, and *ask Claude* to set things up. No token, no code.
+- **You're comfortable in a terminal.** The CLI path below — clone, `.env`, one `npm` command.
+
+The rest of this README is the developer reference. If words like *knowledge graph* are new, start
+with the walkthrough — it explains the *what* and *why* before the *how*.
+
 ## The problem
 
 - **Notion** is a great capture surface and a poor reasoning surface — it can't
@@ -202,13 +215,11 @@ Engram's own describing pages when they fall behind what's shipped — the stale
 problem this project is, ironically, built to prevent. See the
 [CHANGELOG](CHANGELOG.md).
 
-**Where it's headed** (tracked as GitHub issues) — the throughline is making this
-effortless for **non-technical Notion + Claude users**: one root, no token required,
-a friendly front door.
+The throughline of the recent work has been making this effortless for **non-technical Notion +
+Claude users**: one root, no token required, a friendly front door. That arc is now complete —
+see the [Getting Started walkthrough](https://ulrictodman.com/engram/getting-started.html).
 
-- [**#5** — Welcoming onboarding](https://github.com/ricksinclair/engram/issues/5): detailed, plain-English docs, non-technical-first.
-
-*(Recently done: [#2 tests](https://github.com/ricksinclair/engram/issues/2), [#3 one root](https://github.com/ricksinclair/engram/issues/3), [#4 two setup paths](https://github.com/ricksinclair/engram/issues/4), [#6 agent recipes](https://github.com/ricksinclair/engram/issues/6), [#7 skills showcase](https://github.com/ricksinclair/engram/issues/7).)*
+*(Recently done: [#2 tests](https://github.com/ricksinclair/engram/issues/2), [#3 one root](https://github.com/ricksinclair/engram/issues/3), [#4 two setup paths](https://github.com/ricksinclair/engram/issues/4), [#6 agent recipes](https://github.com/ricksinclair/engram/issues/6), [#7 skills showcase](https://github.com/ricksinclair/engram/issues/7), [#5 welcoming onboarding](https://github.com/ricksinclair/engram/issues/5). New ideas welcome — [open an issue](https://github.com/ricksinclair/engram/issues).)*
 
 ## Credits
 
