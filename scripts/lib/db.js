@@ -21,9 +21,30 @@ export async function run(driver, cypher, params = {}) {
   try {
     const res = await session.run(cypher, params);
     return res.records;
+  } catch (err) {
+    throw annotateConnectionError(err);
   } finally {
     await session.close();
   }
+}
+
+// Turn opaque driver errors (auth, unreachable) into an actionable hint so
+// users know to set NEO4J_PASSWORD / create .env rather than guessing.
+export function annotateConnectionError(err) {
+  const code = err && err.code ? String(err.code) : '';
+  if (code.includes('Security.Unauthorized')) {
+    err.message =
+      `Neo4j authentication failed for user "${USER}" at ${URI}.\n` +
+      `  → Engram defaults to password "engram-local" (the bundled docker-compose.yml).\n` +
+      `  → If your instance uses a different password, copy .env.example to .env and set NEO4J_PASSWORD.\n` +
+      `Original: ${err.message}`;
+  } else if (code.includes('ServiceUnavailable') || code.includes('Routing')) {
+    err.message =
+      `Could not reach Neo4j at ${URI}.\n` +
+      `  → Start it with: docker compose up -d  (or check NEO4J_URI in .env).\n` +
+      `Original: ${err.message}`;
+  }
+  return err;
 }
 
 // Parse `--flag value` and `--flag` (boolean) style args into an object.
