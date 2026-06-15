@@ -8,6 +8,31 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
+## [Unreleased] — The graph-first rule enforces itself
+
+**TL;DR (explain-like-I'm-5):** Engram kept *telling* the AI "check the memory graph
+first" — but telling isn't enforcing, and sometimes it forgot. Now `new-project` drops
+two tiny **hooks** into a project that re-show that rule to the AI automatically, every
+turn, so it can't quietly skip it. They're built to barely cost anything (~40 extra words
+of context per turn), and you can switch them off anytime with `/hooks`.
+
+**Technical**
+- **Graph-first hooks** — `new-project` now writes `.claude/settings.json` + two scripts
+  under `.claude/hooks/`: a `SessionStart` hook that injects the full graph-first rule once
+  (~141 tokens) and a deliberately terse `UserPromptSubmit` hook that re-injects a
+  keyword+action nudge every turn (~40 tokens). This moves "consult the graph first" from a
+  CLAUDE.md instruction (read once, easily missed) to a deterministic, harness-run check —
+  the same *rules-become-checks* principle as `lint:graph`, applied to recall. Per-turn text
+  is kept minimal on purpose; the rationale lives in the once-per-session block.
+- New exports in `new-project.js` (`agentConfigFiles`, `mergeSettings`, `writeAgentConfig`),
+  unit-tested: hook scripts emit valid JSON, settings-merge is idempotent and preserves
+  unrelated keys, and the per-turn nudge has a size guard so it can't bloat back to the full rule.
+- Hook commands use `$CLAUDE_PROJECT_DIR`, so they resolve from any subdirectory of the project.
+- **Honest caveat in the docs** — the site (new differentiator *vii*, "Enforced recall — honestly
+  costed") and README state the per-turn context cost up front (~40 tokens/turn; full rule once per
+  session; disable via `/hooks`). The non-technical Getting Started is left untouched: that path is
+  the Notion+MCP lane, which has no hook surface, so the caveat would only confuse it.
+
 ## [1.4.0] — Recipes you can just ask for, and a graph that keeps itself honest
 
 **TL;DR (explain-like-I'm-5):** A big bundle. Engram now (1) lets you **just ask
