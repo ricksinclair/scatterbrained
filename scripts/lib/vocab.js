@@ -32,6 +32,7 @@ export const SOURCE_KINDS = {
   skill: 'A Claude skill (SKILL.md).',
   protocol: 'A collaboration/operating protocol document.',
   live_demo: 'A deployed/live site or demo (referenced by URL).',
+  github_issue: 'A GitHub issue or pull request (referenced by URL).',
 };
 
 export const SOURCE_KIND_LIST = Object.keys(SOURCE_KINDS);
