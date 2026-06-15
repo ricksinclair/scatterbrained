@@ -37,6 +37,11 @@ page that's stale *because* it was left alone — this catches that.)
 - **Skills showcase** — a benefit-led "what you can just *do*" section (README + site §05):
   each skill paired as *"just ask Claude…"* (MCP path) alongside its one-line command (CLI path),
   the no-terminal/terminal split made scannable for non-technical Notion + Claude users. (#7)
+- **graph-sync: run-at-end-of-work trigger** — the `graph-sync` recipe now says explicitly to run
+  not only on request but **proactively, at the end of completing any meaningful unit of work**, so a
+  finished task's durable conclusions are captured before the session ends (the graph is the
+  cross-session resume mechanism). A clarification to the recipe's "when to run," not a behavior
+  change to the scripts.
 - **Welcoming onboarding** — a dedicated, plain-English **Getting Started** page
   (`docs/getting-started.html`) that takes a brand-new user from nothing to a working setup. Two
   signposted tracks (Notion + Claude / no-terminal *first*, then developer / CLI), a plain-English
