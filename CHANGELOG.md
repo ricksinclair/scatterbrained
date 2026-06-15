@@ -34,6 +34,9 @@ page that's stale *because* it was left alone — this catches that.)
 - **Agent recipes** (`skills/`) — `graph-sync` and `new-project` as MCP recipes an agent
   follows directly (no token), the no-terminal counterpart to the scripts. Shipped in the
   package. (#6)
+- **Skills showcase** — a benefit-led "what you can just *do*" section (README + site §05):
+  each skill paired as *"just ask Claude…"* (MCP path) alongside its one-line command (CLI path),
+  the no-terminal/terminal split made scannable for non-technical Notion + Claude users. (#7)
 
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 

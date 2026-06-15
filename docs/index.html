@@ -226,10 +226,81 @@
   </div>
 </section>
 
-<!-- ───────────────────────── DIFFERENTIATORS ───────────────────────── -->
-<section class="band" id="why">
+<!-- ───────────────────────── SKILLS SHOWCASE ───────────────────────── -->
+<section class="band" id="skills">
   <div class="wrap">
-    <p class="section-tag">05 — what makes it different</p>
+    <p class="section-tag">05 — what you can just do</p>
+    <h2>Skills, not commands.</h2>
+    <p class="prose">
+      Everything Engram does is a <em>skill</em> you reach for in plain language. If you use
+      Claude with the Notion connection, <strong>just ask</strong> — no token, no terminal.
+      Prefer the keyboard? Every skill has a one-line command. Same result; pick your lane.
+    </p>
+
+    <div class="skills">
+      <article class="skill">
+        <h3>Stand up a project</h3>
+        <p>One move builds the whole thing: a Notion workspace (Kanban, changelog, test
+        tracking, docs index, a capture page), the project registered in the graph, and a wired
+        <code>CLAUDE.md</code> dropped in your repo.</p>
+        <p class="ask"><span>Ask:</span> “Set up a new Engram project called Acme.”</p>
+        <p class="cli"><code>engram new-project --name "Acme"</code></p>
+      </article>
+
+      <article class="skill">
+        <h3>Refresh the whole graph</h3>
+        <p>Re-reads only what changed across Notion and your files, folds in new facts, surfaces
+        fresh cross-project insights, checks integrity, and backs everything up — in one pass.</p>
+        <p class="ask"><span>Ask:</span> “Run a graph-sync.”</p>
+        <p class="cli"><code>engram resume</code> · <code>lint:graph</code> · <code>export</code></p>
+      </article>
+
+      <article class="skill">
+        <h3>Find anything by meaning</h3>
+        <p>Ask in your own words. “How do I make money from this?” surfaces notes about revenue
+        and pricing even when they never say it — keyword and meaning, blended and ranked.</p>
+        <p class="ask"><span>Ask:</span> “Search Engram for how this makes money.”</p>
+        <p class="cli"><code>engram search "how do I make money"</code></p>
+      </article>
+
+      <article class="skill">
+        <h3>Pick up where you left off</h3>
+        <p>A “where were we” brief across every project — freshness, goals, the newest
+        conclusions, and what's still open — so a new session starts already caught up.</p>
+        <p class="ask"><span>Ask:</span> “Where were we?”</p>
+        <p class="cli"><code>engram resume</code></p>
+      </article>
+
+      <article class="skill">
+        <h3>Keep it honest</h3>
+        <p>When a fact is replaced, retire it — Engram marks it superseded instead of deleting,
+        so the history survives. A review pass surfaces the stale candidates for you to confirm.</p>
+        <p class="ask"><span>Ask:</span> “Retire the old pricing decision; it changed.”</p>
+        <p class="cli"><code>engram review:supersession</code> · <code>supersede</code></p>
+      </article>
+
+      <article class="skill">
+        <h3>Assemble context to paste</h3>
+        <p>Pull a clean, scoped context block — by project, domain, or tag — ready to drop into
+        any chat, so the assistant reasons over your real knowledge, not a vague summary.</p>
+        <p class="ask"><span>Ask:</span> “Give me the context block for Acme.”</p>
+        <p class="cli"><code>engram context --project Acme</code></p>
+      </article>
+    </div>
+
+    <p class="prose skills-foot">
+      The “ask Claude” path runs over the Notion + Neo4j MCPs as
+      <a href="https://github.com/ricksinclair/engram/tree/main/skills">recipes</a> the agent
+      follows directly — the no-terminal twin of the toolkit. Full command reference in the
+      <a href="https://github.com/ricksinclair/engram#the-toolkit">README</a>.
+    </p>
+  </div>
+</section>
+
+<!-- ───────────────────────── DIFFERENTIATORS ───────────────────────── -->
+<section class="band band-alt" id="why">
+  <div class="wrap">
+    <p class="section-tag">06 — what makes it different</p>
     <h2>Six ideas doing the work.</h2>
     <ol class="diff-list">
       <li>
@@ -273,9 +344,9 @@
 </section>
 
 <!-- ───────────────────────── COMPARISON ───────────────────────── -->
-<section class="band band-alt">
+<section class="band">
   <div class="wrap">
-    <p class="section-tag">06 — honestly, why not just…</p>
+    <p class="section-tag">07 — honestly, why not just…</p>
     <h2>Where each approach lands.</h2>
     <p class="prose">
       Bi-temporal graphs for agents already exist — Graphiti/Zep, Mem0, Letta are good and
