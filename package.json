@@ -1,6 +1,6 @@
 {
   "name": "engram-kg",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Engram — an agent-maintained, bi-temporal knowledge graph for AI memory. Neo4j canonical truth; Notion + local files as capture lanes.",
   "keywords": [
     "knowledge-graph", "neo4j", "ai-memory", "agent-memory",
