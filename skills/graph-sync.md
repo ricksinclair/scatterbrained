@@ -29,8 +29,12 @@ in order; report a concise summary at the end, not a play-by-play.
   (Person/Organization/Project/Idea/Rule/Resource/Skill/Goal), with `INFORMS` edges from the
   Source. Skip pure boilerplate (still mark its hash).
 - **Notion:** for each tracked page that changed (or new pages under your root), read it via the
-  Notion MCP and `MERGE` the same way; `source_kind` = `notion_page` (or `notion_workspace` for
-  a project's top-level hub).
+  Notion MCP **connector** and `MERGE` the same way; `source_kind` = `notion_page` (or
+  `notion_workspace` for a project's top-level hub). The connector reaches every subpage through
+  your **one-root** share — no per-page sharing. *Faster, deterministic detection (optional):* set
+  `NOTION_TOKEN` and run `npm run index -- --since <last-sync>` — it uses `/v1/search` to list only
+  the changed pages in one cheap metadata call (no KB database needed; the one-root share is what
+  scopes it), then you only read those.
 - Rules: `MERGE` only; every node gets ≥1 edge (no orphans); don't invent labels or edge types.
 
 ## 3 — Synthesize (the payoff)
