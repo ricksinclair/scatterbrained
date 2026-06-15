@@ -8,7 +8,7 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
-## [Unreleased] — Honest Notion surfaces: digests for humans, not empty mirrors
+## [1.7.0] — Honest Notion surfaces: digests for humans, not empty mirrors (2026-06-15)
 
 **TL;DR (explain-like-I'm-5):** The Notion databases Engram sets up (changelog, task board, test
 tracking…) were being presented as things you "run your project in" — but in real use they sat
