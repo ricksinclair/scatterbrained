@@ -53,6 +53,10 @@ page that's stale *because* it was left alone — this catches that.)
   `context` / `search`) for any question about work done or decisions made, with **Notion as the
   secondary lane** reached via the `Source` references the graph surfaces — instead of answering
   from memory or searching blind. Makes the agent consult the graph unprompted, not only when asked.
+- **"A sync is the full pass" guard in the generated `CLAUDE.md`** — the template now spells out that
+  syncing the graph means re-ingesting changed docs + MERGEing a `Source` for *every* new/updated
+  artifact (incl. ones the indexer can't see, like `.html`) + `lint:graph` to 0 errors *before*
+  backup — not just writing one Insight. Guards against calling a partial sync "done."
 
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 
