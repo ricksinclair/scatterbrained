@@ -12,6 +12,32 @@
 // Severity: ERROR fails the run (exit 1); WARN is reported but does not fail.
 import { getDriver, run, parseArgs, toPlain } from './lib/db.js';
 import { SOURCE_KIND_LIST, FILE_BACKED_KINDS } from './lib/vocab.js';
+import { IDENTITY_SIGNALS } from './lib/identity.js';
+
+// Build the `likely-duplicate-entity` query: for every (label, identity-signal)
+// pair, group nodes by that signal's value and flag any value shared by more
+// than one distinct natural key. That's the semantic duplicate MERGE can't see —
+// the same real entity under two different names (see scripts/lib/identity.js).
+function buildLikelyDuplicateCypher() {
+  const blocks = [];
+  for (const [label, props] of Object.entries(IDENTITY_SIGNALS)) {
+    for (const prop of props) {
+      blocks.push(`
+        MATCH (n:\`${label}\`)
+        WHERE n.\`${prop}\` IS NOT NULL AND trim(toString(n.\`${prop}\`)) <> ''
+        WITH n.\`${prop}\` AS sig,
+             collect(DISTINCT coalesce(n.name, n.title, n.id)) AS keys
+        WHERE size(keys) > 1
+        RETURN ['${label}'] AS labels,
+               '${prop}=' + toString(sig) + ' shared by: ' + keys[0] + ' / ' + keys[1]
+               + CASE WHEN size(keys) > 2 THEN ' / +' + toString(size(keys) - 2) + ' more' ELSE '' END AS key`);
+    }
+  }
+  // No identity signals configured anywhere -> a query that returns nothing.
+  return blocks.length
+    ? blocks.join('\n      UNION ALL\n')
+    : `RETURN [] AS labels, '' AS key LIMIT 0`;
+}
 
 // Labels we expect to carry a created_at timestamp.
 const DATED_LABELS = ['Insight', 'Idea', 'Project', 'Goal', 'Source', 'Rule', 'Skill', 'Person', 'Organization', 'Resource'];
@@ -65,6 +91,12 @@ const CHECKS = [
       WITH labels(n)[0] AS label, n.name AS key, count(*) AS c
       WHERE c > 1
       RETURN [label] AS labels, key + ' (x' + toString(c) + ')' AS key`,
+  },
+  {
+    name: 'likely-duplicate-entity',
+    severity: 'WARN',
+    hint: 'Same-label nodes share an identity signal (repo_url/url/file_path/notion_id/contact_info) under different names — almost certainly the same entity created twice. Consolidate onto one node (move edges, DETACH DELETE the dupe) and add the other name to its `aliases`.',
+    cypher: buildLikelyDuplicateCypher(),
   },
   {
     name: 'stale-source-informing-active',

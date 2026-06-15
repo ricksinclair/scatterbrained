@@ -61,6 +61,13 @@ it honest.**
 - **Lint-enforced integrity.** Rules become checks: `npm run lint:graph` fails on
   orphans, undated nodes, unlinked insights/sources, and off-vocabulary tags, so
   the graph can't silently rot.
+- **Duplicate-resistant across sessions.** `MERGE` dedupes on an exact key, but two
+  sessions can name the same entity differently — and then `MERGE` *creates* a parallel
+  node instead of preventing one. Engram closes that gap from both ends: `add-node`
+  warns before it writes when a new node shares an identity signal (`repo_url`, `url`,
+  `file_path`, …) or closely resembles an existing one, and `lint:graph`'s
+  `likely-duplicate-entity` check catches any that slip through. Alternate names live on
+  the canonical node as searchable `aliases`.
 - **Agent-native.** Built so an LLM can resume exactly where it left off
   (`npm run resume`) and tend the graph itself, not as a bolt-on. New projects ship
   `.claude/` hooks that re-inject the "consult the graph first" rule every turn — so it's
@@ -160,7 +167,8 @@ The full command reference is just below. The "ask Claude" recipes live in
 |---------|--------------|
 | `npm run new:project -- --name "X"` | Stand up a whole project at once: the Notion operations workspace (Kanban + Documentation Index + Changelog + Test Run Metrics + Problem Tests + status pages), a `Project`+`Goal` in the graph, `notion-ids.json`, and a repo `CLAUDE.md`. Graph + operations, one command. Needs `NOTION_TOKEN` + `NOTION_PARENT_PAGE_ID`; `--dry-run` to preview. |
 | `npm run setup:notion -- --name "X"` | Just the Notion operations workspace (no graph/CLAUDE.md). |
-| `npm run lint:graph` | Integrity backstop — orphans, undated nodes, unlinked insights/sources, off-vocabulary `source_kind`. Exit 1 on any error. |
+| `npm run lint:graph` | Integrity backstop — orphans, undated nodes, unlinked insights/sources, off-vocabulary `source_kind`, likely-duplicate entities. Exit 1 on any error. |
+| `npm run add -- <type> --name "X" [--aliases "a,b"] [--force]` | MERGE-add any node. Guards against semantic duplicates before writing (shared identity signal or look-alike name); `--aliases` records alternate names; `--force` skips the guard. |
 | `npm run search -- "<query>"` | **Hybrid search** — keyword (BM25) + semantic (local embeddings) fused via RRF, ranked, bi-temporal-aware, with provenance. Degrades to keyword-only if not embedded. |
 | `npm run embed` | Backfill semantic embeddings (local `bge-small-en-v1.5`, no API). Needs the optional `@xenova/transformers` dep; run once, then `search` goes hybrid. |
 | `npm run resume` | Cross-session "where were we" brief. |
