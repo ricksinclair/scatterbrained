@@ -31,6 +31,7 @@
     "supersede": "node scripts/supersede.js",
     "review:supersession": "node scripts/review-supersession.js",
     "review:docs": "node scripts/review-doc-staleness.js",
+    "review:decisions": "node scripts/review-undocumented-decisions.js",
     "check:notion": "node scripts/check-notion.js",
     "setup:notion": "node scripts/setup-notion.js",
     "new:project": "node scripts/new-project.js",
