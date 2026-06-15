@@ -8,16 +8,19 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
-## [Unreleased] — Close the "set and forget" gaps: enforce both reading and writing
+## [1.5.0] — Close the "set and forget" gaps: enforce both reading and writing (2026-06-15)
 
-**TL;DR (explain-like-I'm-5):** Two fixes so an AI assistant can't quietly let things rot.
+**TL;DR (explain-like-I'm-5):** Three fixes so an AI assistant can't quietly let things rot.
 **(1) Reading:** Engram kept *telling* the AI "check the memory graph first" — but telling
 isn't enforcing, and sometimes it forgot. Now `new-project` drops two tiny **hooks** into a
 project that re-show that rule every turn, for ~40 extra words of context (switch off with
 `/hooks`). **(2) Writing:** decisions the AI makes were landing only in the graph (which a
 person can't casually read), so the human-readable docs could go stale behind a rich graph —
 the *opposite* of the problem Engram set out to solve. A new check, `review:decisions`, now
-catches any decision that never made it to a human-readable page, so you can write it up.
+catches any decision that never made it to a human-readable page, and `writeback` helps draft
+it back into Notion as real prose. **(3) Notion sync the easy way:** change-detection now works
+off your single "one-root" home page — connect the integration once and it sees every project
+underneath, no giant spreadsheet-style database required.
 
 ### Decisions recorded this cycle (dual-write — the human-readable half)
 - **Notion change-detection follows the one-root model, not a flat KB database.** `notion-index.js`
