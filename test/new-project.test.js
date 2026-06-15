@@ -6,7 +6,7 @@ import path from 'node:path';
 import { claudeMd, mergeManifest, agentConfigFiles, mergeSettings, writeAgentConfig } from '../scripts/new-project.js';
 import { formatReport, HUMAN_SURFACES, CYPHER as UNDOC_CYPHER } from '../scripts/review-undocumented-decisions.js';
 
-test('claudeMd fills the project name, workspace url, and data_source ids', () => {
+test('claudeMd fills the project name, workspace url, and lists only scaffolded data sources', () => {
   const md = claudeMd('Acme', 'https://ws', {
     'Development Tracker': { id: 'dt-id' },
     Changelog: { id: 'cl-id' },
@@ -15,7 +15,11 @@ test('claudeMd fills the project name, workspace url, and data_source ids', () =
   assert.match(md, /https:\/\/ws/);
   assert.match(md, /data_source_id `dt-id`/);
   assert.match(md, /data_source_id `cl-id`/);
-  assert.match(md, /data_source_id `<id>`/, 'missing entries fall back to a placeholder, never undefined');
+  // Only the databases actually scaffolded are listed — no invented ids, no `undefined`.
+  assert.doesNotMatch(md, /Problem Tests: data_source_id/, 'opt-in DB not listed when absent from entries');
+  assert.doesNotMatch(md, /undefined|<id>/, 'never emits a placeholder/undefined id');
+  // Honest milestone-cadence guidance, not "log every change/test run".
+  assert.match(md, /human digests for stakeholders|digests for non-technical stakeholders/i);
 });
 
 test('mergeManifest adds a project without clobbering existing ones', () => {
