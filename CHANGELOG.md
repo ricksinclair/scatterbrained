@@ -20,6 +20,13 @@ the *opposite* of the problem Engram set out to solve. A new check, `review:deci
 catches any decision that never made it to a human-readable page, so you can write it up.
 
 ### Decisions recorded this cycle (dual-write — the human-readable half)
+- **Notion change-detection follows the one-root model, not a flat KB database.** `notion-index.js`
+  now defaults to `/v1/search` (everything shared with the integration), so connecting it *once* at
+  your one-root parent page covers every project subpage — no `NOTION_KB_DATABASE_ID`, no per-page
+  sharing. *Why:* the old token path required a single flat database, which fought the one-root +
+  Capture-page design that lets non-technical adopters keep everything under one modal page reached
+  through the connector. The KB-database mode is kept (set `NOTION_KB_DATABASE_ID`) for legacy
+  single-DB setups; the no-token MCP **connector** path stays the default for non-technical users.
 - **Enforce graph-first *recall* via hooks, not prose.** A CLAUDE.md line is read once and
   missed; a per-turn hook makes it a check. Cost bounded to ~40 tokens/turn by keeping the
   rationale in a once-per-session block. *Limit:* a hook can't force a tool call — it makes the
