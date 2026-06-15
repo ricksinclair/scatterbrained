@@ -8,13 +8,43 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
-## [Unreleased] — The graph-first rule enforces itself
+## [Unreleased] — Close the "set and forget" gaps: enforce both reading and writing
 
-**TL;DR (explain-like-I'm-5):** Engram kept *telling* the AI "check the memory graph
-first" — but telling isn't enforcing, and sometimes it forgot. Now `new-project` drops
-two tiny **hooks** into a project that re-show that rule to the AI automatically, every
-turn, so it can't quietly skip it. They're built to barely cost anything (~40 extra words
-of context per turn), and you can switch them off anytime with `/hooks`.
+**TL;DR (explain-like-I'm-5):** Two fixes so an AI assistant can't quietly let things rot.
+**(1) Reading:** Engram kept *telling* the AI "check the memory graph first" — but telling
+isn't enforcing, and sometimes it forgot. Now `new-project` drops two tiny **hooks** into a
+project that re-show that rule every turn, for ~40 extra words of context (switch off with
+`/hooks`). **(2) Writing:** decisions the AI makes were landing only in the graph (which a
+person can't casually read), so the human-readable docs could go stale behind a rich graph —
+the *opposite* of the problem Engram set out to solve. A new check, `review:decisions`, now
+catches any decision that never made it to a human-readable page, so you can write it up.
+
+### Decisions recorded this cycle (dual-write — the human-readable half)
+- **Enforce graph-first *recall* via hooks, not prose.** A CLAUDE.md line is read once and
+  missed; a per-turn hook makes it a check. Cost bounded to ~40 tokens/turn by keeping the
+  rationale in a once-per-session block. *Limit:* a hook can't force a tool call — it makes the
+  rule hard to miss, not impossible to skip.
+- **Enforce decision *documentation* by detection, not auto-prose.** Rather than auto-pushing
+  generated text into Notion (boilerplate risk), ship a detector (`review:decisions`) that
+  surfaces graph-only decisions for a human-quality write-up. Auto-writer + scheduled sync are
+  deferred to a roadmap issue.
+- **A decision isn't "captured" until it's in *both* the graph and a human-readable surface.**
+  Codified in the generated CLAUDE.md template and the graph-sync skill.
+
+**Technical**
+- **Graph-first hooks** — `new-project` now writes `.claude/settings.json` + two scripts
+  under `.claude/hooks/`: a `SessionStart` hook that injects the full graph-first rule once
+  (~141 tokens) and a deliberately terse `UserPromptSubmit` hook that re-injects a
+  keyword+action nudge every turn (~40 tokens). This moves "consult the graph first" from a
+  CLAUDE.md instruction (read once, easily missed) to a deterministic, harness-run check —
+  the same *rules-become-checks* principle as `lint:graph`, applied to recall. Per-turn text
+  is kept minimal on purpose; the rationale lives in the once-per-session block.
+- **`review:decisions`** (`review-undocumented-decisions.js`) — decision-centric drift check:
+  for each recent `Insight` ABOUT a project, is there *any* human-readable Source
+  (Notion page/workspace, README, live site) refreshed at/after it? Flags both the **stale**
+  case and the **absent** case (a decision with no human surface at all — which the doc-centric
+  `review:docs` structurally can't see). Never edits; lists candidates. Wired into graph-sync's
+  verify phase and the CLAUDE.md template's dual-write rule. Pure `formatReport` is unit-tested.
 
 **Technical**
 - **Graph-first hooks** — `new-project` now writes `.claude/settings.json` + two scripts
