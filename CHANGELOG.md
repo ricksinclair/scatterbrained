@@ -8,12 +8,15 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
-## [Unreleased] — coming in the next release
+## [1.4.0] — Recipes you can just ask for, and a graph that keeps itself honest
 
-**TL;DR (explain-like-I'm-5):** Engram now notices when its *own notes go stale* —
-a page that's wrong not because someone changed it, but because nobody did, while
-the thing it describes moved on. (Ordinary "what changed?" detection is blind to a
-page that's stale *because* it was left alone — this catches that.)
+**TL;DR (explain-like-I'm-5):** A big bundle. Engram now (1) lets you **just ask
+Claude** to do things — no terminal — right alongside every command; (2) **notices
+when its own notes and pages fall behind** what actually shipped; (3) keeps **all
+your projects under one Notion home** you set up once; (4) ships a **welcoming,
+plain-English Getting Started**; and (5) hands the AI sharper habits — check the
+graph *first* for memory, treat it as the source of truth, and keep it *fully* in
+sync, not half.
 
 **Technical**
 - `review:docs` (`review-doc-staleness.js`) — surfaces, per project, the *describing*
