@@ -60,6 +60,10 @@ sync, not half.
   syncing the graph means re-ingesting changed docs + MERGEing a `Source` for *every* new/updated
   artifact (incl. ones the indexer can't see, like `.html`) + `lint:graph` to 0 errors *before*
   backup — not just writing one Insight. Guards against calling a partial sync "done."
+- **Housekeeping-vs-decision test in the generated `CLAUDE.md`** — the template now gives the test for
+  *what* to capture: "would a future session want to follow this rule or rationale?" If yes it's a
+  decision worth an Insight, even when the action that surfaced it is mundane housekeeping; a one-off
+  mechanical act or status update is not. Guards against under-capturing real decisions.
 
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 

@@ -69,7 +69,10 @@ This project is a \`Project\` node in your Engram graph. **Query the graph FIRST
 about work done, decisions made, or *why* something is the way it is — before answering from memory
 or searching elsewhere (\`npm run resume\`, \`npm run context -- --project ${JSON.stringify(name)}\`,
 \`npm run search\`). Treat **Notion as the secondary lane**: follow the \`Source\` references the graph
-surfaces rather than searching it blind. Capture decisions as Insights; MERGE never CREATE;
+surfaces rather than searching it blind. Capture **decisions** as Insights — the test is
+*"would a future session want to follow this rule or rationale?"* (a *policy* is a decision
+even when the action that surfaced it is mundane housekeeping; a one-off mechanical act or
+status update is not). MERGE never CREATE;
 invalidate-don't-delete; run \`npm run lint:graph\` after writes; sync the graph at the end of each
 completed unit of work. **A "sync" is the full pass** — re-ingest changed docs
 (\`npm run doc-index -- --stats\`), MERGE a \`Source\` for *every* new/updated artifact (incl. ones
