@@ -30,6 +30,11 @@ catches any decision that never made it to a human-readable page, so you can wri
   deferred to a roadmap issue.
 - **A decision isn't "captured" until it's in *both* the graph and a human-readable surface.**
   Codified in the generated CLAUDE.md template and the graph-sync skill.
+- **Publish the context cost of any standing mechanism — transparency is unconditionally good.**
+  A mechanism that injects into the context budget (a hook, a preamble) ships with its measured
+  cost: when it's cheap the number is a selling point, when it's expensive it's an honest admission
+  — either way the reader is better served. Embodied by the site's measured cost table (recall hooks
+  ≈ 139 tokens once + ~40/turn; ~3% worst-case on a 128K window; negligible on 1M).
 
 **Technical**
 - **Graph-first hooks** — `new-project` now writes `.claude/settings.json` + two scripts
