@@ -30,6 +30,19 @@ catches any decision that never made it to a human-readable page, so you can wri
   deferred to a roadmap issue.
 - **A decision isn't "captured" until it's in *both* the graph and a human-readable surface.**
   Codified in the generated CLAUDE.md template and the graph-sync skill.
+- **The graph→Notion writer is hybrid (detect → draft → human-quality prose → post), not a raw dump.**
+  A mechanical `summary`→Notion copy produces boilerplate; the writer instead seeds each entry with
+  the Insight's `full_text` for the agent to rewrite as prose, then posts on `--commit`. *Alternatives
+  rejected:* a fixed template (deterministic but robotic voice) and capture-time-only authoring (good
+  prose but only fires during a sync and is silently skippable). The hybrid reuses the existing
+  `review:decisions` detector and stays guarded — Notion is a published surface, so it never posts
+  unattended (drafting is the default; posting needs `--commit` + `NOTION_TOKEN` + explicit entries).
+- **Ingest `CHANGELOG.md` as a Source by default.** `review:decisions` only credits human
+  surfaces tracked as graph Sources, but `CHANGELOG.md` was on the indexer's exclude list — so
+  the very file the dual-write rule points you to could never clear a flag. Changelogs are now
+  ingested (removed from `excludeFiles`); the requirement is documented in the template and the
+  check's output. *Alternative rejected:* leave it excluded and only document the gotcha — too
+  easy to trip over for the file dual-write recommends most.
 - **Publish the context cost of any standing mechanism — transparency is unconditionally good.**
   A mechanism that injects into the context budget (a hook, a preamble) ships with its measured
   cost: when it's cheap the number is a selling point, when it's expensive it's an honest admission
@@ -50,6 +63,20 @@ catches any decision that never made it to a human-readable page, so you can wri
   case and the **absent** case (a decision with no human surface at all — which the doc-centric
   `review:docs` structurally can't see). Never edits; lists candidates. Wired into graph-sync's
   verify phase and the CLAUDE.md template's dual-write rule. Pure `formatReport` is unit-tested.
+- **`CHANGELOG.md` ingested by default** — removed from `excludeFiles` in
+  `examples/document-sources.example.json` so it lands as a `markdown` Source (already in
+  `HUMAN_SURFACES`) and can actually clear a `review:decisions` flag. The requirement —
+  the changelog must sit inside a `document-sources.json` root and out of `excludeFiles` — is
+  spelled out in the example's `_comment`, the generated CLAUDE.md template, and the check's
+  output footer. Closes part 3 of the graph→Notion write-back issue.
+- **`writeback`** (`write-back-decisions.js`) — the WRITER half of the write-back gap. Two-step,
+  guarded: the default DRAFT pass reuses the `review:decisions` query to emit undocumented decisions
+  as candidate Changelog entries (JSON, each seeded with `full_text`); `--commit` reads finalized
+  agent-authored entries (`--file` or stdin), appends each as a row to the project's Notion Changelog
+  (id from `notion-ids.json`), and marks that Notion surface fresh in the graph so the flag clears.
+  Pure `toCandidate` / `buildChangelogProperties` / `changelogId` are unit-tested (6 new tests).
+  Wired into the graph-sync skill's verify phase. Closes part 1 of the graph→Notion write-back issue;
+  the scheduled full-sync (part 2) is sequenced next, on top of this.
 
 **Technical**
 - **Graph-first hooks** — `new-project` now writes `.claude/settings.json` + two scripts

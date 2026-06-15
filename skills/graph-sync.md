@@ -50,7 +50,11 @@ page, `CHANGELOG.md`) so the graph doesn't get rich behind stale human docs.
   shipped). This catches staleness the change-gate can't see.
 - `npm run review:decisions -- --project <each project you worked>` — flags decisions that landed
   in the graph but **no human-readable surface** (the absent case `review:docs` can't see). Write
-  each up in the Notion Changelog/Decisions page + `CHANGELOG.md`, then re-sync.
+  each up in the Notion Changelog/Decisions page + `CHANGELOG.md`, then re-sync. To help close them:
+  `npm run writeback -- --project <X>` emits the flagged decisions as draft Changelog entries (each
+  seeded with the Insight's `full_text`); **rewrite each `description` into prose** (don't ship the
+  raw seed), then `npm run writeback -- --commit --file <edited.json>` posts them to the project's
+  Notion Changelog and marks that surface fresh so the flag clears. Posting needs `NOTION_TOKEN`.
 - `npm run export` (snapshot to a versioned JSON backup).
 
 ## 5 — Report

@@ -76,7 +76,9 @@ status update is not). **Dual-write every decision:** an Insight alone is machin
 record it in a *human-readable* surface (the Notion **Changelog**/**Decisions** page and
 \`CHANGELOG.md\`) so a person browsing Notion sees the *why*, not just a Cypher query. The graph
 is canonical; the human window must not rot behind it. \`npm run review:decisions\` flags decisions
-that landed in the graph but no human surface — write those up, then re-sync. MERGE never CREATE;
+that landed in the graph but no human surface — write those up, then re-sync. (For \`CHANGELOG.md\`
+to clear a flag it must be ingested as a \`Source\`: keep it inside a \`document-sources.json\` root
+and out of \`excludeFiles\` — it ships ingested by default.) MERGE never CREATE;
 invalidate-don't-delete; run \`npm run lint:graph\` after writes; sync the graph at the end of each
 completed unit of work. **A "sync" is the full pass** — re-ingest changed docs
 (\`npm run doc-index -- --stats\`), MERGE a \`Source\` for *every* new/updated artifact (incl. ones

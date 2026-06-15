@@ -69,7 +69,10 @@ export function formatReport(rows, params) {
     out.push(`▸ ${r.project}  — ${r.n} undocumented · ${where}`);
     for (const d of r.undocumented_decisions) out.push(`    • ${d}`);
   }
-  out.push('\nThese are CANDIDATES — write the human-readable entry, then graph-sync. Nothing was changed.\n');
+  out.push('\nThese are CANDIDATES — write the human-readable entry, then graph-sync. Nothing was changed.');
+  out.push('A surface only clears a flag once it is ingested as a Source: CHANGELOG.md must sit inside a');
+  out.push('document-sources.json root and out of excludeFiles (it ships ingested by default); Notion pages');
+  out.push('clear it once re-read during graph-sync.\n');
   return out.join('\n');
 }
 
