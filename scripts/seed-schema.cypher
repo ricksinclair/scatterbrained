@@ -25,10 +25,10 @@ CREATE INDEX source_file_path        IF NOT EXISTS FOR (n:Source)       ON (n.fi
 
 // Full-text (BM25/Lucene) index — the keyword retrieval lane (scripts/search.js).
 // Spans every text-bearing label/property; missing properties are simply skipped.
--- `n.aliases` is indexed too, so a search for an entity's alternate name (or a
--- name a past session used before it was consolidated) resolves to the canonical
--- node. NOTE: if this index already exists, adding a property here does not alter
--- it — DROP INDEX knowledge_text and re-run this file to pick up `aliases`.
+// `n.aliases` is indexed too, so a search for an entity's alternate name (or a
+// name a past session used before it was consolidated) resolves to the canonical
+// node. NOTE: if this index already exists, adding a property here does not alter
+// it — DROP INDEX knowledge_text and re-run this file to pick up `aliases`.
 CREATE FULLTEXT INDEX knowledge_text IF NOT EXISTS
   FOR (n:Insight|Idea|Rule|Project|Resource|Goal|Person|Organization|Skill|Source)
   ON EACH [n.summary, n.full_text, n.name, n.title, n.description, n.purpose, n.role, n.aliases];

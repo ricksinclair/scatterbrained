@@ -51,7 +51,7 @@ test('keysLookAlike catches the containment case that bit ulrictodman.com', () =
 });
 
 test('keysLookAlike does not over-match on trivial/short overlaps', () => {
-  assert.ok(!keysLookAlike('CoopOS', 'Engram'));
+  assert.ok(!keysLookAlike('Helios', 'Borealis'));
   assert.ok(!keysLookAlike('a', 'about page'), 'shorter side must clear minLen');
   assert.ok(!keysLookAlike('', 'anything'));
 });
