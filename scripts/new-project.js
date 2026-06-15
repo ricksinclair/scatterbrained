@@ -44,25 +44,33 @@ const GRAPH = `
   RETURN p.name AS project, g.name AS goal`;
 
 export function claudeMd(name, workspaceUrl, e) {
-  const ds = (k) => (e[k] ? e[k].id : '<id>');
+  // List only the databases that were actually scaffolded (Problem Tests is opt-in),
+  // driven off the real entries so the mirror never invents an id.
+  const dbLine = (k) => (e[k] ? `- ${k}: data_source_id \`${e[k].id}\`` : null);
+  const dbLines = ['Changelog', 'Documentation Index', 'Development Tracker', 'Test Run Metrics', 'Problem Tests']
+    .map(dbLine).filter(Boolean).join('\n');
   return `# CLAUDE.md — ${name}
 
 > Workspace created by Engram's new-project on ${today}. Graph + Notion, one system.
 
-## Notion (source of truth for tasks/status)
+## Notion data sources (human digests for stakeholders)
 > Canonical IDs live in notion-ids.json (validate with \`npm run check:notion\`). Mirror below.
 - Workspace home: ${workspaceUrl || '<workspace-url>'}
-- Development Tracker (Kanban): data_source_id \`${ds('Development Tracker')}\`
-- Documentation Index: data_source_id \`${ds('Documentation Index')}\`
-- Changelog: data_source_id \`${ds('Changelog')}\`
-- Test Run Metrics: data_source_id \`${ds('Test Run Metrics')}\`
-- Problem Tests: data_source_id \`${ds('Problem Tests')}\`
+${dbLines}
 
-## Workflow
-- Log tasks to the Kanban (Stage / Priority / Module / Type / Effort).
-- Document in /docs AND the Documentation Index (keep both in sync).
-- Log every change to CHANGELOG.md and the Changelog DB.
-- Log test runs to Test Run Metrics; track flaky/failing in Problem Tests.
+## Working rhythm — where each thing actually lives
+The day-to-day **sources of truth** are your **code + git/GitHub** (issues/PRs) and the **Engram
+graph** (decisions + recall). The Notion databases are **plain-language digests for non-technical
+stakeholders, written at milestones** — not live mirrors you hand-maintain. Don't log every change
+or every test run by hand; that rots. Write at milestones and let the graph + GitHub carry the rest:
+- **Changelog** — the flagship. On each release, post the version's plain-English TL;DR (one row).
+  \`npm run writeback -- --project ${JSON.stringify(name)}\` drafts it from the graph; \`--commit\` posts it.
+- **Documentation Index** — link durable docs as you write them; keep Status honest.
+- **Development Tracker** — optional; GitHub issues are the real tracker. Keep this only if a
+  non-technical stakeholder is actually reading a Notion-native board.
+- **Test Run Metrics** — a milestone *health* snapshot (latest pass rate / last green / version) on
+  release or CI-on-main, not a row per local run.
+- **Problem Tests** — opt-in (\`--with-problem-tests\`); only if a team is tracking flaky/failing tests.
 
 ## Knowledge graph (Engram) — primary source of truth for recall
 This project is a \`Project\` node in your Engram graph. **Query the graph FIRST** for any question
@@ -195,7 +203,7 @@ async function main() {
   console.error(`\n▶ new-project: ${name}${dryRun ? '  (dry run)' : ''}\n`);
 
   // 1. Notion workspace.
-  const { workspaceId, workspaceUrl, entries, dryPayloads } = await createWorkspace({ name, goal, modules, dryRun, log: (m) => console.error('  ' + m) });
+  const { workspaceId, workspaceUrl, entries, dryPayloads } = await createWorkspace({ name, goal, modules, problemTests: Boolean(args['with-problem-tests']), dryRun, log: (m) => console.error('  ' + m) });
   const block = manifestBlock(name, workspaceUrl, entries);
 
   // 2. Graph registration.

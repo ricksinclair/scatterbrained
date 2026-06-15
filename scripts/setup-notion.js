@@ -38,11 +38,34 @@ const NUM = { number: {} };
 const para = (t) => ({ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ type: 'text', text: { content: t } }] } });
 const h2 = (t) => ({ object: 'block', type: 'heading_2', heading_2: { rich_text: [{ type: 'text', text: { content: t } }] } });
 
-export function databases(modules) {
+// The operational databases. These are HUMAN DIGESTS for non-technical
+// stakeholders (partners, clients, funders, future-self) — written at milestones
+// from the real sources of truth (code, git/GitHub, the graph), NOT live mirrors
+// you hand-maintain. Each `description` is written onto the Notion database so an
+// empty one explains what it's for and who keeps it, instead of implying activity
+// that isn't there. `problemTests` is opt-in (team-scale flaky-test tracking).
+export function databases(modules, { problemTests = false } = {}) {
   const moduleOpts = modules.map((m, i) => [m, ['blue', 'green', 'purple', 'orange', 'gray'][i % 5]]);
   const suite = sel(['Unit', 'green'], ['Integration', 'blue'], ['E2E', 'purple'], ['Lint', 'orange']);
-  return [
-    { key: 'Development Tracker', purpose: 'Kanban board — tasks', props: {
+  const dbs = [
+    { key: 'Changelog', purpose: 'Release notes (flagship human surface)',
+      description: 'Plain-English release notes — the flagship surface for non-technical stakeholders. One row per release: post the version\'s TL;DR (draft it from the graph with `writeback`, then `--commit`). This is the Notion DB most worth keeping current.',
+      props: {
+      Name: TITLE, Date: DATE,
+      Type: sel(['feat', 'green'], ['fix', 'red'], ['docs', 'gray'], ['refactor', 'purple'], ['test', 'yellow'], ['chore', 'default'], ['perf', 'blue']),
+      Version: TEXT, Description: TEXT,
+    } },
+    { key: 'Documentation Index', purpose: 'Index of durable docs',
+      description: 'An index of durable docs (architecture, guides, status) for people who won\'t browse the repo. Link docs here as you write them and keep Status honest.',
+      props: {
+      Name: TITLE,
+      Category: sel(['Architecture', 'blue'], ['API Reference', 'purple'], ['Guides', 'green'], ['Status Reports', 'orange'], ['Testing', 'yellow'], ['Security', 'red']),
+      Status: sel(['Draft', 'gray'], ['Current', 'green'], ['Needs Update', 'orange'], ['Archived', 'default']),
+      Owner: TEXT, 'Last Updated': DATE,
+    } },
+    { key: 'Development Tracker', purpose: 'Optional stakeholder task view',
+      description: 'Optional Kanban for non-technical stakeholders who want a Notion-native view of what\'s in progress vs done. GitHub issues are the real tracker — only keep this in sync if someone is actually reading it.',
+      props: {
       Name: TITLE,
       Stage: sel(['Backlog', 'gray'], ['To Do', 'blue'], ['In Progress', 'yellow'], ['Review', 'orange'], ['Done', 'green']),
       Priority: sel(['P0-Critical', 'red'], ['P1-High', 'orange'], ['P2-Medium', 'yellow'], ['P3-Low', 'gray']),
@@ -50,33 +73,29 @@ export function databases(modules) {
       Type: sel(['Feature', 'blue'], ['Bug', 'red'], ['Refactor', 'purple'], ['Test', 'yellow'], ['Docs', 'gray']),
       Effort: sel(['XS', 'gray'], ['S', 'green'], ['M', 'yellow'], ['L', 'orange'], ['XL', 'red']),
     } },
-    { key: 'Documentation Index', purpose: 'All docs', props: {
-      Name: TITLE,
-      Category: sel(['Architecture', 'blue'], ['API Reference', 'purple'], ['Guides', 'green'], ['Status Reports', 'orange'], ['Testing', 'yellow'], ['Security', 'red']),
-      Status: sel(['Draft', 'gray'], ['Current', 'green'], ['Needs Update', 'orange'], ['Archived', 'default']),
-      Owner: TEXT, 'Last Updated': DATE,
-    } },
-    { key: 'Changelog', purpose: 'Release tracking', props: {
-      Name: TITLE, Date: DATE,
-      Type: sel(['feat', 'green'], ['fix', 'red'], ['docs', 'gray'], ['refactor', 'purple'], ['test', 'yellow'], ['chore', 'default'], ['perf', 'blue']),
-      Version: TEXT, Description: TEXT,
-    } },
-    { key: 'Test Run Metrics', purpose: 'Pass/fail over time', props: {
+    { key: 'Test Run Metrics', purpose: 'Milestone health snapshot',
+      description: 'A milestone health snapshot — latest pass rate, last green build, version — updated on release or CI-on-main, NOT a row per local test run. The signal a stakeholder wants is "is it healthy?", not run-by-run history.',
+      props: {
       Name: TITLE, 'Run Date': DATE, Suite: suite,
       Passed: NUM, Failed: NUM, Skipped: NUM, Total: NUM, 'Pass Rate %': NUM, 'Duration (sec)': NUM,
       Branch: TEXT, Commit: TEXT,
       'Triggered By': sel(['Manual', 'gray'], ['CI/CD', 'blue'], ['Pre-commit', 'green'], ['Scheduled', 'purple']),
       Notes: TEXT,
     } },
-    { key: 'Problem Tests', purpose: 'Flaky/failing tests', props: {
+  ];
+  if (problemTests) {
+    dbs.push({ key: 'Problem Tests', purpose: 'Flaky/failing tests (team, opt-in)',
+      description: 'A flaky/failing-test tracker for teams. Opt-in (`--with-problem-tests`) — solo projects fix tests in place and don\'t need it.',
+      props: {
       'Test Name': TITLE, 'File Path': TEXT, Suite: suite,
       Status: sel(['Failing', 'red'], ['Flaky', 'orange'], ['Skipped', 'gray'], ['Fixed', 'green'], ["Won't Fix", 'default']),
       Priority: sel(['P0-Critical', 'red'], ['P1-High', 'orange'], ['P2-Medium', 'yellow'], ['P3-Low', 'gray']),
       'First Seen': DATE, 'Last Seen': DATE, 'Failure Count': NUM, 'Error Message': TEXT,
       'Root Cause': sel(['Timing/Race Condition', 'orange'], ['Test Data', 'yellow'], ['Environment', 'blue'], ['Code Bug', 'red'], ['Selector/Locator', 'purple'], ['API Mock', 'green'], ['Unknown', 'gray']),
       Notes: TEXT,
-    } },
-  ];
+    } });
+  }
+  return dbs;
 }
 
 async function notion(path, body) {
@@ -91,7 +110,7 @@ async function notion(path, body) {
 
 // Create the workspace home + 5 databases + 2 status pages. Returns
 // { workspaceId, workspaceUrl, entries, dryPayloads }. Honors --dry-run (creates nothing).
-export async function createWorkspace({ name, goal, modules, dryRun = false, log = () => {} }) {
+export async function createWorkspace({ name, goal, modules, problemTests = false, dryRun = false, log = () => {} }) {
   const today = new Date().toISOString().slice(0, 10);
   const parentPage = process.env.NOTION_PARENT_PAGE_ID || '<NOTION_PARENT_PAGE_ID>';
   const entries = {};
@@ -103,7 +122,10 @@ export async function createWorkspace({ name, goal, modules, dryRun = false, log
     parent: { type: 'page_id', page_id: parentPage },
     icon: { type: 'emoji', emoji: '🚀' },
     properties: { title: { title: [{ text: { content: `${name} — Workspace` } }] } },
-    children: [para(`Home for ${name}. Databases and status pages live here. Created by Engram's new-project.`)],
+    children: [
+      para(`Home for ${name}. Created by Engram's new-project.`),
+      para('These databases are human digests for non-technical stakeholders, written at milestones — not live mirrors to hand-maintain. Your code, git/GitHub, and the Engram graph are the day-to-day sources of truth. Each database below describes what it is for and who keeps it current.'),
+    ],
   };
   let workspaceId = '<workspace-page-id>';
   let workspaceUrl = '';
@@ -111,9 +133,15 @@ export async function createWorkspace({ name, goal, modules, dryRun = false, log
   else { const ws = await notion('pages', wsBody); workspaceId = ws.id; workspaceUrl = ws.url; log(`✓ workspace page`); }
   emit('Workspace', 'page', workspaceId, 'Workspace home');
 
-  // 2. The five databases (parented to the workspace page).
-  for (const def of databases(modules)) {
-    const body = { parent: { type: 'page_id', page_id: workspaceId }, title: [{ text: { content: def.key } }], properties: def.props };
+  // 2. The operational databases (parented to the workspace page). The human-facing
+  // `description` is written onto each DB so an empty one explains its purpose + audience.
+  for (const def of databases(modules, { problemTests })) {
+    const body = {
+      parent: { type: 'page_id', page_id: workspaceId },
+      title: [{ text: { content: def.key } }],
+      description: [{ type: 'text', text: { content: def.description } }],
+      properties: def.props,
+    };
     if (dryRun) { dryPayloads.push({ label: `database: ${def.key}`, body }); emit(def.key, 'data_source', '<db-id>', def.purpose); }
     else { const db = await notion('databases', body); emit(def.key, 'data_source', db.id, def.purpose); log(`✓ database: ${def.key}`); }
   }
@@ -149,7 +177,7 @@ async function main() {
     process.exit(2);
   }
 
-  const { workspaceUrl, entries, dryPayloads } = await createWorkspace({ name, goal, modules, dryRun, log: (m) => console.error(m) });
+  const { workspaceUrl, entries, dryPayloads } = await createWorkspace({ name, goal, modules, problemTests: Boolean(args['with-problem-tests']), dryRun, log: (m) => console.error(m) });
   if (dryRun) for (const p of dryPayloads) console.log(`\n# would create ${p.label}\n` + JSON.stringify(p.body, null, 2));
 
   console.log(`\n${dryRun ? '# DRY RUN — nothing created. ' : ''}notion-ids.json block:\n`);

@@ -189,9 +189,10 @@
     <p class="section-tag">04 — the human surface</p>
     <h2>Notion does double duty.</h2>
     <p class="prose">
-      The graph is the agent's memory. <em>Notion is where you work.</em> The same workspace
-      plays two roles: a <strong>capture lane</strong> (pages flow into the graph, §2) and an
-      <strong>operations desk</strong> — where the project is actually run.
+      The graph is the agent's memory. <em>Notion is the human window.</em> The same workspace
+      plays two roles: a <strong>capture lane</strong> (pages flow into the graph, §2) and a set of
+      <strong>human-readable digests</strong> — plain-language surfaces for the non-technical
+      stakeholders who'll never open your repo, graph, or CI.
     </p>
 
     <div class="notion-board" role="img" aria-label="A Kanban board with five stages: Backlog, To Do, In Progress, Review, Done.">
@@ -203,16 +204,19 @@
     </div>
 
     <div class="notion-dbs">
-      <span>Kanban tracker</span><span>Documentation Index</span><span>Changelog</span>
-      <span>Test Run Metrics</span><span>Problem Tests</span><span>Implementation Progress</span><span>Architecture</span>
+      <span>Changelog</span><span>Documentation Index</span><span>Development Tracker</span>
+      <span>Test Run Metrics</span><span>Implementation Progress</span><span>Architecture</span>
     </div>
 
     <p class="prose">
-      That whole operations stack ships with Engram. One command —
-      <code>engram new-project</code> — stands up the Notion workspace (all five databases +
-      status pages), registers the project in the graph, and drops a wired
-      <code>CLAUDE.md</code> into the repo. Graph and operations, set up <em>together</em> — one
-      cohesive system. The graph remembers; Notion runs the work; the capture lane keeps them in sync.
+      That whole stack ships with Engram. One command — <code>engram new-project</code> — stands up
+      the Notion workspace (four databases + status pages), registers the project in the graph, and
+      drops a wired <code>CLAUDE.md</code> into the repo. These databases are <em>digests written at
+      milestones</em>, not logs you hand-feed: the <strong>Changelog</strong> is the flagship (a
+      plain-English release note per version), <strong>Test Run Metrics</strong> is a health snapshot,
+      and each database describes what it's for so an empty one is never mistaken for neglected work.
+      (A flaky-test tracker, <em>Problem Tests</em>, is an opt-in fifth for teams.) Your code, git,
+      and the graph stay the day-to-day source of truth; Notion is the window onto it.
     </p>
     <p class="prose">
       And setup is <em>one authorization, ever</em>: share a single root page with your Notion
@@ -241,9 +245,9 @@
     <div class="skills">
       <article class="skill">
         <h3>Stand up a project</h3>
-        <p>One move builds the whole thing: a Notion workspace (Kanban, changelog, test
-        tracking, docs index, a capture page), the project registered in the graph, and a wired
-        <code>CLAUDE.md</code> dropped in your repo.</p>
+        <p>One move builds the whole thing: a Notion workspace (a plain-English changelog, docs
+        index, a health snapshot, an optional task board, a capture page), the project registered in
+        the graph, and a wired <code>CLAUDE.md</code> dropped in your repo.</p>
         <p class="ask"><span>Ask:</span> “Set up a new Engram project called Acme.”</p>
         <p class="cli"><code>engram new-project --name "Acme"</code></p>
       </article>

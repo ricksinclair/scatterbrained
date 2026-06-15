@@ -8,6 +8,35 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
+## [Unreleased] — Honest Notion surfaces: digests for humans, not empty mirrors
+
+**TL;DR (explain-like-I'm-5):** The Notion databases Engram sets up (changelog, task board, test
+tracking…) were being presented as things you "run your project in" — but in real use they sat
+empty while the actual work lived in code, GitHub, and the memory graph. An empty database that
+*looks* like it should be full implies neglected work — the opposite of Engram's honesty goal. So
+we reframed them: the Notion side is a set of **plain-language digests for non-technical
+stakeholders** (a partner, a client, a funder, future-you), written **at milestones**, not logs you
+feed by hand. The **Changelog** is the flagship (one plain-English note per release); **Test Run
+Metrics** is now a health *snapshot* (is it green?), not a row per test run; the flaky-test
+**Problem Tests** tracker is **opt-in** (it's team-scale); and every database now carries a written
+description of what it's for, so an empty one explains itself.
+
+### Changed
+- `setup-notion` / `new-project`: each scaffolded database now gets a human-facing **description**
+  written onto it (purpose + who keeps it current). The workspace home page explains the digest model.
+- **Test Run Metrics** reframed from per-run logging to a milestone *health snapshot*.
+- **Problem Tests** is no longer scaffolded by default — pass `--with-problem-tests` (team use).
+- The generated repo `CLAUDE.md` now describes the honest **working rhythm** (code + git/GitHub +
+  graph are the day-to-day truth; Notion DBs are milestone digests) instead of "log every change /
+  every test run", and lists only the databases actually scaffolded.
+- Website (`docs/`) updated to match: the operations stack is presented as human-readable digests,
+  Problem Tests shown as opt-in, and the "all five databases" copy corrected to four + an opt-in fifth.
+
+### Why
+Empty scaffolding that implies activity is worse than no database; surfaces should be truthful and
+serve the one audience that can't read code/GitHub/graph. Token-efficiency falls out for free:
+write rarely and meaningfully (one curated row per release) instead of hundreds of run rows.
+
 ## [1.6.0] — Stop the graph from quietly forking: catch duplicate entities (2026-06-15)
 
 **TL;DR (explain-like-I'm-5):** Engram remembers things as named facts, and it avoids
