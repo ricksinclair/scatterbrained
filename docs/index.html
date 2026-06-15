@@ -340,6 +340,15 @@
         <p>Built so an LLM resumes exactly where it left off and tends the graph itself.
         Plain Neo4j + scripts + git — no vendor, no framework to outgrow.</p></div>
       </li>
+      <li>
+        <span class="n">vii</span>
+        <div><h3>Enforced recall — honestly costed</h3>
+        <p>New projects ship <code>.claude/</code> hooks that re-inject the “consult the graph
+        first” rule every turn, so the agent can’t quietly skip it — <em>rules become checks</em>,
+        applied to memory, not just integrity. The honest cost: ~40 tokens of context per turn
+        (the full rule is paid once per session). Review, tune, or switch it off via
+        <code>/hooks</code>.</p></div>
+      </li>
     </ol>
   </div>
 </section>

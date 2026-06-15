@@ -62,7 +62,10 @@ it honest.**
   orphans, undated nodes, unlinked insights/sources, and off-vocabulary tags, so
   the graph can't silently rot.
 - **Agent-native.** Built so an LLM can resume exactly where it left off
-  (`npm run resume`) and tend the graph itself, not as a bolt-on.
+  (`npm run resume`) and tend the graph itself, not as a bolt-on. New projects ship
+  `.claude/` hooks that re-inject the "consult the graph first" rule every turn — so it's
+  *enforced*, not relied on from memory. **Honest cost:** ~40 tokens of context per turn
+  (the full rule is paid once per session); review or disable via `/hooks`.
 
 - **Hybrid retrieval.** `search` fuses three lanes — keyword (BM25), **semantic**
   (local embeddings, no API), and the graph — into one ranked, explainable result.
