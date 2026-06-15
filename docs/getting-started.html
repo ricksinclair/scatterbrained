@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Get started — Engram</title>
+<meta name="description" content="Set up Engram from scratch, even if you've never opened a terminal. Two clearly-signposted tracks: the friendly Notion + Claude path (no token, no CLI) and the developer CLI path." />
+<meta property="og:title" content="Get started with Engram" />
+<meta property="og:description" content="A welcoming, step-by-step on-ramp. Pick your path — ask Claude, or use the CLI." />
+<meta property="og:type" content="website" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Spectral:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ───────────────────────── TOP BAR ───────────────────────── -->
+<nav class="topbar">
+  <a class="tb-home" href="./index.html">← Engram</a>
+  <span class="tb-here">Get started</span>
+</nav>
+
+<!-- ───────────────────────── INTRO ───────────────────────── -->
+<header class="band gs-hero">
+  <div class="wrap">
+    <p class="section-tag">getting started</p>
+    <h1 class="gs-title">Welcome. Let's get you set up.</h1>
+    <p class="prose gs-lede">
+      You don't need to be a developer. If you can use Notion and chat with Claude, you can run
+      Engram. This page walks you all the way from nothing to a working setup — in plain English,
+      one step at a time.
+    </p>
+    <p class="prose">
+      By the end you'll have two things working together: an <strong>AI memory</strong> that
+      remembers your projects, notes, and decisions across conversations — and a ready-to-use
+      <strong>Notion workspace</strong> to actually run your work (a task board, a changelog, and
+      more). Set up together, as one system.
+    </p>
+  </div>
+</header>
+
+<main>
+
+<!-- ───────────────────────── PLAIN ENGLISH ───────────────────────── -->
+<section class="band band-alt">
+  <div class="wrap">
+    <p class="section-tag">first — what is this, really?</p>
+    <h2>Four words, in plain English.</h2>
+    <p class="prose">
+      You'll see these terms a lot. Here's what each one actually means — no jargon.
+    </p>
+    <dl class="gloss">
+      <div>
+        <dt>Knowledge graph</dt>
+        <dd>A way of storing facts as <em>connected dots</em> — "this project needs this skill,"
+        "this decision came from this note." Because the dots are linked, an assistant can follow
+        the connections and answer questions a plain list never could. It's the part that
+        <em>remembers</em>.</dd>
+      </div>
+      <div>
+        <dt>Capture lane</dt>
+        <dd>Wherever you naturally jot things down — a Notion page, a document on your computer.
+        Engram reads those and feeds the facts into the graph for you. You write where it's comfy;
+        it files everything where it's useful.</dd>
+      </div>
+      <div>
+        <dt>Operations workspace</dt>
+        <dd>The Notion side where you actually <em>run</em> a project: a task board (Kanban), a
+        changelog, test tracking, a docs index. Engram sets this up for you, ready to go.</dd>
+      </div>
+      <div>
+        <dt>The one root</dt>
+        <dd>A single Notion page that becomes the home for <em>all</em> your projects. You share it
+        with the assistant <em>once</em>, and everything you add later lives under it automatically.
+        Set up once, never fuss again.</dd>
+      </div>
+    </dl>
+    <p class="prose gs-why">
+      Want the deeper "why it's built this way" story?
+      <a href="./index.html#why">Read the explainer →</a>
+    </p>
+  </div>
+</section>
+
+<!-- ───────────────────────── TRACK CHOOSER ───────────────────────── -->
+<section class="band" id="choose">
+  <div class="wrap">
+    <p class="section-tag">now — which one are you?</p>
+    <h2>Two ways in. Pick yours.</h2>
+    <p class="prose">
+      Both end at the same place. Choose the one that sounds like you — you can always read the
+      other later.
+    </p>
+    <div class="tracks">
+      <a class="track track-primary" href="#track-mcp">
+        <span class="track-badge">friendliest</span>
+        <h3>“I use Notion and Claude.”</h3>
+        <p>No terminal, no token, no code. You ask Claude in plain language and it does the
+        building for you. <strong>Start here if you're not a developer.</strong></p>
+        <span class="track-go">Take this path ↓</span>
+      </a>
+      <a class="track" href="#track-cli">
+        <span class="track-badge">for developers</span>
+        <h3>“I'm comfortable in a terminal.”</h3>
+        <p>The command-line path: a Notion token, a <code>.env</code> file, and one
+        <code>npm</code> command. Scriptable and great for automation or CI.</p>
+        <span class="track-go">Take this path ↓</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ───────────────────────── TRACK A — MCP ───────────────────────── -->
+<section class="band band-alt" id="track-mcp">
+  <div class="wrap">
+    <p class="section-tag">track a — notion + claude · no terminal</p>
+    <h2>Just ask Claude.</h2>
+    <p class="prose">
+      In this path, <strong>Claude does the setup</strong>. You connect it to Notion once, give it
+      one home page to work in, and then ask — in normal English — for what you want.
+    </p>
+
+    <ol class="steps">
+      <li>
+        <div class="step-body">
+          <h3>Connect Claude to Notion</h3>
+          <p>In Claude, turn on the <strong>Notion connection</strong> (Settings → Connectors →
+          Notion, then approve access). This is what lets Claude read and build pages for you.
+          One-time, a couple of clicks.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <h3>Make one home page — your “root”</h3>
+          <p>In Notion, create a single page and name it something neutral like
+          <strong>“Projects”</strong> or <strong>“Workspace.”</strong> Open its <code>•••</code>
+          menu → <strong>Connections</strong> → add your Claude/Notion connection. You share this
+          <em>one</em> page, <em>once</em> — every project you add later nests under it and inherits
+          access automatically.</p>
+          <p class="step-tip"><span>Why one root?</span> So you never have to share pages again,
+          and so all your projects live in one place the assistant can reason across.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <h3>Ask Claude to set up a project</h3>
+          <p>Now just say it. For example:</p>
+          <p class="ask-line">“Set up a new Engram project called <em>Acme</em> under my Projects
+          page.”</p>
+          <p>Point Claude at Engram's recipe so it follows the exact steps —
+          <a href="https://github.com/ricksinclair/engram/blob/main/skills/new-project.md"><code>skills/new-project.md</code></a>.
+          It will create the workspace, register the project in the graph's memory, and add a
+          settings file to your repo — all over the connection you just approved.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <h3>See what you got</h3>
+          <p>Open Notion and look under your root page. You'll find a new
+          <strong>Acme — Workspace</strong> with a task board, a changelog, test tracking, a docs
+          index, and a <strong>Capture</strong> page (drop notes there and they flow into the
+          memory). The assistant now <em>remembers</em> Acme across every future chat.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <h3>Live with it — just ask</h3>
+          <p>From here, everything is a request in plain language. A few you'll use often:</p>
+          <ul class="ask-list">
+            <li>“<strong>Where were we?</strong>” — a catch-up brief across all your projects.</li>
+            <li>“<strong>Run a graph-sync.</strong>” — re-read what changed, file new facts, back up.</li>
+            <li>“<strong>Search Engram for how Acme makes money.</strong>” — find by meaning, not just keywords.</li>
+          </ul>
+          <p>See them all on the <a href="./index.html#skills">Skills</a> section.</p>
+        </div>
+      </li>
+    </ol>
+
+    <p class="prose note">
+      <span class="note-tag">one honest note</span>
+      The memory itself (a small database called <strong>Neo4j</strong>) has to run somewhere —
+      usually a single one-time install on a computer, started with one command
+      (<code>docker compose up -d</code>). It's the one slightly technical bit. You can do it once
+      by following the <a href="#track-cli">developer steps below</a>, or have a tech-savvy friend
+      (or Claude, walking you through it) set it up once — then never think about it again.
+    </p>
+  </div>
+</section>
+
+<!-- ───────────────────────── TRACK B — CLI ───────────────────────── -->
+<section class="band" id="track-cli">
+  <div class="wrap">
+    <p class="section-tag">track b — developer · cli &amp; token</p>
+    <h2>Set it up from the terminal.</h2>
+    <p class="prose">
+      The scriptable path. Same result as Track A — a Notion workspace plus a project in the graph
+      — driven by commands instead of conversation. Ideal for automation, CI, or if you just prefer
+      the keyboard.
+    </p>
+
+    <ol class="steps">
+      <li>
+        <div class="step-body">
+          <h3>Clone it and start the graph</h3>
+          <p>Get the code and spin up Neo4j locally (this is the “memory” database). The demo
+          credentials are fine as-is for local use.</p>
+          <pre class="code"><code>git clone https://github.com/ricksinclair/engram.git &amp;&amp; cd engram
+npm install
+cp .env.example .env
+docker compose up -d                <span class="c"># Neo4j now at http://localhost:7474</span></code></pre>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <h3>Create a Notion integration token</h3>
+          <p>At <a href="https://www.notion.so/my-integrations">notion.so/my-integrations</a>,
+          create an internal integration and copy its secret. Then, in Notion, share your one
+          <strong>root page</strong> with that integration (page <code>•••</code> →
+          <strong>Connections</strong>). Put both values in <code>.env</code>:</p>
+          <pre class="code"><code><span class="c"># .env</span>
+NOTION_TOKEN=secret_xxxxxxxxxxxxxxxxxxxx
+NOTION_PARENT_PAGE_ID=your_root_page_id</code></pre>
+          <p class="step-tip"><span>The root page id</span> is the long string in the page's URL.
+          Everything you create nests under it — share once, inherit forever.</p>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <h3>Stand up a project</h3>
+          <p>One command builds the whole thing — the Notion workspace, the project in the graph,
+          and a wired <code>CLAUDE.md</code> in your repo. Preview first with
+          <code>--dry-run</code>.</p>
+          <pre class="code"><code>npm run new:project -- --name "Acme" --dry-run   <span class="c"># preview, creates nothing</span>
+npm run new:project -- --name "Acme"             <span class="c"># for real</span></code></pre>
+        </div>
+      </li>
+      <li>
+        <div class="step-body">
+          <h3>Drive it with the toolkit</h3>
+          <p>Every skill has a command. A few to start:</p>
+          <pre class="code"><code>npm run resume                       <span class="c"># "where were we?" brief</span>
+npm run search -- "how do I make money"   <span class="c"># find by keyword (+ meaning, once embedded)</span>
+npm run lint:graph                   <span class="c"># integrity check</span>
+npm run export                       <span class="c"># versioned backup, committed to git</span></code></pre>
+          <p>The full list lives in the
+          <a href="https://github.com/ricksinclair/engram#the-toolkit">README toolkit table</a>.
+          Turning on <em>search-by-meaning</em> is one optional extra step —
+          <a href="https://github.com/ricksinclair/engram#quickstart">see Quickstart</a>.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<!-- ───────────────────────── NEXT ───────────────────────── -->
+<section class="band band-cta">
+  <div class="wrap">
+    <h2>That's it — you're set up.</h2>
+    <p class="prose">
+      Whichever path you took, you now have a memory that grows with your work and a workspace to
+      run it. Capture where it's natural; ask where it's powerful; let the assistant keep it honest.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-solid" href="./index.html#skills">See what you can do →</a>
+      <a class="btn btn-ghost" href="./index.html">Back to the explainer</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p><strong>Engram</strong> — built by <a href="https://ulrictodman.com">Ulric Todman</a>.
+    MIT licensed. New here and stuck? Open an issue on
+    <a href="https://github.com/ricksinclair/engram/issues">GitHub</a> — friendly questions welcome.</p>
+  </div>
+</footer>
+
+</body>
+</html>

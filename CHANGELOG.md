@@ -37,6 +37,12 @@ page that's stale *because* it was left alone — this catches that.)
 - **Skills showcase** — a benefit-led "what you can just *do*" section (README + site §05):
   each skill paired as *"just ask Claude…"* (MCP path) alongside its one-line command (CLI path),
   the no-terminal/terminal split made scannable for non-technical Notion + Claude users. (#7)
+- **Welcoming onboarding** — a dedicated, plain-English **Getting Started** page
+  (`docs/getting-started.html`) that takes a brand-new user from nothing to a working setup. Two
+  signposted tracks (Notion + Claude / no-terminal *first*, then developer / CLI), a plain-English
+  glossary (knowledge graph, capture lane, operations workspace, the one root), numbered steps per
+  track, and an honest note about the one-time Neo4j install. README gains a "Start here" on-ramp;
+  the site hero + CTA now lead with **Get started →**. (#5)
 
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 
