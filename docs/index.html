@@ -368,6 +368,30 @@
         isn’t done until it’s in <em>both</em> the graph and a place a human reads.</p></div>
       </li>
     </ol>
+
+    <div class="cost-note">
+      <h3>What the enforcement costs your context — measured</h3>
+      <p class="prose">Honesty about the one ongoing cost: only the graph-first <em>recall</em> hooks
+      (vii) add standing context. The decision check (viii, <code>review:decisions</code>) is a
+      command you run, not an injected prompt — it costs nothing per turn. The hooks are
+      <strong>~139 tokens once per session + ~40 per turn</strong>. The table assumes <em>no</em>
+      compaction (Claude Code compacts long sessions, so real usage runs lower):</p>
+      <div class="table-scroll">
+        <table class="compare">
+          <thead>
+            <tr><th>Session length</th><th>Added tokens</th><th>of 1M ctx</th><th>of 256K</th><th>of 128K</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>10 turns</td><td>~540</td><td>0.05%</td><td>0.2%</td><td>0.4%</td></tr>
+            <tr><td>50 turns</td><td>~2,100</td><td>0.2%</td><td>0.8%</td><td>1.7%</td></tr>
+            <tr><td>100 turns</td><td>~4,100</td><td>0.4%</td><td>1.6%</td><td>3.2%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="legend">Even a long 100-turn session on a small 128K window stays ~3%; on 1M it's a
+      rounding error. Figures are on-device estimates, not an exact tokenizer count. Don't want it?
+      Switch the hooks off anytime via <code>/hooks</code>.</p>
+    </div>
   </div>
 </section>
 

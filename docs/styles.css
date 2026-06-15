@@ -178,6 +178,12 @@ em { font-style: italic; color: #f3eee2; }
 .legend { font-family: "JetBrains Mono", monospace; font-size: 0.75rem; color: var(--muted); margin-top: 1.2rem; }
 .legend .y { color: var(--ember); } .legend .m { color: var(--muted); } .legend .n { color: #4a4f5b; }
 
+/* context-cost transparency note */
+.cost-note { margin-top: 4rem; padding-top: 2.4rem; border-top: 1px solid var(--line); }
+.cost-note h3 { font-family: "Spectral", serif; font-size: 1.45rem; color: var(--paper); margin: 0 0 0.6rem; }
+.cost-note .compare { min-width: 0; }
+.cost-note .table-scroll { margin-top: 1.6rem; }
+
 /* quote band */
 .band-quote { background: var(--ink-2); }
 .band-quote blockquote { margin: 0; max-width: 32ch; }
