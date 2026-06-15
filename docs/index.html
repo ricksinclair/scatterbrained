@@ -281,6 +281,15 @@
       </article>
 
       <article class="skill">
+        <h3>Surface undocumented decisions</h3>
+        <p>Decisions the agent makes can live only in the graph, where a person never sees them. A
+        review pass flags any decision with no human-readable page refreshed since — so the
+        <em>why</em> reaches Notion and your docs, not just a query.</p>
+        <p class="ask"><span>Ask:</span> “Which decisions aren't written up yet?”</p>
+        <p class="cli"><code>engram review:decisions</code></p>
+      </article>
+
+      <article class="skill">
         <h3>Assemble context to paste</h3>
         <p>Pull a clean, scoped context block — by project, domain, or tag — ready to drop into
         any chat, so the assistant reasons over your real knowledge, not a vague summary.</p>
@@ -302,7 +311,7 @@
 <section class="band band-alt" id="why">
   <div class="wrap">
     <p class="section-tag">06 — what makes it different</p>
-    <h2>Six ideas doing the work.</h2>
+    <h2>Eight ideas doing the work.</h2>
     <ol class="diff-list">
       <li>
         <span class="n">i</span>
@@ -349,7 +358,40 @@
         (the full rule is paid once per session). Review, tune, or switch it off via
         <code>/hooks</code>.</p></div>
       </li>
+      <li>
+        <span class="n">viii</span>
+        <div><h3>Decisions reach humans, not just the graph</h3>
+        <p>A captured decision is a graph fact a person can’t casually read — so the human-readable
+        docs can rot <em>behind</em> a rich graph (the inverse of the problem this set out to solve).
+        <code>review:decisions</code> flags any decision with no Notion page, README, or site refreshed
+        since — so it gets written up. The same enforcement as recall, pointed the other way: capture
+        isn’t done until it’s in <em>both</em> the graph and a place a human reads.</p></div>
+      </li>
     </ol>
+
+    <div class="cost-note">
+      <h3>What the enforcement costs your context — measured</h3>
+      <p class="prose">Honesty about the one ongoing cost: only the graph-first <em>recall</em> hooks
+      (vii) add standing context. The decision check (viii, <code>review:decisions</code>) is a
+      command you run, not an injected prompt — it costs nothing per turn. The hooks are
+      <strong>~139 tokens once per session + ~40 per turn</strong>. The table assumes <em>no</em>
+      compaction (Claude Code compacts long sessions, so real usage runs lower):</p>
+      <div class="table-scroll">
+        <table class="compare">
+          <thead>
+            <tr><th>Session length</th><th>Added tokens</th><th>of 1M ctx</th><th>of 256K</th><th>of 128K</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>10 turns</td><td>~540</td><td>0.05%</td><td>0.2%</td><td>0.4%</td></tr>
+            <tr><td>50 turns</td><td>~2,100</td><td>0.2%</td><td>0.8%</td><td>1.7%</td></tr>
+            <tr><td>100 turns</td><td>~4,100</td><td>0.4%</td><td>1.6%</td><td>3.2%</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="legend">Even a long 100-turn session on a small 128K window stays ~3%; on 1M it's a
+      rounding error. Figures are on-device estimates, not an exact tokenizer count. Don't want it?
+      Switch the hooks off anytime via <code>/hooks</code>.</p>
+    </div>
   </div>
 </section>
 

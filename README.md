@@ -66,6 +66,10 @@ it honest.**
   `.claude/` hooks that re-inject the "consult the graph first" rule every turn — so it's
   *enforced*, not relied on from memory. **Honest cost:** ~40 tokens of context per turn
   (the full rule is paid once per session); review or disable via `/hooks`.
+- **Decisions reach humans, not just the graph.** A captured decision is a graph fact a person
+  can't casually read, so docs can rot *behind* a rich graph. `npm run review:decisions` flags any
+  decision with no Notion page / README / site refreshed since — capture isn't done until it's in
+  *both* the graph and a place a human reads.
 
 - **Hybrid retrieval.** `search` fuses three lanes — keyword (BM25), **semantic**
   (local embeddings, no API), and the graph — into one ranked, explainable result.
@@ -144,6 +148,7 @@ result; pick your lane.
 | **Find anything by meaning** — keyword + semantic, blended and ranked | *"Search Engram for how this makes money."* | `npm run search -- "how do I make money"` |
 | **Pick up where you left off** — a "where were we" brief across every project | *"Where were we?"* | `npm run resume` |
 | **Keep it honest** — retire a replaced fact (marked superseded, never deleted) | *"Retire the old pricing decision; it changed."* | `npm run review:supersession` · `supersede` |
+| **Surface undocumented decisions** — decisions that live only in the graph, never written up for a human | *"Which decisions aren't written up yet?"* | `npm run review:decisions` |
 | **Assemble context to paste** — a clean, scoped context block | *"Give me the context block for Acme."* | `npm run context -- --project Acme` |
 
 The full command reference is just below. The "ask Claude" recipes live in
@@ -162,6 +167,7 @@ The full command reference is just below. The "ask Claude" recipes live in
 | `npm run context` | Assemble a pasteable context block (`--project`, `--domain`, `--tag`, …). |
 | `npm run supersede` | Invalidate a fact bi-temporally (never deletes). |
 | `npm run review:supersession` | Surface candidate stale facts for human review. |
+| `npm run review:decisions` | Surface decisions captured in the graph but not yet in any human-readable surface (Notion / README / site). Lists candidates to write up; never edits. |
 | `npm run check:notion` | Validate the Notion ID manifest before IDs rot. |
 | `npm run index` / `doc-index` | Deterministic "what changed?" probes (Notion / local files). |
 | `npm run export` / `import` | Versioned JSON backups in git. Embeddings are excluded (they're large and regenerable) — re-run `embed` after a restore. |

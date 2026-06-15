@@ -72,7 +72,11 @@ or searching elsewhere (\`npm run resume\`, \`npm run context -- --project ${JSO
 surfaces rather than searching it blind. Capture **decisions** as Insights — the test is
 *"would a future session want to follow this rule or rationale?"* (a *policy* is a decision
 even when the action that surfaced it is mundane housekeeping; a one-off mechanical act or
-status update is not). MERGE never CREATE;
+status update is not). **Dual-write every decision:** an Insight alone is machine-only — also
+record it in a *human-readable* surface (the Notion **Changelog**/**Decisions** page and
+\`CHANGELOG.md\`) so a person browsing Notion sees the *why*, not just a Cypher query. The graph
+is canonical; the human window must not rot behind it. \`npm run review:decisions\` flags decisions
+that landed in the graph but no human surface — write those up, then re-sync. MERGE never CREATE;
 invalidate-don't-delete; run \`npm run lint:graph\` after writes; sync the graph at the end of each
 completed unit of work. **A "sync" is the full pass** — re-ingest changed docs
 (\`npm run doc-index -- --stats\`), MERGE a \`Source\` for *every* new/updated artifact (incl. ones

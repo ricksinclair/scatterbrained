@@ -36,7 +36,9 @@ in order; report a concise summary at the end, not a play-by-play.
 ## 3 — Synthesize (the payoff)
 Look for genuinely new, non-obvious conclusions *across* domains — not restatements of edges.
 For each, `MERGE` an `Insight` (`ABOUT` a Project/Idea/Goal, `DERIVED_FROM` its Sources). Be
-selective: a few strong insights beat twenty trivial ones.
+selective: a few strong insights beat twenty trivial ones. **Dual-write decisions:** an Insight is
+machine-only — also record the decision in a *human-readable* surface (the Notion Changelog/Decisions
+page, `CHANGELOG.md`) so the graph doesn't get rich behind stale human docs.
 
 ## 4 — Verify, then back up
 - `npm run lint:graph` — fix any new errors (orphans, undated nodes, off-vocabulary
@@ -46,6 +48,9 @@ selective: a few strong insights beat twenty trivial ones.
 - `npm run review:docs -- --project <each project you worked>` — re-read its *describing* docs
   (its Notion page, README, the site) and fix any that **drifted** (e.g. a "not built yet" that
   shipped). This catches staleness the change-gate can't see.
+- `npm run review:decisions -- --project <each project you worked>` — flags decisions that landed
+  in the graph but **no human-readable surface** (the absent case `review:docs` can't see). Write
+  each up in the Notion Changelog/Decisions page + `CHANGELOG.md`, then re-sync.
 - `npm run export` (snapshot to a versioned JSON backup).
 
 ## 5 — Report
