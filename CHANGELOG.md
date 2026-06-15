@@ -8,6 +8,43 @@ can follow, then the technical details underneath.
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
+## [1.6.0] — Stop the graph from quietly forking: catch duplicate entities (2026-06-15)
+
+**TL;DR (explain-like-I'm-5):** Engram remembers things as named facts, and it avoids
+duplicates by matching on the name. But two different sessions can name the *same* thing
+differently — "ulrictodman.com" in one, "Personal Site (ulrictodman.com)" in another — and
+then the safety net (match-by-name) actually *creates* a second copy instead of stopping it.
+Copies split a thing's history across two nodes, so later "what do I know about X?" answers
+come back half-empty. This release closes that gap from both ends: when you add a node, Engram
+now **warns before writing** if the new thing looks like one that already exists (it shares a
+repo URL, web URL, or file path, or its name closely resembles an existing one), and the
+integrity check (`lint:graph`) now **flags likely duplicates** that slipped through. Alternate
+names can be recorded as searchable **aliases** on the real node, so a future search for either
+name finds the one canonical entity. Plus a workflow refinement: when a Notion sync turns up
+*dozens* of changed pages, a routine end-of-work sync now focuses on the project you actually
+worked on (and says what it deferred), while an explicit "do a full sync" still reads everything.
+
+### What's new
+- **Semantic-duplicate detection (closes #20).**
+  - `scripts/lib/identity.js` — per-label *identity signals* (`repo_url`, `url`, `file_path`,
+    `notion_id`, `contact_info`) and conservative name look-alike helpers, as one shared source of truth.
+  - `lint:graph` gains a `likely-duplicate-entity` **WARN** — groups same-label nodes by each identity
+    signal and flags any value shared under different natural keys. (Caught 4 real pre-existing dupes on
+    first run.)
+  - `add-node` gains a **creation-time guard**: warns and aborts (unless `--force`) when a new node shares
+    an identity signal with, or closely resembles the name/alias of, an existing same-label node.
+  - First-class **`aliases`** — `add-node --aliases "a,b"` records alternate names; `aliases` is added to
+    the `knowledge_text` full-text index so search resolves them to the canonical node.
+- **`github_issue` source_kind** added to the closed vocabulary (link issues/PRs as Sources).
+- **graph-sync scope guard** (docs) — the skill now distinguishes a focused proactive run (read the
+  worked project's pages, defer the rest, hold the sync marker back) from an explicit/catch-up run
+  (read the entire change-set, no reluctance).
+
+### Notes
+- Migration: the `aliases` property is added to the `knowledge_text` full-text index in
+  `seed-schema.cypher`. Existing graphs that want alias-resolution in search should
+  `DROP INDEX knowledge_text` and re-run the schema (noted inline); otherwise no migration is required.
+
 ## [1.5.0] — Close the "set and forget" gaps: enforce both reading and writing (2026-06-15)
 
 **TL;DR (explain-like-I'm-5):** Three fixes so an AI assistant can't quietly let things rot.
