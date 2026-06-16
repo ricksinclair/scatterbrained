@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 392 80" width="392" height="80" role="img" aria-label="scatterbrained">
+  <title>scatterbrained (mono)</title>
+  <text x="6" y="54" font-family="Fraunces, Spectral, Georgia, serif" font-size="48" letter-spacing="-1" fill="currentColor">scatter</text>
+  <circle cx="192" cy="42" r="4.6" fill="currentColor"/>
+  <text x="208" y="62" font-family="Fraunces, Spectral, Georgia, serif" font-size="48" letter-spacing="-1" fill="none" stroke="currentColor" stroke-width="1.2">brained</text>
+</svg>
