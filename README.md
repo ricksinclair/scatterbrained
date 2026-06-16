@@ -1,12 +1,29 @@
-# Engram
+# This project is being renamed — and the “Engram” name retired
 
-**An agent-maintained, bi-temporal knowledge graph for AI memory.** Neo4j is the
-canonical truth; Notion and your local files are capture lanes; an AI agent
-ingests, maintains, and consults the graph across sessions.
+**Why:** after I built and published this, I learned about
+[**ly-wang19/engram**](https://github.com/ly-wang19/engram) — an open-source
+bi-temporal memory engine for LLM agents, published **before** mine and backed by a
+paper ([arXiv:2606.09900](https://arxiv.org/abs/2606.09900), *“A Bi-Temporal Memory
+Engine for LLM Agents”*). The overlap was real: the same name, the same *bi-temporal*
+framing, the same idea of keeping history instead of overwriting it.
 
-> 📖 The full write-up — why this beats a Notion-only or Neo4j-only workflow, and
-> where it differs from off-the-shelf agent-memory frameworks — lives at
-> **[ulrictodman.com/engram](https://ulrictodman.com/engram)**.
+As best I can tell it was honest convergence — but they were there first and did the
+rigorous, benchmarked work to earn it. So I'm not going to stand on their ground.
+**I've retired the “Engram” name here**, taken down the writeup that used it, and I'm
+choosing a new name. If you came looking for a reproducible, paper-backed memory
+*engine*, go read **theirs** — it's the real thing in that lane.
+
+Credit where it's due. The thunder is theirs.
+
+---
+
+### What this project actually is (under a new name, soon)
+
+A personal, **agent-maintained knowledge graph** you can *see* and trace — Neo4j as
+canonical truth, Notion and local files as capture lanes, an AI agent that ingests
+and maintains the graph across sessions, and a visual “observatory” for exploring it.
+Different in kind from a benchmarked retrieval engine; it just shared a name it
+shouldn't have. The code below still works; only the branding is changing.
 
 MIT licensed. No vendor, no framework to outgrow — plain Neo4j + Node scripts +
 git. You can read every line. New here? The [CHANGELOG](CHANGELOG.md) tells the
