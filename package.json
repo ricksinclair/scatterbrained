@@ -1,28 +1,28 @@
 {
-  "name": "engram-kg",
+  "name": "scatterbrained",
   "version": "1.7.0",
-  "description": "An agent-maintained personal knowledge graph for AI memory (project is being renamed; the 'Engram' name is retired — see README).",
+  "description": "Scatterbrained — a personal, agent-maintained knowledge graph you can see. A second brain that remembers across sessions. Neo4j canonical truth; Notion + local files as capture lanes.",
   "keywords": [
     "knowledge-graph",
     "neo4j",
     "ai-memory",
     "agent-memory",
-    "bi-temporal",
+    "second-brain",
     "notion",
     "cypher",
     "llm",
     "rag"
   ],
-  "homepage": "https://ulrictodman.com/engram",
+  "homepage": "https://github.com/ricksinclair/scatterbrained",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ricksinclair/engram.git"
+    "url": "https://github.com/ricksinclair/scatterbrained.git"
   },
   "license": "MIT",
   "author": "Ulric Todman (https://ulrictodman.com)",
   "type": "module",
   "bin": {
-    "engram": "bin/engram.js"
+    "scatterbrained": "bin/engram.js"
   },
   "files": [
     "bin/",
