@@ -576,5 +576,25 @@ npm run review:supersession</code></pre>
   </div>
 </footer>
 
+<!-- Lightbox — click any Studio screenshot to expand it in place. -->
+<div id="lightbox" class="lightbox" hidden>
+  <button class="lb-close" aria-label="close">×</button>
+  <img id="lightbox-img" alt="" />
+</div>
+<script>
+(function () {
+  var lb = document.getElementById('lightbox'), img = document.getElementById('lightbox-img');
+  function close() { lb.hidden = true; img.removeAttribute('src'); document.documentElement.classList.remove('lb-open'); }
+  function open(el) { img.src = el.currentSrc || el.src; img.alt = el.alt || ''; lb.hidden = false; document.documentElement.classList.add('lb-open'); }
+  document.querySelectorAll('#studio img').forEach(function (el) {
+    el.classList.add('zoomable');
+    el.addEventListener('click', function () { open(el); });
+  });
+  lb.addEventListener('click', close);
+  document.querySelector('.lb-close').addEventListener('click', function (e) { e.stopPropagation(); close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !lb.hidden) close(); });
+})();
+</script>
+
 </body>
 </html>

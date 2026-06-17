@@ -176,6 +176,14 @@ html.gated body { overflow: hidden; height: 100vh; }
 #gate button { font-family: "JetBrains Mono", monospace; font-size: 0.85rem; cursor: pointer; color: var(--ink, #0b0d12); background: var(--ember, #ef9a5b); border: 0; border-radius: 8px; padding: 0.55rem 1.4rem; }
 #gate-err { color: var(--ember, #ef9a5b); font-size: 0.8rem; min-height: 1rem; }
 
+/* Lightbox — expand a screenshot in place */
+img.zoomable { cursor: zoom-in; }
+html.lb-open { overflow: hidden; }
+.lightbox { position: fixed; inset: 0; z-index: 9000; background: rgba(6, 7, 11, 0.94); display: flex; align-items: center; justify-content: center; padding: 3vh 3vw; cursor: zoom-out; }
+.lightbox img { max-width: 96vw; max-height: 94vh; border-radius: 8px; border: 1px solid var(--line-2); box-shadow: 0 30px 90px -20px rgba(0, 0, 0, 0.95); }
+.lb-close { position: fixed; top: 12px; right: 22px; font-size: 2rem; line-height: 1; color: var(--paper-dim); background: none; border: 0; cursor: pointer; }
+.lb-close:hover { color: var(--paper); }
+
 /* problem grid */
 .problem-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; margin-top: 3rem; }
 .problem-grid article { border-top: 2px solid var(--line-2); padding-top: 1.3rem; }
