@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Get started — Engram</title>
-<meta name="description" content="Set up Engram from scratch, even if you've never opened a terminal. Two clearly-signposted tracks: the friendly Notion + Claude path (no token, no CLI) and the developer CLI path." />
-<meta property="og:title" content="Get started with Engram" />
+<meta name="robots" content="noindex, nofollow, noarchive" />
+<title>Get started — Scatterbrained</title>
+<meta name="description" content="Set up Scatterbrained from scratch, even if you've never opened a terminal. Two clearly-signposted tracks: the friendly Notion + Claude path (no token, no CLI) and the developer CLI path." />
+<meta property="og:title" content="Get started with Scatterbrained" />
 <meta property="og:description" content="A welcoming, step-by-step on-ramp. Pick your path — ask Claude, or use the CLI." />
 <meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,7 +20,7 @@
 
 <!-- ───────────────────────── TOP BAR ───────────────────────── -->
 <nav class="topbar">
-  <a class="tb-home" href="./index.html">← Engram</a>
+  <a class="tb-home" href="./index.html">← Scatterbrained</a>
   <span class="tb-here">Get started</span>
 </nav>
 
@@ -30,7 +31,7 @@
     <h1 class="gs-title">Welcome. Let's get you set up.</h1>
     <p class="prose gs-lede">
       You don't need to be a developer. If you can use Notion and chat with Claude, you can run
-      Engram. This page walks you all the way from nothing to a working setup — in plain English,
+      Scatterbrained. This page walks you all the way from nothing to a working setup — in plain English,
       one step at a time.
     </p>
     <p class="prose">
@@ -63,7 +64,7 @@
       <div>
         <dt>Capture lane</dt>
         <dd>Wherever you naturally jot things down — a Notion page, a document on your computer.
-        Engram reads those and feeds the facts into the graph for you. You write where it's comfy;
+        Scatterbrained reads those and feeds the facts into the graph for you. You write where it's comfy;
         it files everything where it's useful.</dd>
       </div>
       <div>
@@ -71,7 +72,7 @@
         <dd>The Notion side: plain-language updates for people following the project — a changelog,
         a docs index, a health snapshot, an optional task board. Think of it as the <em>window</em>
         onto the work for non-technical folks, kept current at milestones (not a log you feed by
-        hand). Engram sets it up for you, ready to go.</dd>
+        hand). Scatterbrained sets it up for you, ready to go.</dd>
       </div>
       <div>
         <dt>The one root</dt>
@@ -150,10 +151,10 @@
         <div class="step-body">
           <h3>Ask Claude to set up a project</h3>
           <p>Now just say it. For example:</p>
-          <p class="ask-line">“Set up a new Engram project called <em>Acme</em> under my Projects
+          <p class="ask-line">“Set up a new Scatterbrained project called <em>Acme</em> under my Projects
           page.”</p>
-          <p>Point Claude at Engram's recipe so it follows the exact steps —
-          <a href="https://github.com/ricksinclair/engram/blob/main/skills/new-project.md"><code>skills/new-project.md</code></a>.
+          <p>Point Claude at Scatterbrained's recipe so it follows the exact steps —
+          <a href="https://github.com/ricksinclair/scatterbrained/blob/main/skills/new-project.md"><code>skills/new-project.md</code></a>.
           It will create the workspace, register the project in the graph's memory, and add a
           settings file to your repo — all over the connection you just approved.</p>
         </div>
@@ -175,7 +176,7 @@
           <ul class="ask-list">
             <li>“<strong>Where were we?</strong>” — a catch-up brief across all your projects.</li>
             <li>“<strong>Run a graph-sync.</strong>” — re-read what changed, file new facts, back up.</li>
-            <li>“<strong>Search Engram for how Acme makes money.</strong>” — find by meaning, not just keywords.</li>
+            <li>“<strong>Search Scatterbrained for how Acme makes money.</strong>” — find by meaning, not just keywords.</li>
           </ul>
           <p>See them all on the <a href="./index.html#skills">Skills</a> section.</p>
         </div>
@@ -210,7 +211,7 @@
           <h3>Clone it and start the graph</h3>
           <p>Get the code and spin up Neo4j locally (this is the “memory” database). The demo
           credentials are fine as-is for local use.</p>
-          <pre class="code"><code>git clone https://github.com/ricksinclair/engram.git &amp;&amp; cd engram
+          <pre class="code"><code>git clone https://github.com/ricksinclair/scatterbrained.git &amp;&amp; cd scatterbrained
 npm install
 cp .env.example .env
 docker compose up -d                <span class="c"># Neo4j now at http://localhost:7474</span></code></pre>
@@ -249,9 +250,9 @@ npm run search -- "how do I make money"   <span class="c"># find by keyword (+ m
 npm run lint:graph                   <span class="c"># integrity check</span>
 npm run export                       <span class="c"># versioned backup, committed to git</span></code></pre>
           <p>The full list lives in the
-          <a href="https://github.com/ricksinclair/engram#the-toolkit">README toolkit table</a>.
+          <a href="https://github.com/ricksinclair/scatterbrained#the-toolkit">README toolkit table</a>.
           Turning on <em>search-by-meaning</em> is one optional extra step —
-          <a href="https://github.com/ricksinclair/engram#quickstart">see Quickstart</a>.</p>
+          <a href="https://github.com/ricksinclair/scatterbrained#quickstart">see Quickstart</a>.</p>
         </div>
       </li>
     </ol>
@@ -277,9 +278,9 @@ npm run export                       <span class="c"># versioned backup, committ
 
 <footer class="foot">
   <div class="wrap">
-    <p><strong>Engram</strong> — built by <a href="https://ulrictodman.com">Ulric Todman</a>.
+    <p><strong>Scatterbrained</strong> — built by <a href="https://ulrictodman.com">Ulric Todman</a>.
     MIT licensed. New here and stuck? Open an issue on
-    <a href="https://github.com/ricksinclair/engram/issues">GitHub</a> — friendly questions welcome.</p>
+    <a href="https://github.com/ricksinclair/scatterbrained/issues">GitHub</a> — friendly questions welcome.</p>
   </div>
 </footer>
 

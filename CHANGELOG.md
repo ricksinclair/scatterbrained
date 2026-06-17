@@ -1,19 +1,19 @@
 # Changelog
 
-The plain-English story of Engram. Each version starts with a **TL;DR** anyone
+The plain-English story of Scatterbrained. Each version starts with a **TL;DR** anyone
 can follow, then the technical details underneath.
 
-> **What is Engram, in one breath?** A memory for an AI assistant. It remembers
+> **What is Scatterbrained, in one breath?** A memory for an AI assistant. It remembers
 > your projects, notes, and decisions as connected facts it can search and reason
 > over across conversations — and it keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
 ## [1.7.0] — Honest Notion surfaces: digests for humans, not empty mirrors (2026-06-15)
 
-**TL;DR (explain-like-I'm-5):** The Notion databases Engram sets up (changelog, task board, test
+**TL;DR (explain-like-I'm-5):** The Notion databases Scatterbrained sets up (changelog, task board, test
 tracking…) were being presented as things you "run your project in" — but in real use they sat
 empty while the actual work lived in code, GitHub, and the memory graph. An empty database that
-*looks* like it should be full implies neglected work — the opposite of Engram's honesty goal. So
+*looks* like it should be full implies neglected work — the opposite of Scatterbrained's honesty goal. So
 we reframed them: the Notion side is a set of **plain-language digests for non-technical
 stakeholders** (a partner, a client, a funder, future-you), written **at milestones**, not logs you
 feed by hand. The **Changelog** is the flagship (one plain-English note per release); **Test Run
@@ -39,12 +39,12 @@ write rarely and meaningfully (one curated row per release) instead of hundreds 
 
 ## [1.6.0] — Stop the graph from quietly forking: catch duplicate entities (2026-06-15)
 
-**TL;DR (explain-like-I'm-5):** Engram remembers things as named facts, and it avoids
+**TL;DR (explain-like-I'm-5):** Scatterbrained remembers things as named facts, and it avoids
 duplicates by matching on the name. But two different sessions can name the *same* thing
 differently — "ulrictodman.com" in one, "Personal Site (ulrictodman.com)" in another — and
 then the safety net (match-by-name) actually *creates* a second copy instead of stopping it.
 Copies split a thing's history across two nodes, so later "what do I know about X?" answers
-come back half-empty. This release closes that gap from both ends: when you add a node, Engram
+come back half-empty. This release closes that gap from both ends: when you add a node, Scatterbrained
 now **warns before writing** if the new thing looks like one that already exists (it shares a
 repo URL, web URL, or file path, or its name closely resembles an existing one), and the
 integrity check (`lint:graph`) now **flags likely duplicates** that slipped through. Alternate
@@ -77,12 +77,12 @@ worked on (and says what it deferred), while an explicit "do a full sync" still 
 ## [1.5.0] — Close the "set and forget" gaps: enforce both reading and writing (2026-06-15)
 
 **TL;DR (explain-like-I'm-5):** Three fixes so an AI assistant can't quietly let things rot.
-**(1) Reading:** Engram kept *telling* the AI "check the memory graph first" — but telling
+**(1) Reading:** Scatterbrained kept *telling* the AI "check the memory graph first" — but telling
 isn't enforcing, and sometimes it forgot. Now `new-project` drops two tiny **hooks** into a
 project that re-show that rule every turn, for ~40 extra words of context (switch off with
 `/hooks`). **(2) Writing:** decisions the AI makes were landing only in the graph (which a
 person can't casually read), so the human-readable docs could go stale behind a rich graph —
-the *opposite* of the problem Engram set out to solve. A new check, `review:decisions`, now
+the *opposite* of the problem Scatterbrained set out to solve. A new check, `review:decisions`, now
 catches any decision that never made it to a human-readable page, and `writeback` helps draft
 it back into Notion as real prose. **(3) Notion sync the easy way:** change-detection now works
 off your single "one-root" home page — connect the integration once and it sees every project
@@ -173,7 +173,7 @@ underneath, no giant spreadsheet-style database required.
 
 ## [1.4.0] — Recipes you can just ask for, and a graph that keeps itself honest
 
-**TL;DR (explain-like-I'm-5):** A big bundle. Engram now (1) lets you **just ask
+**TL;DR (explain-like-I'm-5):** A big bundle. Scatterbrained now (1) lets you **just ask
 Claude** to do things — no terminal — right alongside every command; (2) **notices
 when its own notes and pages fall behind** what actually shipped; (3) keeps **all
 your projects under one Notion home** you set up once; (4) ships a **welcoming,
@@ -230,7 +230,7 @@ sync, not half.
 
 ## [1.3.0] — Set up a whole project in one command (graph *and* Notion)
 
-**TL;DR (explain-like-I'm-5):** Engram used to give you the AI's *memory* (the graph).
+**TL;DR (explain-like-I'm-5):** Scatterbrained used to give you the AI's *memory* (the graph).
 Now it also sets up the place *you* work. Run one command and you get a Notion
 workspace ready to go: a to-do board (Kanban), a changelog, a place to track tests,
 and a docs index — plus the project is registered in the graph and a settings file
@@ -238,7 +238,7 @@ and a docs index — plus the project is registered in the graph and a settings 
 **together**, as one system. (Before, you had to wire all that up yourself.)
 
 **Technical**
-- `new-project` (`engram new-project --name "X"`) — orchestrates it end to end:
+- `new-project` (`scatterbrained new-project --name "X"`) — orchestrates it end to end:
   creates the Notion operations workspace, MERGEs a `Project` + `Goal` (+ a `Source`
   for the workspace) in the graph, writes/updates `notion-ids.json`, and drops a wired
   repo `CLAUDE.md`. `--dry-run` previews without creating anything.
@@ -252,7 +252,7 @@ and a docs index — plus the project is registered in the graph and a settings 
 **TL;DR (explain-like-I'm-5):** Picture a giant box of your notes.
 - **Before:** you could only find a note by typing the *exact words* on it. Type
   "car" and you'd miss the note that says "automobile."
-- **Now:** Engram also understands *what you mean*. Ask *"how do I make money from
+- **Now:** Scatterbrained also understands *what you mean*. Ask *"how do I make money from
   this?"* and it finds your notes about revenue and pricing — even if they never
   say "make money." It groups notes by the *idea*, not just the words.
 - **The neat part:** it does this with a small AI brain that runs **on your own
@@ -272,7 +272,7 @@ and a docs index — plus the project is registered in the graph and a settings 
 
 ## [1.1.0] — Keyword search
 
-**TL;DR:** Gave Engram a fast "Find." Type some words, get your most relevant
+**TL;DR:** Gave Scatterbrained a fast "Find." Type some words, get your most relevant
 notes back in ranked order, each with a breadcrumb trail to where the fact came
 from. Like Ctrl-F, but ranked and across everything you've stored.
 
@@ -297,4 +297,4 @@ flows into one graph the assistant can reason over.
 ---
 
 *Format loosely follows [Keep a Changelog](https://keepachangelog.com); versions
-match the [`engram-kg`](https://www.npmjs.com/package/engram-kg) npm releases.*
+match the [`scatterbrained`](https://www.npmjs.com/package/scatterbrained) npm releases.*

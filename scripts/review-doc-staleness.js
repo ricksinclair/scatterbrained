@@ -19,7 +19,7 @@
 // Usage:
 //   node scripts/review-doc-staleness.js                  # projects with a conclusion in the last 14d
 //   node scripts/review-doc-staleness.js --days 30
-//   node scripts/review-doc-staleness.js --project Engram
+//   node scripts/review-doc-staleness.js --project Scatterbrained
 //   node scripts/review-doc-staleness.js --json
 // ============================================================================
 import { getDriver, run, parseArgs, toPlain } from './lib/db.js';

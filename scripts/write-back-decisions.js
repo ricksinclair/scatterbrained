@@ -21,8 +21,8 @@
 // default; posting requires --commit AND a NOTION_TOKEN AND explicit entries.
 //
 // Usage:
-//   node scripts/write-back-decisions.js --project Engram            # draft (JSON candidates)
-//   node scripts/write-back-decisions.js --project Engram --days 30
+//   node scripts/write-back-decisions.js --project Scatterbrained            # draft (JSON candidates)
+//   node scripts/write-back-decisions.js --project Scatterbrained --days 30
 //   node scripts/write-back-decisions.js --commit --file entries.json
 //   cat entries.json | node scripts/write-back-decisions.js --commit
 // ============================================================================

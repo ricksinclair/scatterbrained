@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// engram — thin CLI dispatcher over the toolkit scripts, so the published
-// package is usable via `npx engram-kg <command>` (or globally as `engram`).
+// scatterbrained — thin CLI dispatcher over the toolkit scripts, so the published
+// package is usable via `npx scatterbrained <command>` (or globally as `scatterbrained`).
 // For the full setup (docker-compose Neo4j, schema, demo graph), clone the repo:
-// https://github.com/ricksinclair/engram
+// https://github.com/ricksinclair/scatterbrained
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -30,9 +30,9 @@ const COMMANDS = {
   import: 'import-graph.js',
 };
 
-const HELP = `engram — an agent-maintained, bi-temporal knowledge graph for AI memory
+const HELP = `scatterbrained — an agent-maintained, bi-temporal knowledge graph for AI memory
 
-Usage:  engram <command> [args]
+Usage:  scatterbrained <command> [args]
 
 Commands:
   lint            graph integrity check (orphans, undated, unlinked, vocab)
@@ -56,7 +56,7 @@ Connection (env, with sane local defaults):
   NEO4J_URI (bolt://localhost:7687)  NEO4J_USER (neo4j)  NEO4J_PASSWORD
 
 Full setup — docker-compose Neo4j, schema, and a demo graph — is in the repo:
-  https://github.com/ricksinclair/engram   ·   https://ulrictodman.com/engram
+  https://github.com/ricksinclair/scatterbrained   ·   https://ulrictodman.com/scatterbrained
 `;
 
 const [cmd, ...rest] = process.argv.slice(2);
@@ -68,7 +68,7 @@ if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
 
 const script = COMMANDS[cmd];
 if (!script) {
-  console.error(`engram: unknown command "${cmd}". Run \`engram help\`.`);
+  console.error(`scatterbrained: unknown command "${cmd}". Run \`scatterbrained help\`.`);
   process.exit(1);
 }
 

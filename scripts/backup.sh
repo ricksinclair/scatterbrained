@@ -11,7 +11,7 @@
 #
 # Install (daily at 03:17 — off the :00 mark on purpose):
 #   crontab -e
-#   17 3 * * * /absolute/path/to/engram/scripts/backup.sh
+#   17 3 * * * /absolute/path/to/scatterbrained/scripts/backup.sh
 # ============================================================================
 set -uo pipefail
 
@@ -25,7 +25,7 @@ export PATH="/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"
 
 # Derive the repo root from this script's location — no hardcoded paths.
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-CONTAINER="engram-neo4j"
+CONTAINER="scatterbrained-neo4j"
 LOG="$REPO/logs/backup.log"
 
 mkdir -p "$REPO/logs"

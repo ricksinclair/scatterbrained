@@ -3,9 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Engram — an agent-maintained knowledge graph for AI memory</title>
+<meta name="robots" content="noindex, nofollow, noarchive, noimageindex" />
+<title>Scatterbrained — an agent-maintained knowledge graph for AI memory</title>
 <meta name="description" content="A transparent, fully-owned, bi-temporal knowledge graph that an AI agent maintains across sessions. Neo4j as canonical truth; Notion and local files as capture lanes. Why it beats a Notion-only or Neo4j-only workflow." />
-<meta property="og:title" content="Engram — a knowledge graph for AI memory" />
+<meta property="og:title" content="Scatterbrained — a knowledge graph for AI memory" />
 <meta property="og:description" content="Capture where it's natural. Query where it's powerful. Let an agent keep it honest." />
 <meta property="og:type" content="website" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,6 +15,40 @@
 <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+
+<!-- Private preview gate — front-end only (not security; just keeps the WIP off
+     search engines + casual visitors before launch). Change PASS below. -->
+<div id="gate" hidden>
+  <form id="gate-form">
+    <div class="gate-logo">scatter<span>·</span>brained</div>
+    <p class="gate-tag">private preview</p>
+    <input id="gate-pw" type="password" placeholder="passphrase" autocomplete="off" aria-label="passphrase" />
+    <button type="submit">enter →</button>
+    <div id="gate-err" aria-live="polite"></div>
+  </form>
+</div>
+<script>
+(function () {
+  var KEY = 'sb_preview_ok';
+  var PASS = 'observatory';   // ← share this with whoever you're showing; change anytime
+  var ok = false;
+  try { ok = localStorage.getItem(KEY) === '1'; } catch (e) {}
+  if (ok) return;
+  var root = document.documentElement;
+  root.classList.add('gated');
+  var gate = document.getElementById('gate');
+  gate.hidden = false;
+  document.getElementById('gate-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (document.getElementById('gate-pw').value === PASS) {
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+      gate.remove(); root.classList.remove('gated');
+    } else {
+      document.getElementById('gate-err').textContent = 'not quite — try again';
+    }
+  });
+})();
+</script>
 
 <div class="grain" aria-hidden="true"></div>
 
@@ -36,11 +71,24 @@
   </svg>
 
   <div class="hero-inner">
+    <span class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 120 120">
+        <g class="bm-edges" stroke-width="1.4" fill="none">
+          <line x1="34" y1="64" x2="62" y2="34"/><line x1="62" y1="34" x2="90" y2="56"/>
+          <line x1="34" y1="64" x2="60" y2="64"/><line x1="60" y1="64" x2="90" y2="56"/>
+          <line x1="60" y1="64" x2="74" y2="90"/><line x1="34" y1="64" x2="44" y2="92"/>
+          <line x1="62" y1="34" x2="60" y2="64"/>
+        </g>
+        <circle class="bm bm-a" cx="34" cy="64" r="6"/><circle class="bm bm-b" cx="62" cy="34" r="6"/>
+        <circle class="bm bm-c" cx="90" cy="56" r="6"/><circle class="bm bm-d" cx="74" cy="90" r="5"/>
+        <circle class="bm bm-e" cx="44" cy="92" r="5"/><circle class="bm bm-hub" cx="60" cy="64" r="7"/>
+      </svg>
+    </span>
     <p class="kicker">a knowledge graph that remembers for you</p>
-    <h1 class="wordmark">Engram</h1>
+    <h1 class="wordmark"><span class="wm-1">scatter</span><span class="wm-dot"></span><span class="wm-2">brained</span></h1>
     <p class="define">
-      <span class="ipa">/ˈɛnˌɡram/</span> &nbsp;·&nbsp; <span class="pos">noun</span><br/>
-      a physical trace a memory leaves behind — the unit in which knowledge is stored.
+      <span class="ipa">/ˈskadərˌbreɪnd/</span> &nbsp;·&nbsp; <span class="pos">adjective</span><br/>
+      a mind full of scattered thoughts — wired together, they remember everything.
     </p>
     <p class="lede">
       Capture where it's natural. Query where it's powerful. Let an agent keep it honest.
@@ -50,7 +98,7 @@
     <div class="cta-row">
       <a class="btn btn-solid" href="./getting-started.html">Get started →</a>
       <a class="btn btn-ghost" href="#why">Why it's different</a>
-      <a class="btn btn-ghost" href="https://github.com/ricksinclair/engram">GitHub</a>
+      <a class="btn btn-ghost" href="https://github.com/ricksinclair/scatterbrained">GitHub</a>
     </div>
   </div>
   <div class="scroll-cue" aria-hidden="true"><span></span></div>
@@ -183,6 +231,51 @@
   </div>
 </section>
 
+<!-- ───────────────────────── THE OBSERVATORY (Studio) ───────────────────────── -->
+<section class="band band-studio" id="studio">
+  <div class="wrap">
+    <p class="section-tag">the observatory</p>
+    <h2>A graph you can actually <em>see</em>.</h2>
+    <p class="prose">
+      That schema isn't a diagram — it's alive. The <strong>Studio</strong> renders your whole
+      graph as a constellation you explore on your own machine. Click any node and the inspector
+      <em>composes itself</em> from what that node is: a goal shows its progress, a rule its
+      confidence, a source its file. Focus to fade the noise, ask in plain language, and follow a
+      fact to the moment it was superseded.
+    </p>
+
+    <figure class="studio-demo">
+      <img src="media/shot-provenance.jpg" alt="Scatterbrained Studio: a force-directed constellation of an engineering decision log; the selected node's inspector shows it was informed by three sources." />
+      <figcaption>The Studio on a sample graph — an engineering team's decision log. Runs locally; your data never leaves your machine.</figcaption>
+    </figure>
+
+    <div class="studio-feats">
+      <div><b>Constellation</b> the whole graph as a force-directed map, with degree-of-interest focus that fades the unrelated.</div>
+      <div><b>Composable inspector</b> the panel is built <em>from the node</em> — provenance, relations, bi-temporal timeline, goal progress.</div>
+      <div><b>See any source in place</b> PDFs, spreadsheets, a saved article, an embedded YouTube talk — opened inline, never a detour.</div>
+      <div><b>Local &amp; private</b> it reads your local graph; pluggable local LLM, nothing phoned home.</div>
+    </div>
+
+    <h3 class="studio-sub">Two ways people use it</h3>
+    <div class="studio-cases">
+      <figure>
+        <img src="media/shot-timeline.jpg" alt="The Studio showing a superseded decision — 'Chose AWS SQS FIFO', valid until March 2, superseded by the Kafka decision." />
+        <figcaption><b>A decision log that remembers <em>why</em>.</b> Six months later, “why didn't we just use SQS?” has an answer — the reversed decision, the benchmark that drove it, and the reason, all one click away.</figcaption>
+      </figure>
+      <figure>
+        <img src="media/shot-report.jpg" alt="The Studio's report view — a project expanded into an exportable briefing with a chart, summary, sources and relations." />
+        <figcaption><b>Brief a stakeholder in one click.</b> Expand any project into a clean, exportable briefing — status, the key decision, the open risk — without writing it up twice.</figcaption>
+      </figure>
+    </div>
+
+    <div class="studio-gallery">
+      <figure><img src="media/shot-video.jpg" alt="An embedded YouTube talk inside a node's inspector." /><figcaption>Embed a talk or article on the node itself.</figcaption></figure>
+      <figure><img src="media/shot-goal.jpg" alt="A goal node showing a progress meter computed from its requirements." /><figcaption>Goals show real progress, computed from the graph.</figcaption></figure>
+      <figure><img src="media/shot-notes.jpg" alt="Notes attached to a node — one new, one addressed." /><figcaption>Jot a note on anything; the next sync acts on it.</figcaption></figure>
+    </div>
+  </div>
+</section>
+
 <!-- ───────────────────────── THE HUMAN SURFACE ───────────────────────── -->
 <section class="band band-alt">
   <div class="wrap">
@@ -209,7 +302,7 @@
     </div>
 
     <p class="prose">
-      That whole stack ships with Engram. One command — <code>engram new-project</code> — stands up
+      That whole stack ships with Scatterbrained. One command — <code>scatterbrained new-project</code> — stands up
       the Notion workspace (four databases + status pages), registers the project in the graph, and
       drops a wired <code>CLAUDE.md</code> into the repo. These databases are <em>digests written at
       milestones</em>, not logs you hand-feed: the <strong>Changelog</strong> is the flagship (a
@@ -237,7 +330,7 @@
     <p class="section-tag">05 — what you can just do</p>
     <h2>Skills, not commands.</h2>
     <p class="prose">
-      Everything Engram does is a <em>skill</em> you reach for in plain language. If you use
+      Everything Scatterbrained does is a <em>skill</em> you reach for in plain language. If you use
       Claude with the Notion connection, <strong>just ask</strong> — no token, no terminal.
       Prefer the keyboard? Every skill has a one-line command. Same result; pick your lane.
     </p>
@@ -248,8 +341,8 @@
         <p>One move builds the whole thing: a Notion workspace (a plain-English changelog, docs
         index, a health snapshot, an optional task board, a capture page), the project registered in
         the graph, and a wired <code>CLAUDE.md</code> dropped in your repo.</p>
-        <p class="ask"><span>Ask:</span> “Set up a new Engram project called Acme.”</p>
-        <p class="cli"><code>engram new-project --name "Acme"</code></p>
+        <p class="ask"><span>Ask:</span> “Set up a new Scatterbrained project called Acme.”</p>
+        <p class="cli"><code>scatterbrained new-project --name "Acme"</code></p>
       </article>
 
       <article class="skill">
@@ -257,15 +350,15 @@
         <p>Re-reads only what changed across Notion and your files, folds in new facts, surfaces
         fresh cross-project insights, checks integrity, and backs everything up — in one pass.</p>
         <p class="ask"><span>Ask:</span> “Run a graph-sync.”</p>
-        <p class="cli"><code>engram resume</code> · <code>lint:graph</code> · <code>export</code></p>
+        <p class="cli"><code>scatterbrained resume</code> · <code>lint:graph</code> · <code>export</code></p>
       </article>
 
       <article class="skill">
         <h3>Find anything by meaning</h3>
         <p>Ask in your own words. “How do I make money from this?” surfaces notes about revenue
         and pricing even when they never say it — keyword and meaning, blended and ranked.</p>
-        <p class="ask"><span>Ask:</span> “Search Engram for how this makes money.”</p>
-        <p class="cli"><code>engram search "how do I make money"</code></p>
+        <p class="ask"><span>Ask:</span> “Search Scatterbrained for how this makes money.”</p>
+        <p class="cli"><code>scatterbrained search "how do I make money"</code></p>
       </article>
 
       <article class="skill">
@@ -273,15 +366,15 @@
         <p>A “where were we” brief across every project — freshness, goals, the newest
         conclusions, and what's still open — so a new session starts already caught up.</p>
         <p class="ask"><span>Ask:</span> “Where were we?”</p>
-        <p class="cli"><code>engram resume</code></p>
+        <p class="cli"><code>scatterbrained resume</code></p>
       </article>
 
       <article class="skill">
         <h3>Keep it honest</h3>
-        <p>When a fact is replaced, retire it — Engram marks it superseded instead of deleting,
+        <p>When a fact is replaced, retire it — Scatterbrained marks it superseded instead of deleting,
         so the history survives. A review pass surfaces the stale candidates for you to confirm.</p>
         <p class="ask"><span>Ask:</span> “Retire the old pricing decision; it changed.”</p>
-        <p class="cli"><code>engram review:supersession</code> · <code>supersede</code></p>
+        <p class="cli"><code>scatterbrained review:supersession</code> · <code>supersede</code></p>
       </article>
 
       <article class="skill">
@@ -290,7 +383,7 @@
         review pass flags any decision with no human-readable page refreshed since — so the
         <em>why</em> reaches Notion and your docs, not just a query.</p>
         <p class="ask"><span>Ask:</span> “Which decisions aren't written up yet?”</p>
-        <p class="cli"><code>engram review:decisions</code></p>
+        <p class="cli"><code>scatterbrained review:decisions</code></p>
       </article>
 
       <article class="skill">
@@ -298,15 +391,15 @@
         <p>Pull a clean, scoped context block — by project, domain, or tag — ready to drop into
         any chat, so the assistant reasons over your real knowledge, not a vague summary.</p>
         <p class="ask"><span>Ask:</span> “Give me the context block for Acme.”</p>
-        <p class="cli"><code>engram context --project Acme</code></p>
+        <p class="cli"><code>scatterbrained context --project Acme</code></p>
       </article>
     </div>
 
     <p class="prose skills-foot">
       The “ask Claude” path runs over the Notion + Neo4j MCPs as
-      <a href="https://github.com/ricksinclair/engram/tree/main/skills">recipes</a> the agent
+      <a href="https://github.com/ricksinclair/scatterbrained/tree/main/skills">recipes</a> the agent
       follows directly — the no-terminal twin of the toolkit. Full command reference in the
-      <a href="https://github.com/ricksinclair/engram#the-toolkit">README</a>.
+      <a href="https://github.com/ricksinclair/scatterbrained#the-toolkit">README</a>.
     </p>
   </div>
 </section>
@@ -417,7 +510,7 @@
             <th>Notion<br/>only</th>
             <th>Neo4j<br/>only</th>
             <th>Vendor<br/>memory</th>
-            <th class="hl">Engram</th>
+            <th class="hl">Scatterbrained</th>
           </tr>
         </thead>
         <tbody>
@@ -442,7 +535,7 @@
     <blockquote>
       <p>It now finds by <em>meaning</em>, not just words.</p>
       <cite>— and the model that does it runs entirely on your machine: no API, no
-      account. A small, owned model over a hosted one — on purpose. (<a href="https://github.com/ricksinclair/engram/issues/1">#1</a>)</cite>
+      account. A small, owned model over a hosted one — on purpose. (<a href="https://github.com/ricksinclair/scatterbrained/issues/1">#1</a>)</cite>
     </blockquote>
   </div>
 </section>
@@ -454,19 +547,19 @@
     <p class="prose">
       Clone it, run <code>docker compose up</code>, load the demo graph, and watch the
       toolkit work. MIT licensed — fork the ideas, the schema, the discipline. On npm
-      as <code>engram-kg</code>.
+      as <code>scatterbrained</code>.
     </p>
     <div class="cta-row">
       <a class="btn btn-solid" href="./getting-started.html">New here? Get started →</a>
-      <a class="btn btn-ghost" href="https://github.com/ricksinclair/engram">github.com/ricksinclair/engram</a>
+      <a class="btn btn-ghost" href="https://github.com/ricksinclair/scatterbrained">github.com/ricksinclair/scatterbrained</a>
     </div>
 <pre class="code"><code><span class="c"># clone &amp; spin up</span>
-git clone https://github.com/ricksinclair/engram.git &amp;&amp; cd engram
+git clone https://github.com/ricksinclair/scatterbrained.git &amp;&amp; cd scatterbrained
 npm install &amp;&amp; docker compose up -d
 
 <span class="c"># schema + a synthetic demo graph</span>
 cat scripts/seed-schema.cypher examples/seed-demo.cypher \
-  | docker exec -i engram-neo4j cypher-shell -u neo4j -p engram-local
+  | docker exec -i scatterbrained-neo4j cypher-shell -u neo4j -p scatterbrained-local
 
 npm run lint:graph        <span class="c"># integrity check — passes</span>
 npm run review:supersession</code></pre>
@@ -477,11 +570,31 @@ npm run review:supersession</code></pre>
 
 <footer class="foot">
   <div class="wrap">
-    <p><strong>Engram</strong> — built by <a href="https://ulrictodman.com">Ulric Todman</a>.
+    <p><strong>Scatterbrained</strong> — built by <a href="https://ulrictodman.com">Ulric Todman</a>.
     MIT licensed. Patterns informed by the 2026 agent-memory landscape; this is the
     transparent, fully-owned take.</p>
   </div>
 </footer>
+
+<!-- Lightbox — click any Studio screenshot to expand it in place. -->
+<div id="lightbox" class="lightbox" hidden>
+  <button class="lb-close" aria-label="close">×</button>
+  <img id="lightbox-img" alt="" />
+</div>
+<script>
+(function () {
+  var lb = document.getElementById('lightbox'), img = document.getElementById('lightbox-img');
+  function close() { lb.hidden = true; img.removeAttribute('src'); document.documentElement.classList.remove('lb-open'); }
+  function open(el) { img.src = el.currentSrc || el.src; img.alt = el.alt || ''; lb.hidden = false; document.documentElement.classList.add('lb-open'); }
+  document.querySelectorAll('#studio img').forEach(function (el) {
+    el.classList.add('zoomable');
+    el.addEventListener('click', function () { open(el); });
+  });
+  lb.addEventListener('click', close);
+  document.querySelector('.lb-close').addEventListener('click', function (e) { e.stopPropagation(); close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !lb.hidden) close(); });
+})();
+</script>
 
 </body>
 </html>

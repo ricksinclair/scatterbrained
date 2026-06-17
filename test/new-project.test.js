@@ -23,7 +23,7 @@ test('claudeMd fills the project name, workspace url, and lists only scaffolded 
 });
 
 test('mergeManifest adds a project without clobbering existing ones', () => {
-  const tmp = path.join(os.tmpdir(), `engram-merge-${process.pid}-a.json`);
+  const tmp = path.join(os.tmpdir(), `scatterbrained-merge-${process.pid}-a.json`);
   fs.writeFileSync(tmp, JSON.stringify({ projects: { Existing: { workspace_url: 'u', entries: {} } } }));
   mergeManifest('New', { projects: { New: { workspace_url: 'v', entries: { X: { kind: 'page', id: '1' } } } } }, tmp);
   const result = JSON.parse(fs.readFileSync(tmp, 'utf8'));
@@ -33,7 +33,7 @@ test('mergeManifest adds a project without clobbering existing ones', () => {
 });
 
 test('mergeManifest starts fresh when the file does not exist', () => {
-  const tmp = path.join(os.tmpdir(), `engram-merge-${process.pid}-b.json`);
+  const tmp = path.join(os.tmpdir(), `scatterbrained-merge-${process.pid}-b.json`);
   mergeManifest('P', { projects: { P: { workspace_url: 'w', entries: {} } } }, tmp);
   assert.ok(JSON.parse(fs.readFileSync(tmp, 'utf8')).projects.P);
   fs.unlinkSync(tmp);
@@ -68,11 +68,11 @@ test('mergeSettings is idempotent and preserves unrelated settings', () => {
 });
 
 test('writeAgentConfig drops .claude/ hooks + settings into the repo dir', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'engram-agentcfg-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'scatterbrained-agentcfg-'));
   const settingsPath = writeAgentConfig(tmp, 'Acme');
   assert.ok(fs.existsSync(settingsPath), 'settings.json written');
-  assert.ok(fs.existsSync(path.join(tmp, '.claude/hooks/engram-graph-first-session.sh')));
-  assert.ok(fs.existsSync(path.join(tmp, '.claude/hooks/engram-graph-first-prompt.sh')));
+  assert.ok(fs.existsSync(path.join(tmp, '.claude/hooks/scatterbrained-graph-first-session.sh')));
+  assert.ok(fs.existsSync(path.join(tmp, '.claude/hooks/scatterbrained-graph-first-prompt.sh')));
   assert.ok(JSON.parse(fs.readFileSync(settingsPath, 'utf8')).hooks.SessionStart, 'settings has hooks');
   fs.rmSync(tmp, { recursive: true, force: true });
 });

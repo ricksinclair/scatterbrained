@@ -1,7 +1,7 @@
 name: Deploy explainer site to Pages
 
 # Publishes docs/ to GitHub Pages. With the user site's CNAME (ulrictodman.com)
-# and no CNAME in this repo, the site is served at ulrictodman.com/engram.
+# and no CNAME in this repo, the site is served at ulrictodman.com/scatterbrained.
 on:
   push:
     branches: [main]

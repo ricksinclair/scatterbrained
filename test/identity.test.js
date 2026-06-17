@@ -46,8 +46,8 @@ test('normalizeKey trims, lowercases, and collapses whitespace', () => {
 
 test('keysLookAlike catches the containment case that bit ulrictodman.com', () => {
   assert.ok(keysLookAlike('ulrictodman.com', 'Personal Site (ulrictodman.com)'));
-  assert.ok(keysLookAlike('Engram', 'engram')); // case-insensitive exact
-  assert.ok(keysLookAlike('  Engram ', 'engram'));
+  assert.ok(keysLookAlike('Scatterbrained', 'scatterbrained')); // case-insensitive exact
+  assert.ok(keysLookAlike('  Scatterbrained ', 'scatterbrained'));
 });
 
 test('keysLookAlike does not over-match on trivial/short overlaps', () => {

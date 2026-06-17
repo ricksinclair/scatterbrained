@@ -23,6 +23,8 @@ export const SOURCE_KINDS = {
   pdf: 'A PDF document.',
   docx: 'A Word document.',
   pptx: 'A PowerPoint deck.',
+  csv: 'A comma/tab-separated spreadsheet (.csv/.tsv) — rendered as a table + chart.',
+  xlsx: 'An Excel spreadsheet (.xlsx).',
 
   // — Curated / manually-added artifacts (set by hand during a session) —
   claude_memory: 'A Claude memory file (~/.claude/.../memory/*.md).',
@@ -39,7 +41,7 @@ export const SOURCE_KIND_LIST = Object.keys(SOURCE_KINDS);
 
 // Kinds that originate from a file on disk, so they MUST carry a file_path.
 // (Used by lint to flag document-lane Sources that lost their absolute path.)
-export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'claude_memory'];
+export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'csv', 'xlsx', 'claude_memory'];
 
 export function isValidSourceKind(k) {
   return typeof k === 'string' && Object.prototype.hasOwnProperty.call(SOURCE_KINDS, k);

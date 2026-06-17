@@ -1,5 +1,5 @@
 /* ============================================================================
-   Engram — explainer site
+   Scatterbrained — explainer site
    Dark editorial "technical monograph": Fraunces + Spectral + JetBrains Mono,
    graphite canvas, graph-paper texture, warm ember accent.
    ============================================================================ */
@@ -86,11 +86,36 @@ em { font-style: italic; color: #f3eee2; }
 @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 
 .kicker { color: var(--ember); text-transform: uppercase; letter-spacing: 0.28em; font-size: 0.72rem; margin: 0 0 1.4rem; }
+/* split wordmark — smaller than the old short name, ember/paper with a teal joint */
 .wordmark {
-  font-size: clamp(4.5rem, 15vw, 11rem); line-height: 0.9; margin: 0;
-  font-weight: 500; letter-spacing: -0.04em;
-  background: linear-gradient(180deg, #fbf4e6, #cbb89c 90%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+  font-size: clamp(3rem, 9vw, 6.5rem); line-height: 0.95; margin: 0;
+  font-weight: 500; letter-spacing: -0.03em; display: inline-flex; align-items: baseline;
+}
+.wordmark .wm-1 { color: var(--ember); }
+.wordmark .wm-2 { color: var(--paper); }
+.wordmark .wm-dot { display: inline-block; width: 0.16em; height: 0.16em; border-radius: 50%; background: var(--teal); margin: 0 0.07em; align-self: center; }
+
+/* the animated brand mark — same constellation as Scatterbrained Studio */
+.brand-mark { display: inline-block; margin-bottom: 1.2rem; }
+.brand-mark svg { width: 64px; height: 64px; overflow: visible; }
+.brand-mark .bm-edges line { stroke: var(--paper); stroke-dasharray: 60; stroke-dashoffset: 60; opacity: 0; animation: bm-draw 0.9s ease-out 0.5s forwards, bm-breathe 3.8s ease-in-out 1.6s infinite; }
+.brand-mark .bm { transform-box: fill-box; transform-origin: center; }
+.brand-mark .bm-a { fill: var(--ember); animation: bm-in 0.8s cubic-bezier(.2,.8,.2,1) 0.05s both, bm-drift-a 5.5s ease-in-out 1s infinite; }
+.brand-mark .bm-b { fill: var(--paper); animation: bm-in 0.8s cubic-bezier(.2,.8,.2,1) 0.13s both, bm-drift-b 6.2s ease-in-out 1.1s infinite; }
+.brand-mark .bm-c { fill: var(--teal); animation: bm-in 0.8s cubic-bezier(.2,.8,.2,1) 0.21s both, bm-drift-c 5.8s ease-in-out 1.2s infinite; }
+.brand-mark .bm-d { fill: #e0b25a; animation: bm-in 0.8s cubic-bezier(.2,.8,.2,1) 0.29s both, bm-drift-b 6.6s ease-in-out 1.3s infinite; }
+.brand-mark .bm-e { fill: var(--teal-dk, #3f7a72); animation: bm-in 0.8s cubic-bezier(.2,.8,.2,1) 0.37s both, bm-drift-c 6.0s ease-in-out 1.4s infinite; }
+.brand-mark .bm-hub { fill: var(--ember-dk); animation: bm-in 0.8s cubic-bezier(.2,.8,.2,1) 0.45s both, bm-pulse 2.8s ease-in-out 1.2s infinite; }
+@keyframes bm-in { from { transform: scale(0); opacity: 0; } 60% { transform: scale(1.25); } to { transform: scale(1); opacity: 1; } }
+@keyframes bm-draw { from { stroke-dashoffset: 60; opacity: 0; } to { stroke-dashoffset: 0; opacity: 0.5; } }
+@keyframes bm-breathe { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.6; } }
+@keyframes bm-drift-a { 0%, 100% { transform: translate(0,0); } 33% { transform: translate(2.5px,-3px); } 66% { transform: translate(-2px,2px); } }
+@keyframes bm-drift-b { 0%, 100% { transform: translate(0,0); } 50% { transform: translate(-3px,-2.5px); } }
+@keyframes bm-drift-c { 0%, 100% { transform: translate(0,0); } 40% { transform: translate(3px,2px); } 75% { transform: translate(-1.5px,-2px); } }
+@keyframes bm-pulse { 0%, 100% { transform: scale(1); opacity: 0.9; } 50% { transform: scale(1.22); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .brand-mark .bm, .brand-mark .bm-edges line { animation: none; }
+  .brand-mark .bm-edges line { opacity: 0.5; stroke-dashoffset: 0; }
 }
 .define { font-family: "JetBrains Mono", monospace; font-size: 0.92rem; color: var(--paper-dim);
   margin: 1.2rem 0 0; line-height: 1.7; }
@@ -120,6 +145,44 @@ em { font-style: italic; color: #f3eee2; }
 .band h2 { font-size: clamp(2rem, 4.5vw, 3.4rem); line-height: 1.05; margin: 0 0 1.6rem; max-width: 18ch; }
 .prose { max-width: var(--measure); color: var(--paper-dim); font-size: 1.12rem; }
 .prose code { font-size: 0.78em; }
+
+/* ── The observatory (Studio showcase) ───────────────────────────────── */
+.band-studio { background: radial-gradient(120% 90% at 50% -10%, var(--ink-3), var(--ink) 62%); border-top: 1px solid var(--line-2); }
+.studio-demo { margin: 2.6rem 0 0; }
+.studio-demo video, .studio-demo img { width: 100%; display: block; border-radius: 14px; border: 1px solid var(--line-2); background: var(--ink-2); box-shadow: 0 40px 90px -45px rgba(0,0,0,0.95), 0 0 60px -30px rgba(239,154,91,0.18); }
+.studio-demo figcaption { margin-top: 0.9rem; text-align: center; color: var(--muted); font-size: 0.82rem; letter-spacing: 0.02em; }
+.studio-feats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.1rem 2.4rem; margin-top: 2.6rem; max-width: 860px; }
+.studio-feats > div { color: var(--paper-dim); font-size: 0.98rem; line-height: 1.5; border-top: 1px solid var(--line); padding-top: 0.75rem; }
+.studio-feats b { display: block; margin-bottom: 0.12rem; color: var(--paper); font-weight: 600; }
+@media (max-width: 640px) { .studio-feats { grid-template-columns: 1fr; } }
+.studio-sub { margin: 3.4rem 0 1.3rem; font-family: "Fraunces", serif; font-weight: 400; font-size: clamp(1.4rem, 3vw, 1.9rem); color: var(--paper); }
+.studio-cases { display: grid; grid-template-columns: 1fr 1fr; gap: 1.9rem; }
+.studio-cases figure, .studio-gallery figure { margin: 0; }
+.studio-cases img, .studio-gallery img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line-2); box-shadow: 0 26px 64px -42px rgba(0,0,0,0.92); background: var(--ink-2); }
+.studio-cases figcaption { margin-top: 0.85rem; color: var(--paper-dim); font-size: 0.96rem; line-height: 1.5; }
+.studio-cases b { color: var(--paper); }
+.studio-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3rem; margin-top: 2.2rem; }
+.studio-gallery figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.82rem; text-align: center; }
+@media (max-width: 720px) { .studio-cases, .studio-gallery { grid-template-columns: 1fr; } }
+
+/* Private-preview gate (front-end only) */
+html.gated body { overflow: hidden; height: 100vh; }
+#gate { position: fixed; inset: 0; z-index: 9999; background: var(--ink, #0b0d12); display: flex; align-items: center; justify-content: center; }
+#gate form { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; text-align: center; }
+.gate-logo { font-family: "Fraunces", serif; font-size: 2.2rem; color: var(--paper, #ece6d8); }
+.gate-logo span { color: var(--ember, #ef9a5b); }
+.gate-tag { margin: 0; color: var(--muted, #7e8492); text-transform: uppercase; letter-spacing: 0.24em; font-size: 0.68rem; font-family: "JetBrains Mono", monospace; }
+#gate input { font: inherit; font-size: 1rem; text-align: center; color: var(--paper, #ece6d8); background: var(--ink-2, #10131a); border: 1px solid var(--line-2, rgba(236,230,216,0.16)); border-radius: 8px; padding: 0.6rem 1rem; width: 240px; }
+#gate button { font-family: "JetBrains Mono", monospace; font-size: 0.85rem; cursor: pointer; color: var(--ink, #0b0d12); background: var(--ember, #ef9a5b); border: 0; border-radius: 8px; padding: 0.55rem 1.4rem; }
+#gate-err { color: var(--ember, #ef9a5b); font-size: 0.8rem; min-height: 1rem; }
+
+/* Lightbox — expand a screenshot in place */
+img.zoomable { cursor: zoom-in; }
+html.lb-open { overflow: hidden; }
+.lightbox { position: fixed; inset: 0; z-index: 9000; background: rgba(6, 7, 11, 0.94); display: flex; align-items: center; justify-content: center; padding: 3vh 3vw; cursor: zoom-out; }
+.lightbox img { max-width: 96vw; max-height: 94vh; border-radius: 8px; border: 1px solid var(--line-2); box-shadow: 0 30px 90px -20px rgba(0, 0, 0, 0.95); }
+.lb-close { position: fixed; top: 12px; right: 22px; font-size: 2rem; line-height: 1; color: var(--paper-dim); background: none; border: 0; cursor: pointer; }
+.lb-close:hover { color: var(--paper); }
 
 /* problem grid */
 .problem-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; margin-top: 3rem; }
