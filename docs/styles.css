@@ -155,6 +155,26 @@ em { font-style: italic; color: #f3eee2; }
 .studio-feats > div { color: var(--paper-dim); font-size: 0.98rem; line-height: 1.5; border-top: 1px solid var(--line); padding-top: 0.75rem; }
 .studio-feats b { display: block; margin-bottom: 0.12rem; color: var(--paper); font-weight: 600; }
 @media (max-width: 640px) { .studio-feats { grid-template-columns: 1fr; } }
+.studio-sub { margin: 3.4rem 0 1.3rem; font-family: "Fraunces", serif; font-weight: 400; font-size: clamp(1.4rem, 3vw, 1.9rem); color: var(--paper); }
+.studio-cases { display: grid; grid-template-columns: 1fr 1fr; gap: 1.9rem; }
+.studio-cases figure, .studio-gallery figure { margin: 0; }
+.studio-cases img, .studio-gallery img { width: 100%; display: block; border-radius: 10px; border: 1px solid var(--line-2); box-shadow: 0 26px 64px -42px rgba(0,0,0,0.92); background: var(--ink-2); }
+.studio-cases figcaption { margin-top: 0.85rem; color: var(--paper-dim); font-size: 0.96rem; line-height: 1.5; }
+.studio-cases b { color: var(--paper); }
+.studio-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.3rem; margin-top: 2.2rem; }
+.studio-gallery figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.82rem; text-align: center; }
+@media (max-width: 720px) { .studio-cases, .studio-gallery { grid-template-columns: 1fr; } }
+
+/* Private-preview gate (front-end only) */
+html.gated body { overflow: hidden; height: 100vh; }
+#gate { position: fixed; inset: 0; z-index: 9999; background: var(--ink, #0b0d12); display: flex; align-items: center; justify-content: center; }
+#gate form { display: flex; flex-direction: column; align-items: center; gap: 0.9rem; text-align: center; }
+.gate-logo { font-family: "Fraunces", serif; font-size: 2.2rem; color: var(--paper, #ece6d8); }
+.gate-logo span { color: var(--ember, #ef9a5b); }
+.gate-tag { margin: 0; color: var(--muted, #7e8492); text-transform: uppercase; letter-spacing: 0.24em; font-size: 0.68rem; font-family: "JetBrains Mono", monospace; }
+#gate input { font: inherit; font-size: 1rem; text-align: center; color: var(--paper, #ece6d8); background: var(--ink-2, #10131a); border: 1px solid var(--line-2, rgba(236,230,216,0.16)); border-radius: 8px; padding: 0.6rem 1rem; width: 240px; }
+#gate button { font-family: "JetBrains Mono", monospace; font-size: 0.85rem; cursor: pointer; color: var(--ink, #0b0d12); background: var(--ember, #ef9a5b); border: 0; border-radius: 8px; padding: 0.55rem 1.4rem; }
+#gate-err { color: var(--ember, #ef9a5b); font-size: 0.8rem; min-height: 1rem; }
 
 /* problem grid */
 .problem-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.5rem; margin-top: 3rem; }

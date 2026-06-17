@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="robots" content="noindex, nofollow, noarchive, noimageindex" />
 <title>Scatterbrained — an agent-maintained knowledge graph for AI memory</title>
 <meta name="description" content="A transparent, fully-owned, bi-temporal knowledge graph that an AI agent maintains across sessions. Neo4j as canonical truth; Notion and local files as capture lanes. Why it beats a Notion-only or Neo4j-only workflow." />
 <meta property="og:title" content="Scatterbrained — a knowledge graph for AI memory" />
@@ -14,6 +15,40 @@
 <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
+
+<!-- Private preview gate — front-end only (not security; just keeps the WIP off
+     search engines + casual visitors before launch). Change PASS below. -->
+<div id="gate" hidden>
+  <form id="gate-form">
+    <div class="gate-logo">scatter<span>·</span>brained</div>
+    <p class="gate-tag">private preview</p>
+    <input id="gate-pw" type="password" placeholder="passphrase" autocomplete="off" aria-label="passphrase" />
+    <button type="submit">enter →</button>
+    <div id="gate-err" aria-live="polite"></div>
+  </form>
+</div>
+<script>
+(function () {
+  var KEY = 'sb_preview_ok';
+  var PASS = 'observatory';   // ← share this with whoever you're showing; change anytime
+  var ok = false;
+  try { ok = localStorage.getItem(KEY) === '1'; } catch (e) {}
+  if (ok) return;
+  var root = document.documentElement;
+  root.classList.add('gated');
+  var gate = document.getElementById('gate');
+  gate.hidden = false;
+  document.getElementById('gate-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (document.getElementById('gate-pw').value === PASS) {
+      try { localStorage.setItem(KEY, '1'); } catch (e) {}
+      gate.remove(); root.classList.remove('gated');
+    } else {
+      document.getElementById('gate-err').textContent = 'not quite — try again';
+    }
+  });
+})();
+</script>
 
 <div class="grain" aria-hidden="true"></div>
 
@@ -210,19 +245,33 @@
     </p>
 
     <figure class="studio-demo">
-      <video autoplay loop muted playsinline poster="media/still-overview.png"
-             aria-label="Scatterbrained Studio: exploring a constellation of nodes, the inspector composing itself from the selected node, and searching by meaning.">
-        <source src="media/studio-demo.webm" type="video/webm" />
-        <img src="media/studio-demo.gif" alt="Scatterbrained Studio demo — a force-directed constellation; clicking a node opens a composed inspector with provenance, relations and timeline." />
-      </video>
-      <figcaption>The Studio on a demo graph — running entirely locally, your data never leaves your machine.</figcaption>
+      <img src="media/shot-provenance.jpg" alt="Scatterbrained Studio: a force-directed constellation of an engineering decision log; the selected node's inspector shows it was informed by three sources." />
+      <figcaption>The Studio on a sample graph — an engineering team's decision log. Runs locally; your data never leaves your machine.</figcaption>
     </figure>
 
     <div class="studio-feats">
       <div><b>Constellation</b> the whole graph as a force-directed map, with degree-of-interest focus that fades the unrelated.</div>
       <div><b>Composable inspector</b> the panel is built <em>from the node</em> — provenance, relations, bi-temporal timeline, goal progress.</div>
-      <div><b>Ask in plain language</b> “what's due to revisit” · “needs review” · search by meaning, not just keywords.</div>
+      <div><b>See any source in place</b> PDFs, spreadsheets, a saved article, an embedded YouTube talk — opened inline, never a detour.</div>
       <div><b>Local &amp; private</b> it reads your local graph; pluggable local LLM, nothing phoned home.</div>
+    </div>
+
+    <h3 class="studio-sub">Two ways people use it</h3>
+    <div class="studio-cases">
+      <figure>
+        <img src="media/shot-timeline.jpg" alt="The Studio showing a superseded decision — 'Chose AWS SQS FIFO', valid until March 2, superseded by the Kafka decision." />
+        <figcaption><b>A decision log that remembers <em>why</em>.</b> Six months later, “why didn't we just use SQS?” has an answer — the reversed decision, the benchmark that drove it, and the reason, all one click away.</figcaption>
+      </figure>
+      <figure>
+        <img src="media/shot-report.jpg" alt="The Studio's report view — a project expanded into an exportable briefing with a chart, summary, sources and relations." />
+        <figcaption><b>Brief a stakeholder in one click.</b> Expand any project into a clean, exportable briefing — status, the key decision, the open risk — without writing it up twice.</figcaption>
+      </figure>
+    </div>
+
+    <div class="studio-gallery">
+      <figure><img src="media/shot-video.jpg" alt="An embedded YouTube talk inside a node's inspector." /><figcaption>Embed a talk or article on the node itself.</figcaption></figure>
+      <figure><img src="media/shot-goal.jpg" alt="A goal node showing a progress meter computed from its requirements." /><figcaption>Goals show real progress, computed from the graph.</figcaption></figure>
+      <figure><img src="media/shot-notes.jpg" alt="Notes attached to a node — one new, one addressed." /><figcaption>Jot a note on anything; the next sync acts on it.</figcaption></figure>
     </div>
   </div>
 </section>
