@@ -179,6 +179,9 @@ html.gated body { overflow: hidden; height: 100vh; }
 /* Lightbox — expand a screenshot in place */
 img.zoomable { cursor: zoom-in; }
 html.lb-open { overflow: hidden; }
+/* the `hidden` attribute must win over the display:flex below (it otherwise
+   leaves the overlay — black tint + × — on screen permanently). */
+.lightbox[hidden], #gate[hidden] { display: none !important; }
 .lightbox { position: fixed; inset: 0; z-index: 9000; background: rgba(6, 7, 11, 0.94); display: flex; align-items: center; justify-content: center; padding: 3vh 3vw; cursor: zoom-out; }
 .lightbox img { max-width: 96vw; max-height: 94vh; border-radius: 8px; border: 1px solid var(--line-2); box-shadow: 0 30px 90px -20px rgba(0, 0, 0, 0.95); }
 .lb-close { position: fixed; top: 12px; right: 22px; font-size: 2rem; line-height: 1; color: var(--paper-dim); background: none; border: 0; cursor: pointer; }
