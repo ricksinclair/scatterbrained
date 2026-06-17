@@ -1,7 +1,7 @@
 # Query Playbook
 
 Saved, known-good Cypher for the questions we ask the graph every session. Paste any of
-these into **Neo4j Browser** (http://localhost:7474 · `neo4j` / `engram-local`) or run them
+these into **Neo4j Browser** (http://localhost:7474 · `neo4j` / `scatterbrained-local`) or run them
 via the scripts. They also serve as few-shot examples for an NL→Cypher (Text2Cypher) layer later.
 
 | File | Answers |

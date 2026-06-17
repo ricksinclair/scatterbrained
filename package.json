@@ -22,7 +22,7 @@
   "author": "Ulric Todman (https://ulrictodman.com)",
   "type": "module",
   "bin": {
-    "scatterbrained": "bin/engram.js"
+    "scatterbrained": "bin/scatterbrained.js"
   },
   "files": [
     "bin/",

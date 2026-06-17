@@ -3,7 +3,7 @@
 // review-undocumented-decisions.js — surface decisions that live ONLY in the
 // graph and never made it to a human-readable surface (the write-back gap).
 //
-// Engram makes the graph canonical and Notion/docs a capture lane. That keeps
+// Scatterbrained makes the graph canonical and Notion/docs a capture lane. That keeps
 // the machine's memory current — but the agent's own conclusions land as
 // `Insight` nodes, which a human can't casually read. Left unchecked you get the
 // INVERSE of the original problem: a rich, fresh graph behind STALE human docs.
@@ -23,7 +23,7 @@
 // Usage:
 //   node scripts/review-undocumented-decisions.js                 # decisions from the last 14d
 //   node scripts/review-undocumented-decisions.js --days 30
-//   node scripts/review-undocumented-decisions.js --project Engram
+//   node scripts/review-undocumented-decisions.js --project Scatterbrained
 //   node scripts/review-undocumented-decisions.js --json
 // ============================================================================
 import { getDriver, run, parseArgs, toPlain } from './lib/db.js';

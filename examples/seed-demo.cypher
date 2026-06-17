@@ -1,5 +1,5 @@
 // ============================================================================
-// Engram — synthetic demo graph
+// Scatterbrained — synthetic demo graph
 //
 // A tiny, fictional knowledge graph (~16 nodes) so the toolkit produces real
 // output the moment you clone the repo. It exercises every node label and the
@@ -8,7 +8,7 @@
 //
 // Load it (after `npm install` and `docker compose up -d`):
 //   cat scripts/seed-schema.cypher examples/seed-demo.cypher | \
-//     docker exec -i engram-neo4j cypher-shell -u neo4j -p engram-local
+//     docker exec -i scatterbrained-neo4j cypher-shell -u neo4j -p scatterbrained-local
 //
 // Then try:  npm run lint:graph  ·  npm run context -- --project Acme
 //

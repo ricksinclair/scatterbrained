@@ -1,12 +1,12 @@
 ---
 name: new-project
-description: Stand up a new project in Engram via the Notion MCP — no token needed. Creates the operations workspace (Kanban, changelog, test tracking, docs index, Capture) under your one root, registers the project in the graph, and writes a repo CLAUDE.md.
+description: Stand up a new project in Scatterbrained via the Notion MCP — no token needed. Creates the operations workspace (Kanban, changelog, test tracking, docs index, Capture) under your one root, registers the project in the graph, and writes a repo CLAUDE.md.
 ---
 
 # new-project (agent recipe — the MCP path)
 
 The **no-token** path: an AI agent (Claude + the Notion + Neo4j MCPs) builds the same thing the
-`engram new-project` *script* builds — but directly over your existing MCP connection, so there's
+`scatterbrained new-project` *script* builds — but directly over your existing MCP connection, so there's
 no integration token to create. End state: graph + Notion + repo, set up together.
 
 > All Notion pieces nest under your single **portfolio root** (see "Notion setup: one root" in the

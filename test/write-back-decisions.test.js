@@ -8,10 +8,10 @@ import {
 
 test('toCandidate seeds description with full_text (the prose seed to rewrite)', () => {
   const c = toCandidate(
-    { project: 'Engram', insight_id: 'abc', summary: 'Short summary', full_text: 'The full why behind it.', created_at: '2026-06-14T00:00:00Z' },
+    { project: 'Scatterbrained', insight_id: 'abc', summary: 'Short summary', full_text: 'The full why behind it.', created_at: '2026-06-14T00:00:00Z' },
     '2026-06-14'
   );
-  assert.equal(c.project, 'Engram');
+  assert.equal(c.project, 'Scatterbrained');
   assert.equal(c.insight_id, 'abc');
   assert.equal(c.description, 'The full why behind it.');
   assert.equal(c.date, '2026-06-14');
@@ -53,8 +53,8 @@ test('buildChangelogProperties requires name + description', () => {
 });
 
 test('changelogId resolves from the manifest and errors when missing', () => {
-  const manifest = { projects: { Engram: { entries: { Changelog: { kind: 'data_source', id: 'cl-123' } } } } };
-  assert.equal(changelogId(manifest, 'Engram'), 'cl-123');
+  const manifest = { projects: { Scatterbrained: { entries: { Changelog: { kind: 'data_source', id: 'cl-123' } } } } };
+  assert.equal(changelogId(manifest, 'Scatterbrained'), 'cl-123');
   assert.throws(() => changelogId(manifest, 'Nope'), /No Changelog id/);
-  assert.throws(() => changelogId({ projects: {} }, 'Engram'), /No Changelog id/);
+  assert.throws(() => changelogId({ projects: {} }, 'Scatterbrained'), /No Changelog id/);
 });

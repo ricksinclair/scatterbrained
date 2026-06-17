@@ -1,5 +1,5 @@
 // ============================================================================
-// Engram — Knowledge Graph Schema
+// Scatterbrained — Knowledge Graph Schema
 // Safe to re-run: uses CREATE CONSTRAINT IF NOT EXISTS.
 // Node creation happens via MERGE in the application scripts; this file
 // establishes uniqueness constraints (which also create backing indexes).

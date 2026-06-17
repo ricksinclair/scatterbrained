@@ -1,23 +1,23 @@
 services:
   neo4j:
     image: neo4j:5-community
-    container_name: engram-neo4j
+    container_name: scatterbrained-neo4j
     restart: unless-stopped
     ports:
       - "7474:7474"   # HTTP browser
       - "7687:7687"   # Bolt
     environment:
-      NEO4J_AUTH: "neo4j/engram-local"
+      NEO4J_AUTH: "neo4j/scatterbrained-local"
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_apoc_export_file_enabled: "true"
       NEO4J_apoc_import_file_enabled: "true"
       NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
     volumes:
-      - engram_data:/data
-      - engram_logs:/logs
+      - scatterbrained_data:/data
+      - scatterbrained_logs:/logs
 
 volumes:
-  engram_data:
-    name: engram_data
-  engram_logs:
-    name: engram_logs
+  scatterbrained_data:
+    name: scatterbrained_data
+  scatterbrained_logs:
+    name: scatterbrained_logs
