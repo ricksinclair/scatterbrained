@@ -8,7 +8,7 @@
 //     --contact "jane@smithlaw.com" --relationship "SME" --tags "legal,acme,nc"
 //
 //   node scripts/add-node.js idea --name "Patronage tracking module" \
-//     --description "Track member patronage for Subchapter T distributions" \
+//     --description "Track quarterly revenue by region" \
 //     --status "open_question" --domain "software" --tags "acme,governance"
 //
 //   node scripts/add-node.js resource --name "Worker Cooperative Toolbox" --type "book" \

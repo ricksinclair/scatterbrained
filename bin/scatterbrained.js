@@ -30,11 +30,19 @@ const COMMANDS = {
   import: 'import-graph.js',
 };
 
-const HELP = `scatterbrained — an agent-maintained, bi-temporal knowledge graph for AI memory
+// subcommands that live outside scripts/ (the Studio app + tools)
+const SPECIAL = {
+  studio: ['studio-scripts/start.mjs'],   // launch the observatory (auto-Neo4j + demo seed)
+  'code-graph': ['bin/code-graph.mjs'],   // query a repo's import structure
+};
+
+const HELP = `scatterbrained — a local-first knowledge observatory you can run on your own machine
 
 Usage:  scatterbrained <command> [args]
 
 Commands:
+  studio          launch the visual observatory (auto-starts Neo4j + demo graph)
+  code-graph      query a repo's import structure
   lint            graph integrity check (orphans, undated, unlinked, vocab)
   search          hybrid search — keyword + semantic (if embedded), bi-temporal aware
   embed           backfill semantic embeddings (needs: npm i @xenova/transformers)
@@ -64,6 +72,11 @@ const [cmd, ...rest] = process.argv.slice(2);
 if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   process.stdout.write(HELP);
   process.exit(cmd ? 0 : 1);
+}
+
+if (SPECIAL[cmd]) {
+  const res = spawnSync(process.execPath, [path.join(ROOT, ...SPECIAL[cmd]), ...rest], { stdio: 'inherit' });
+  process.exit(res.status ?? 1);
 }
 
 const script = COMMANDS[cmd];

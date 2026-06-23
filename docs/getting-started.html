@@ -1,287 +1,214 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="robots" content="noindex, nofollow, noarchive" />
-<title>Get started — Scatterbrained</title>
-<meta name="description" content="Set up Scatterbrained from scratch, even if you've never opened a terminal. Two clearly-signposted tracks: the friendly Notion + Claude path (no token, no CLI) and the developer CLI path." />
-<meta property="og:title" content="Get started with Scatterbrained" />
-<meta property="og:description" content="A welcoming, step-by-step on-ramp. Pick your path — ask Claude, or use the CLI." />
-<meta property="og:type" content="website" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Getting started — Scatterbrained</title>
+<meta name="description" content="From zero to your own local-first knowledge observatory: a plain-language primer, a five-minute install (macOS/Windows/Linux), and your first steps in the Studio." />
+<!-- Gated companion to index.html (#20). Deploy only when the alpha is called. No build, no deps. -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Spectral:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="./styles.css" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Spectral:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #131318; --panel: #1e1e26; --line: rgba(255,255,255,.10); --line-2: rgba(255,255,255,.16);
+    --ink: #ece6d8; --ink-dim: #b9b3a6; --ink-faint: #7c776c;
+    --paper: var(--ink); --paper-dim: var(--ink-dim); --muted: var(--ink-faint);
+    --ink-2: #17171f; --ink-3: #1b1b24;
+    --ember: #ef9a5b; --ember-dk: #c97b3e; --teal: #79b4ab; --teal-dk: #3f7a72;
+    --maxw: 920px; --measure: 64ch;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: radial-gradient(1100px 640px at 78% -14%, #20202c 0%, var(--bg) 55%); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; font-weight: 500; letter-spacing: -.01em; }
+  a { color: var(--ember); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .82em; color: var(--teal); background: rgba(121,180,171,.08); padding: .1em .4em; border-radius: 4px; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  em { font-style: italic; color: var(--ink); }
+
+  /* top bar */
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--line); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+  .tb-home { color: var(--ink); } .tb-home .b1 { color: var(--ember); } .tb-home:hover { text-decoration: none; color: var(--ember); }
+  .tb-here { color: var(--muted); text-transform: uppercase; letter-spacing: .2em; font-size: 11px; }
+
+  /* hero */
+  .gs-hero { padding: 64px 24px 28px; }
+  .gs-hero .wrap { max-width: var(--maxw); }
+  .kicker { color: var(--ember); text-transform: uppercase; letter-spacing: .24em; font-size: 12px; margin: 0 0 16px; font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .gs-title { font-size: clamp(34px, 6vw, 60px); line-height: 1.04; margin: 0 0 18px; max-width: 16ch;
+    background: linear-gradient(180deg, #fbf4e6, #cbb89c 92%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--ink-dim); max-width: 54ch; margin: 0 0 8px; font-family: "Spectral", Georgia, serif; font-weight: 300; }
+  .need { margin-top: 14px; color: var(--muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+
+  /* sections */
+  .band { padding: 48px 24px; border-top: 1px solid var(--line); }
+  .band:nth-of-type(even) { background: linear-gradient(180deg, var(--ink-2), var(--bg)); }
+  .section-tag { color: var(--ember); text-transform: uppercase; letter-spacing: .2em; font-size: 12px; margin: 0 0 10px; font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .band h2 { font-size: clamp(24px, 3.6vw, 32px); margin: 0 0 14px; max-width: 20ch; }
+  .prose { max-width: var(--measure); color: var(--paper-dim); font-size: 17px; font-family: "Spectral", Georgia, serif; font-weight: 300; line-height: 1.62; }
+  .prose em { color: var(--ink); }
+
+  /* glossary */
+  .gloss { margin: 26px 0 0; }
+  .gloss > div { display: grid; grid-template-columns: 210px 1fr; gap: 28px; padding: 18px 0; border-top: 1px solid var(--line); }
+  .gloss dt { font-family: "Fraunces", Georgia, serif; font-size: 19px; color: var(--ember); margin: 0; }
+  .gloss dd { margin: 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.55; max-width: 58ch; }
+  .gloss dd code { font-size: .8em; }
+  @media (max-width: 680px) { .gloss > div { grid-template-columns: 1fr; gap: 6px; } }
+
+  /* numbered steps */
+  .steps { list-style: none; counter-reset: step; margin: 26px 0 0; padding: 0; }
+  .steps > li { counter-increment: step; display: grid; grid-template-columns: 48px 1fr; gap: 20px; padding: 22px 0; border-top: 1px solid var(--line); align-items: start; }
+  .steps > li::before { content: counter(step); font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 28px; color: var(--ember); line-height: 1; }
+  .step-b h3 { font-size: 19px; margin: 0 0 8px; }
+  .step-b p { margin: 0 0 10px; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.55; max-width: 60ch; }
+  .step-b p:last-child { margin-bottom: 0; }
+  pre { background: #0e0e13; border: 1px solid var(--line); border-radius: 10px; padding: 15px 17px; overflow-x: auto; color: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.7; margin: 0 0 8px; }
+  pre .c { color: var(--ink-faint); }
+  .tip { font-size: 14px; color: var(--muted); border-left: 2px solid var(--ember-dk); padding-left: 12px; }
+  .tip span { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--ember); margin-right: .5em; }
+
+  /* two ways in */
+  .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0 0; }
+  .track { border: 1px solid var(--line-2); border-radius: 12px; padding: 22px; background: rgba(255,255,255,.015); }
+  .track.primary { border-color: var(--ember-dk); background: rgba(239,154,91,.05); }
+  .track h3 { font-size: 19px; margin: 0 0 8px; }
+  .track p { margin: 0 0 12px; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 15.5px; line-height: 1.55; }
+  .ask { font-family: "Fraunces", Georgia, serif; font-style: italic; color: var(--ink); border-left: 2px solid var(--ember); padding: 2px 0 2px 12px; margin: 0 0 8px; font-size: 16px; }
+  .cli { margin: 0; }
+  @media (max-width: 680px) { .tracks { grid-template-columns: 1fr; } }
+
+  .platforms { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 32px; margin-top: 22px; }
+  .platforms > div { border-top: 1px solid var(--line); padding-top: 12px; }
+  .platforms b { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-weight: 500; }
+  .platforms p { margin: 6px 0 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 14px; line-height: 1.5; }
+  @media (max-width: 680px) { .platforms { grid-template-columns: 1fr; } }
+
+  .note { margin-top: 26px; border: 1px solid var(--line-2); border-left: 3px solid var(--ember); border-radius: 8px; padding: 18px 20px; background: var(--ink-3); }
+  .note p { margin: 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 15.5px; line-height: 1.6; }
+  .note-tag { display: block; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: var(--ember); margin-bottom: 8px; }
+
+  footer { border-top: 1px solid var(--line); padding: 30px 24px 52px; color: var(--ink-faint); font-size: 13.5px; text-align: center; }
+  footer p { max-width: 640px; margin: 0 auto; line-height: 1.75; }
+  footer strong { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-weight: 500; }
+  footer a { color: var(--ember); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
 </head>
 <body>
 
-<div class="grain" aria-hidden="true"></div>
-
-<!-- ───────────────────────── TOP BAR ───────────────────────── -->
-<nav class="topbar">
-  <a class="tb-home" href="./index.html">← Scatterbrained</a>
-  <span class="tb-here">Get started</span>
-</nav>
-
-<!-- ───────────────────────── INTRO ───────────────────────── -->
-<header class="band gs-hero">
-  <div class="wrap">
-    <p class="section-tag">getting started</p>
-    <h1 class="gs-title">Welcome. Let's get you set up.</h1>
-    <p class="prose gs-lede">
-      You don't need to be a developer. If you can use Notion and chat with Claude, you can run
-      Scatterbrained. This page walks you all the way from nothing to a working setup — in plain English,
-      one step at a time.
-    </p>
-    <p class="prose">
-      By the end you'll have two things working together: an <strong>AI memory</strong> that
-      remembers your projects, notes, and decisions across conversations — and a ready-to-use
-      <strong>Notion workspace</strong> of plain-language updates for anyone following along (a
-      changelog, a docs index, and more). Set up together, as one system.
-    </p>
-  </div>
+<header class="topbar">
+  <a class="tb-home" href="index.html"><span class="b1">scatter</span>brained</a>
+  <span class="tb-here">getting started</span>
 </header>
 
-<main>
-
-<!-- ───────────────────────── PLAIN ENGLISH ───────────────────────── -->
-<section class="band band-alt">
+<section class="gs-hero">
   <div class="wrap">
-    <p class="section-tag">first — what is this, really?</p>
-    <h2>Four words, in plain English.</h2>
-    <p class="prose">
-      You'll see these terms a lot. Here's what each one actually means — no jargon.
-    </p>
-    <dl class="gloss">
-      <div>
-        <dt>Knowledge graph</dt>
-        <dd>A way of storing facts as <em>connected dots</em> — "this project needs this skill,"
-        "this decision came from this note." Because the dots are linked, an assistant can follow
-        the connections and answer questions a plain list never could. It's the part that
-        <em>remembers</em>.</dd>
-      </div>
-      <div>
-        <dt>Capture lane</dt>
-        <dd>Wherever you naturally jot things down — a Notion page, a document on your computer.
-        Scatterbrained reads those and feeds the facts into the graph for you. You write where it's comfy;
-        it files everything where it's useful.</dd>
-      </div>
-      <div>
-        <dt>Operations workspace</dt>
-        <dd>The Notion side: plain-language updates for people following the project — a changelog,
-        a docs index, a health snapshot, an optional task board. Think of it as the <em>window</em>
-        onto the work for non-technical folks, kept current at milestones (not a log you feed by
-        hand). Scatterbrained sets it up for you, ready to go.</dd>
-      </div>
-      <div>
-        <dt>The one root</dt>
-        <dd>A single Notion page that becomes the home for <em>all</em> your projects. You share it
-        with the assistant <em>once</em>, and everything you add later lives under it automatically.
-        Set up once, never fuss again.</dd>
-      </div>
-    </dl>
-    <p class="prose gs-why">
-      Want the deeper "why it's built this way" story?
-      <a href="./index.html#why">Read the explainer →</a>
-    </p>
+    <p class="kicker">getting started</p>
+    <h1 class="gs-title">From zero to your own observatory.</h1>
+    <p class="lede">No prior graph-database knowledge needed. Here's the plain-language version of what
+      Scatterbrained is, how to install it in about five minutes, and what to do once it's open.</p>
+    <p class="need">you'll need: a Mac, Windows, or Linux machine · ~5 minutes · no account, nothing in the cloud</p>
   </div>
 </section>
 
-<!-- ───────────────────────── TRACK CHOOSER ───────────────────────── -->
-<section class="band" id="choose">
+<section class="band">
   <div class="wrap">
-    <p class="section-tag">now — which one are you?</p>
-    <h2>Two ways in. Pick yours.</h2>
-    <p class="prose">
-      Both end at the same place. Choose the one that sounds like you — you can always read the
-      other later.
-    </p>
-    <div class="tracks">
-      <a class="track track-primary" href="#track-mcp">
-        <span class="track-badge">friendliest</span>
-        <h3>“I use Notion and Claude.”</h3>
-        <p>No terminal, no token, no code. You ask Claude in plain language and it does the
-        building for you. <strong>Start here if you're not a developer.</strong></p>
-        <span class="track-go">Take this path ↓</span>
-      </a>
-      <a class="track" href="#track-cli">
-        <span class="track-badge">for developers</span>
-        <h3>“I'm comfortable in a terminal.”</h3>
-        <p>The command-line path: a Notion token, a <code>.env</code> file, and one
-        <code>npm</code> command. Scriptable and great for automation or CI.</p>
-        <span class="track-go">Take this path ↓</span>
-      </a>
+    <p class="section-tag">first — the words</p>
+    <h2>A 60-second glossary.</h2>
+    <p class="prose">A few terms you'll see. None of them require you to be a database person.</p>
+    <div class="gloss">
+      <div><dt>Knowledge graph</dt><dd>Your notes, decisions, files, and the people and projects they touch — stored as <em>things</em> and the <em>links between them</em>, so you can follow a thread instead of searching for a file.</dd></div>
+      <div><dt>Neo4j</dt><dd>The local database that holds the graph. Scatterbrained starts one for you in Docker; you never have to touch it. It runs on your machine — your data never leaves.</dd></div>
+      <div><dt>The Studio</dt><dd>The app you actually use: a browser window that draws your graph as a living constellation you can explore, read, and edit.</dd></div>
+      <div><dt>The agent</dt><dd>Claude, working in your projects. Scatterbrained gives it a <code>CLAUDE.md</code> and a couple of hooks so it consults the graph first and keeps it tidy — see <a href="index.html#system">the system</a>.</dd></div>
+      <div><dt>Protected facts &amp; notes</dt><dd>Pin a number or citation so a rewrite can't quietly change it (with an optional <em>detail</em> label); jot a <em>note</em> on anything and the next sync has the agent act on it. Two different things — <a href="index.html#notes">explained here</a>.</dd></div>
     </div>
   </div>
 </section>
 
-<!-- ───────────────────────── TRACK A — MCP ───────────────────────── -->
-<section class="band band-alt" id="track-mcp">
+<section class="band">
   <div class="wrap">
-    <p class="section-tag">track a — notion + claude · no terminal</p>
-    <h2>Just ask Claude.</h2>
-    <p class="prose">
-      In this path, <strong>Claude does the setup</strong>. You connect it to Notion once, give it
-      one home page to work in, and then ask — in normal English — for what you want.
-    </p>
-
+    <p class="section-tag">install — macOS</p>
+    <h2>Two things to install once. Then one command.</h2>
+    <p class="prose">Homebrew installs Node and Docker; <code>npm start</code> does the rest — it starts the
+      database, loads a demo graph, and opens the Studio.</p>
     <ol class="steps">
-      <li>
-        <div class="step-body">
-          <h3>Connect Claude to Notion</h3>
-          <p>In Claude, turn on the <strong>Notion connection</strong> (Settings → Connectors →
-          Notion, then approve access). This is what lets Claude read and build pages for you.
-          One-time, a couple of clicks.</p>
-        </div>
-      </li>
-      <li>
-        <div class="step-body">
-          <h3>Make one home page — your “root”</h3>
-          <p>In Notion, create a single page and name it something neutral like
-          <strong>“Projects”</strong> or <strong>“Workspace.”</strong> Open its <code>•••</code>
-          menu → <strong>Connections</strong> → add your Claude/Notion connection. You share this
-          <em>one</em> page, <em>once</em> — every project you add later nests under it and inherits
-          access automatically.</p>
-          <p class="step-tip"><span>Why one root?</span> So you never have to share pages again,
-          and so all your projects live in one place the assistant can reason across.</p>
-        </div>
-      </li>
-      <li>
-        <div class="step-body">
-          <h3>Ask Claude to set up a project</h3>
-          <p>Now just say it. For example:</p>
-          <p class="ask-line">“Set up a new Scatterbrained project called <em>Acme</em> under my Projects
-          page.”</p>
-          <p>Point Claude at Scatterbrained's recipe so it follows the exact steps —
-          <a href="https://github.com/ricksinclair/scatterbrained/blob/main/skills/new-project.md"><code>skills/new-project.md</code></a>.
-          It will create the workspace, register the project in the graph's memory, and add a
-          settings file to your repo — all over the connection you just approved.</p>
-        </div>
-      </li>
-      <li>
-        <div class="step-body">
-          <h3>See what you got</h3>
-          <p>Open Notion and look under your root page. You'll find a new
-          <strong>Acme — Workspace</strong> with a changelog, a docs index, a health snapshot, an
-          optional task board, and a <strong>Capture</strong> page (drop notes there and they flow
-          into the memory). Each database says what it's for. The assistant now <em>remembers</em>
-          Acme across every future chat.</p>
-        </div>
-      </li>
-      <li>
-        <div class="step-body">
-          <h3>Live with it — just ask</h3>
-          <p>From here, everything is a request in plain language. A few you'll use often:</p>
-          <ul class="ask-list">
-            <li>“<strong>Where were we?</strong>” — a catch-up brief across all your projects.</li>
-            <li>“<strong>Run a graph-sync.</strong>” — re-read what changed, file new facts, back up.</li>
-            <li>“<strong>Search Scatterbrained for how Acme makes money.</strong>” — find by meaning, not just keywords.</li>
-          </ul>
-          <p>See them all on the <a href="./index.html#skills">Skills</a> section.</p>
-        </div>
-      </li>
-    </ol>
-
-    <p class="prose note">
-      <span class="note-tag">one honest note</span>
-      The memory itself (a small database called <strong>Neo4j</strong>) has to run somewhere —
-      usually a single one-time install on a computer, started with one command
-      (<code>docker compose up -d</code>). It's the one slightly technical bit. You can do it once
-      by following the <a href="#track-cli">developer steps below</a>, or have a tech-savvy friend
-      (or Claude, walking you through it) set it up once — then never think about it again.
-    </p>
-  </div>
-</section>
-
-<!-- ───────────────────────── TRACK B — CLI ───────────────────────── -->
-<section class="band" id="track-cli">
-  <div class="wrap">
-    <p class="section-tag">track b — developer · cli &amp; token</p>
-    <h2>Set it up from the terminal.</h2>
-    <p class="prose">
-      The scriptable path. Same result as Track A — a Notion workspace plus a project in the graph
-      — driven by commands instead of conversation. Ideal for automation, CI, or if you just prefer
-      the keyboard.
-    </p>
-
-    <ol class="steps">
-      <li>
-        <div class="step-body">
-          <h3>Clone it and start the graph</h3>
-          <p>Get the code and spin up Neo4j locally (this is the “memory” database). The demo
-          credentials are fine as-is for local use.</p>
-          <pre class="code"><code>git clone https://github.com/ricksinclair/scatterbrained.git &amp;&amp; cd scatterbrained
+      <li><div class="step-b">
+        <h3>Install Homebrew</h3>
+        <p>Skip if you already have <code>brew</code>. Otherwise paste into Terminal:</p>
+<pre>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</pre>
+      </div></li>
+      <li><div class="step-b">
+        <h3>Install Node and Docker</h3>
+<pre>brew install node
+brew install --cask docker</pre>
+        <p class="tip"><span>then</span> open Docker once from Applications so it's running. No-GUI alternative: <code>brew install colima docker</code> then <code>colima start</code>.</p>
+      </div></li>
+      <li><div class="step-b">
+        <h3>Get Scatterbrained and run it</h3>
+<pre>git clone https://github.com/ricksinclair/scatterbrained.git
+cd scatterbrained
 npm install
-cp .env.example .env
-docker compose up -d                <span class="c"># Neo4j now at http://localhost:7474</span></code></pre>
-        </div>
-      </li>
-      <li>
-        <div class="step-body">
-          <h3>Create a Notion integration token</h3>
-          <p>At <a href="https://www.notion.so/my-integrations">notion.so/my-integrations</a>,
-          create an internal integration and copy its secret. Then, in Notion, share your one
-          <strong>root page</strong> with that integration (page <code>•••</code> →
-          <strong>Connections</strong>). Put both values in <code>.env</code>:</p>
-          <pre class="code"><code><span class="c"># .env</span>
-NOTION_TOKEN=secret_xxxxxxxxxxxxxxxxxxxx
-NOTION_PARENT_PAGE_ID=your_root_page_id</code></pre>
-          <p class="step-tip"><span>The root page id</span> is the long string in the page's URL.
-          Everything you create nests under it — share once, inherit forever.</p>
-        </div>
-      </li>
-      <li>
-        <div class="step-body">
-          <h3>Stand up a project</h3>
-          <p>One command builds the whole thing — the Notion workspace, the project in the graph,
-          and a wired <code>CLAUDE.md</code> in your repo. Preview first with
-          <code>--dry-run</code>.</p>
-          <pre class="code"><code>npm run new:project -- --name "Acme" --dry-run   <span class="c"># preview, creates nothing</span>
-npm run new:project -- --name "Acme"             <span class="c"># for real</span></code></pre>
-        </div>
-      </li>
-      <li>
-        <div class="step-body">
-          <h3>Drive it with the toolkit</h3>
-          <p>Every skill has a command. A few to start:</p>
-          <pre class="code"><code>npm run resume                       <span class="c"># "where were we?" brief</span>
-npm run search -- "how do I make money"   <span class="c"># find by keyword (+ meaning, once embedded)</span>
-npm run lint:graph                   <span class="c"># integrity check</span>
-npm run export                       <span class="c"># versioned backup, committed to git</span></code></pre>
-          <p>The full list lives in the
-          <a href="https://github.com/ricksinclair/scatterbrained#the-toolkit">README toolkit table</a>.
-          Turning on <em>search-by-meaning</em> is one optional extra step —
-          <a href="https://github.com/ricksinclair/scatterbrained#quickstart">see Quickstart</a>.</p>
-        </div>
-      </li>
+npm start          <span class="c"># → http://localhost:4317</span></pre>
+        <p>The Studio opens with a demo graph loaded. If anything's missing, <code>npm start</code> tells you exactly what to install.</p>
+      </div></li>
     </ol>
-  </div>
-</section>
-
-<!-- ───────────────────────── NEXT ───────────────────────── -->
-<section class="band band-cta">
-  <div class="wrap">
-    <h2>That's it — you're set up.</h2>
-    <p class="prose">
-      Whichever path you took, you now have a memory that grows with your work and a workspace to
-      run it. Capture where it's natural; ask where it's powerful; let the assistant keep it honest.
-    </p>
-    <div class="cta-row">
-      <a class="btn btn-solid" href="./index.html#skills">See what you can do →</a>
-      <a class="btn btn-ghost" href="./index.html">Back to the explainer</a>
+    <div class="platforms">
+      <div><b>Windows</b><p><code>winget install OpenJS.NodeJS Docker.DockerDesktop</code>, launch Docker Desktop, then <code>npm install &amp;&amp; npm start</code>.</p></div>
+      <div><b>Linux</b><p>Install Node 18+ and Docker Engine, then <code>npm install &amp;&amp; npm start</code>. Already run a Neo4j 5? Set <code>NEO4J_PASSWORD</code> and it'll use that.</p></div>
     </div>
   </div>
 </section>
 
-</main>
-
-<footer class="foot">
+<section class="band">
   <div class="wrap">
-    <p><strong>Scatterbrained</strong> — built by <a href="https://ulrictodman.com">Ulric Todman</a>.
-    MIT licensed. New here and stuck? Open an issue on
-    <a href="https://github.com/ricksinclair/scatterbrained/issues">GitHub</a> — friendly questions welcome.</p>
+    <p class="section-tag">your first five minutes</p>
+    <h2>Now that it's open.</h2>
+    <ol class="steps">
+      <li><div class="step-b"><h3>Explore the demo constellation</h3><p>It opens on a small fictional engineering team's graph. Drag to pan, scroll to zoom, and click any node — the inspector on the right builds itself from what that node is.</p></div></li>
+      <li><div class="step-b"><h3>Take the guided tour</h3><p>Open <code>http://localhost:4317/#tour</code> for a narrated auto-play through the headline features. Stop it anytime.</p></div></li>
+      <li><div class="step-b"><h3>Point it at your own graph</h3><p>When you're ready, run <code>NEO4J_PASSWORD=… npm start</code> against your own Neo4j (or keep using the local one). A fresh graph starts empty — that's expected; you fill it as you work.</p></div></li>
+      <li><div class="step-b"><h3>Stand up a project</h3><p>One command sets up a project in the graph and drops a wired <code>CLAUDE.md</code> in your repo (<code>npm run new-project -- --name "My Project"</code>) — or just ask Claude. See the <a href="index.html#adopt">honest caveats</a> on what it writes first.</p></div></li>
+    </ol>
   </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <p class="section-tag">two ways in</p>
+    <h2>Type a command, or just ask.</h2>
+    <p class="prose">Everything Scatterbrained does is reachable both ways. Same result — pick your lane.</p>
+    <div class="tracks">
+      <div class="track primary">
+        <h3>Ask Claude</h3>
+        <p>If you use Claude with the Neo4j (and optional Notion) connection, just say what you want in plain language. No terminal, no token.</p>
+        <p class="ask">"Where were we on the shipment project?"</p>
+        <p class="ask">"Set up a new Scatterbrained project called Acme."</p>
+      </div>
+      <div class="track">
+        <h3>The CLI</h3>
+        <p>Prefer the keyboard? The <code>scatterbrained</code> (<code>sb</code>) command wraps the toolkit.</p>
+        <p class="cli"><code>sb resume</code> · <code>sb search "how this makes money"</code></p>
+        <p class="cli"><code>sb new-project --name "Acme"</code> · <code>sb lint:graph</code></p>
+      </div>
+    </div>
+    <div class="note">
+      <span class="note-tag">honest, up front</span>
+      <p>Scatterbrained is <strong>alpha</strong>. AI summaries / Q&amp;A are optional and run on a local
+        <a href="https://ollama.com">Ollama</a> — everything else works without it, and nothing leaves your
+        machine. Before you wire it into a real project, skim <a href="index.html#adopt">what it changes on your machine</a>.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <p><strong>Scatterbrained</strong> — a local-first knowledge observatory. Built by
+    <a href="https://ulrictodman.com">Ulric Todman</a>. MIT-licensed ·
+    <a href="https://github.com/ricksinclair/scatterbrained">GitHub</a> ·
+    <a href="index.html">back to the overview</a>.</p>
 </footer>
 
 </body>
