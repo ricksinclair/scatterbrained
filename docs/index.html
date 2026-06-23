@@ -701,6 +701,9 @@ cd scatterbrained
 npm install
 npm start          <span class="c"># → http://localhost:4317</span></pre>
             <p>That opens the Studio with a demo graph already loaded — explore it before you point Scatterbrained at anything of your own.</p>
+            <p class="step-tip"><span>or</span> already have Node + Docker? Skip the clone — one command downloads it, starts the database, seeds the demo, and opens the Studio:</p>
+<pre>npx scatterbrained@alpha studio          <span class="c"># → http://localhost:4317</span></pre>
+            <p class="step-tip"><span>tip</span> install it once with <code>npm i -g scatterbrained@alpha</code>, then <code>scatterbrained studio</code> (or <code>scatterbrained help</code> for the graph toolkit) from anywhere.</p>
           </div>
         </li>
       </ol>
@@ -729,8 +732,7 @@ npm start          <span class="c"># → http://localhost:4317</span></pre>
     </div>
   </section>
 
-  <!-- Footer. Before deploy: confirm the GitHub repo is public and the npm package
-       name ('scatterbrained') is published — both are gated until the alpha is called. -->
+  <!-- Footer. Alpha shipped 2026-06-23: repo public, npm 'scatterbrained@alpha' published, Pages live. -->
   <footer class="site-foot">
     <p><strong>Scatterbrained</strong> — a local-first knowledge observatory. Built by
       <a href="https://ulrictodman.com">Ulric Todman</a>. MIT-licensed ·
