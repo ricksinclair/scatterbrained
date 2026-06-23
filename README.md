@@ -1,26 +1,85 @@
 # Scatterbrained
 
-**A personal, agent-maintained knowledge graph you can *see*.** For the
-scatterbrained — a second brain that actually remembers, so every working session
-starts where the last one left off. Neo4j as canonical truth; Notion and local files
-as capture lanes; an AI agent that ingests and maintains the graph across sessions;
-and a visual "observatory" for exploring it.
+**A local-first knowledge observatory.** Point it at a Neo4j graph and *see* your
+knowledge — a living constellation you can explore, interrogate, and act on.
+See → Understand → Act, all on your own machine, no cloud.
 
-> 🚧 **In development.** The name and public packaging are being set up; the polished
-> release isn't here yet. The code below works today.
+> **Alpha.** It runs and demos today. Local-first by design: your graph stays in your
+> Neo4j, your files stay on your disk. The Studio is a single small Node server + a
+> vanilla-JS frontend — no build step, no framework, one real dependency
+> (`neo4j-driver`). The optional AI layer talks only to a local [Ollama](https://ollama.com).
 
----
+![Scatterbrained Studio — the constellation overview](docs/screenshots/01-overview.png)
 
-### A note on the previous name, and prior art
+## What it does
 
-This project was briefly drafted under the name *Engram*. After publishing, I learned
-about [**ly-wang19/engram**](https://github.com/ly-wang19/engram) — an open-source
-bi-temporal memory engine for LLM agents, published **before** mine and backed by a
-paper ([arXiv:2606.09900](https://arxiv.org/abs/2606.09900)). The overlap was real
-(the name, the bi-temporal framing, keeping history instead of overwriting it). As
-best I can tell it was honest convergence — but they were there first and did the
-rigorous, benchmarked work, so I retired the name. If you want a reproducible,
-paper-backed memory *engine*, read **theirs** first. Credit where it's due.
+- **Constellation** — your whole graph as a force-directed map; focus, search, filter, time-travel.
+- **Composable inspector** — click any node and the panel *builds itself* from what the node is:
+  sources (provenance), typed relations, body/excerpt, and history.
+- **Protected facts** — pin a verified number, amount, date, or citation; a later rewrite can't
+  silently change it — the change is queued for your approval, bi-temporally (history kept;
+  removals are reversible from a "retired" list).
+- **Graph-native code review** — review a repo frozen at a commit; line comments live in the graph.
+- **A sense of time** — a calendar + intention clock: what's due, what's worth revisiting.
+- **Capture** — drop a web link or video and it becomes a first-class, connected card; jot notes
+  on any node.
+- **File viewers** — Markdown, CSV/sheets, PDF, Word, PowerPoint, rendered in place.
+- **Writable graph** — wire two nodes together by typing; edit and save Markdown to disk
+  (git-recoverable).
+- **Reports** — turn any node into a shareable briefing.
 
-This is a different animal: less a benchmarked retrieval engine, more a personal,
-*visible*, agent-tended knowledge graph. Hence — **Scatterbrained**.
+Take the **guided tour** (the ▶ Tour button, top-right, or add `/#tour`) for a ~60-second walk
+through all of it.
+
+## Run it
+
+One command. Requires Node 18+ and either Docker (to auto-start Neo4j) or your own Neo4j 5.
+
+```sh
+npm install
+npm start          # → http://localhost:4317   (add /#tour for the auto-tour)
+```
+
+`npm start` finds a Neo4j at `NEO4J_URI` — or spins one up in Docker — applies the schema, loads
+the demo graph on first run, and launches the Studio. To use **your own** graph, set
+`NEO4J_PASSWORD` (and `NEO4J_URI`) and it connects there instead, leaving its data untouched.
+
+Or install the CLI globally and launch from anywhere:
+
+```sh
+npm i -g scatterbrained
+scatterbrained studio        # the observatory
+scatterbrained help          # the graph toolkit (lint, search, context, …)
+```
+
+Config via env (see [`.env.example`](.env.example)): `NEO4J_URI` (default `bolt://localhost:7687`),
+`NEO4J_USER` (`neo4j`), `NEO4J_PASSWORD`, `STUDIO_PORT` (`4317`), `SB_NO_DEMO=1` to skip the demo
+seed. To let the file viewers read your documents, list the allowed roots in
+`document-sources.json` — the Studio never reads outside them.
+
+## Try the demo
+
+[`examples/`](examples/) is a small, fictional engineering story ("Northwind Logistics") that
+exercises every feature — protected facts, a superseded decision, a code review, links, the
+calendar. It loads automatically on first `npm start`; see [`examples/README.md`](examples/README.md)
+to run it on a throwaway Neo4j by hand.
+
+## What's in the box
+
+- **Studio** — the visual app: `server.js` (a `node:http` BFF over the Neo4j driver) + `public/`
+  (a vanilla-JS SPA with a vendored `force-graph`). The inspector is **composable**: a tested
+  resolver picks which components a node gets from its content-signals, and a registry renders
+  them — the pure logic is the shipped logic.
+- **Graph toolkit** — `scripts/`: an agent-maintained, bi-temporal knowledge-graph methodology
+  (lint, search, context-assembly, Notion + local-document capture lanes, bi-temporal supersede).
+  Run any of it via `scatterbrained <command>` or the `npm run` scripts.
+
+## Develop
+
+- **Studio tests:** `npm run test:studio` (vitest — the pure-function suite).
+- **Toolkit tests:** `npm test` (node:test).
+- **Graph integrity:** `npm run lint:graph`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

@@ -26,8 +26,13 @@ jobs:
             echo "FORBIDDEN_TERMS not set (fork or unconfigured) — skipping leak gate."
             exit 0
           fi
-          if grep -rinE "$FORBIDDEN_TERMS" . --exclude-dir=.git --exclude-dir=node_modules ; then
-            echo "::error::Private term leaked into the public repo — scrub before merging."
+          # IMPORTANT: never echo matches. grep -rinE would print the matching LINES —
+          # i.e. the private term itself — into this (public) Actions log, leaking the very
+          # thing the gate guards. Use -l (filenames only) piped to a count, and report
+          # neither the line nor the filename (a filename could also contain a codename).
+          n=$(grep -rlEi "$FORBIDDEN_TERMS" . --exclude-dir=.git --exclude-dir=node_modules | wc -l | tr -d ' ')
+          if [ "$n" != "0" ]; then
+            echo "::error::Leak gate: $n file(s) contain a forbidden private term. Re-run the denylist locally to locate them — matches are intentionally not printed here."
             exit 1
           fi
           echo "Leak gate clean."
@@ -40,13 +45,17 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-      - run: npm ci --omit=optional   # skip the heavy embedder; smoke tests the keyword-only path
+      - run: npm ci   # full install: the Studio test runner (vitest/rollup) ships its native
+                      # binding as an optionalDependency, so --omit=optional would break it.
+                      # The embedder (@xenova/transformers) installs but isn't exercised here.
       - name: Static checks (syntax + JSON)
         run: |
-          for f in scripts/*.js scripts/lib/*.js; do node --check "$f"; done
+          for f in scripts/*.js scripts/lib/*.js server.js lib/*.js public/lib/*.js bin/*.* studio-scripts/*.mjs; do node --check "$f"; done
           for j in package.json examples/*.json; do node -e "JSON.parse(require('fs').readFileSync('$j','utf8'))"; done
-      - name: Unit tests
-        run: node --test          # pure-function suite; no DB or network needed
+      - name: Unit tests — toolkit (node:test) + Studio (vitest)
+        run: |
+          node --test test/cli   # methodology pure-function suite; no DB or network needed
+          npm run test:studio    # Studio pure-function suite
       - name: Start Neo4j
         run: |
           docker run -d --rm --name neo4j -p 7687:7687 -p 7474:7474 \

@@ -3,9 +3,8 @@
 **A second brain for the scatterbrained.** A personal, agent-maintained knowledge
 graph you can *see* — scattered thoughts in, a navigable constellation out.
 
-> Aesthetic carried over from the original "Engram" site; the project was renamed
-> 2026-06-16 after a prior-art collision (see the repo README + the permanent
-> credit to [ly-wang19/engram](https://github.com/ly-wang19/engram)).
+> Warm, literary, constellation-driven — scattered points that resolve into a
+> connected map.
 
 ## Logo system — one system, three registers
 
@@ -24,7 +23,7 @@ product does). In most places, **the logo is the whole branding** — it stands 
 Min wordmark width ~96px. Don't recolor the two words the same; don't remove the
 offset; don't set it in a sans for primary use.
 
-## Palette (from the Engram-era system)
+## Palette
 
 | Token | Hex | Role |
 |---|---|---|
@@ -56,5 +55,5 @@ On light backgrounds: text → ink, accents → ember-dk / teal-dk.
   map (it *is* the product's force-graph). Use it as the hero, in dividers, and in
   loading states (scattered → gathered).
 - **Voice:** warm, witty, self-aware, honest. It owns the name — *for* the
-  scatterbrained, not a cold "AI memory infrastructure." The prior-art credit stays
-  permanently in the footer; the brand has integrity baked in.
+  scatterbrained, not a cold "AI memory infrastructure." Honest about what it is:
+  a local-first observatory for your own knowledge.

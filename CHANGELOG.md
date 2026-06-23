@@ -3,10 +3,27 @@
 The plain-English story of Scatterbrained. Each version starts with a **TL;DR** anyone
 can follow, then the technical details underneath.
 
-> **What is Scatterbrained, in one breath?** A memory for an AI assistant. It remembers
-> your projects, notes, and decisions as connected facts it can search and reason
-> over across conversations — and it keeps an *honest history* instead of quietly
+> **What is Scatterbrained, in one breath?** A local-first knowledge observatory. Point it
+> at a Neo4j graph and *see* your knowledge as a living constellation you can explore,
+> interrogate, and act on — See → Understand → Act, all on your own machine. Underneath is
+> an agent-maintained, bi-temporal graph that keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
+
+## [0.1.0-alpha.1] — First public alpha: the Studio ships (2026-06-22)
+
+**TL;DR (explain-like-I'm-5):** Scatterbrained is now a thing you can *see*, not just a toolkit.
+This is the first public alpha of the **Studio** — the visual observatory: a force-directed map of
+your whole graph, a composable inspector that builds itself from each node, protected key-facts
+(a rewrite can't silently drop a verified number or citation), graph-native code review, a
+calendar/intention clock, link & file capture, and one-command setup (`npm start` auto-starts
+Neo4j, seeds a fictional "Northwind Logistics" demo, and launches the app). Runs entirely on your
+machine; the optional AI layer talks only to a local Ollama.
+
+**Details:** no-build `node:http` BFF (`server.js`) + vanilla-JS SPA (`public/`, vendored
+`force-graph`); the inspector is a tested resolver→registry so the pure logic is the shipped
+logic. 349 Studio unit tests (vitest) + the methodology toolkit's node:test suite. Install globally
+for `scatterbrained studio` / `scatterbrained <toolkit-command>`. Connection is env-driven
+(`.env.example`) — point it at your own graph and it leaves the data untouched.
 
 ## [1.7.0] — Honest Notion surfaces: digests for humans, not empty mirrors (2026-06-15)
 
