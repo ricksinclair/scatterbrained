@@ -1,6 +1,6 @@
 {
   "name": "scatterbrained",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "A local-first knowledge observatory — see, understand, and act on your Neo4j knowledge graph. Studio (a no-build visual app) + an agent-maintained, bi-temporal graph toolkit; Notion and local files as capture lanes.",
   "keywords": [
     "knowledge-graph",
