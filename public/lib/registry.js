@@ -586,15 +586,41 @@ export const REGISTRY = {
     },
   },
 
+  // The property inspector: every real graph property of the node, in full. Prefers the
+  // server's complete `props` bag (n{.*}); falls back to the node's own scalar/array keys
+  // (skipping force-graph internals + app-derived signals) when props isn't present. No
+  // caps, no truncation — arrays render as chips, booleans/dates formatted.
   keyvalue: {
     id: 'keyvalue',
-    render(node, _data, { esc, trunc }) {
-      const skip = new Set(['id', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'index', 'adj', 'embedding', '__threeObj', 'embedding_hash']);
-      const rows = Object.keys(node).filter((k) => !skip.has(k) && node[k] != null && typeof node[k] !== 'object' && typeof node[k] !== 'function')
-        .slice(0, 16)
-        .map((k) => `<div class="kv"><span class="kk">${esc(k)}</span><span class="kvv">${esc(trunc(String(node[k]), 48))}</span></div>`)
-        .join('');
-      return rows ? `<div class="c-keyvalue">${rows}</div>` : '';
+    render(node, _data, { esc }) {
+      const HIDE = new Set(['embedding', 'embedding_hash']);
+      const DERIVED = new Set(['id', 'x', 'y', 'vx', 'vy', 'fx', 'fy', 'index', 'adj', '__threeObj',
+        '__indexColor', 'props', 'r', 'rank', 'color', 'val', 'bornTime', 'neighbors', 'links',
+        'degree', 'edgeCount', 'edges', 'rel_types', 'all_sources', 'notes', 'protected_facts',
+        'retired_facts', 'source_count', 'sourceCount', 'embeddable', 'hasText', 'isTabular',
+        'stale', 'superseded', 'sourceKind', 'filePath', 'label', 'labels', 'desc', 'chart']);
+      const isRealVal = (v) => v == null ||
+        typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ||
+        (Array.isArray(v) && v.every((x) => x == null || typeof x !== 'object'));
+      const bag = (node.props && typeof node.props === 'object')
+        ? node.props
+        : Object.fromEntries(Object.keys(node).filter((k) => !DERIVED.has(k) && isRealVal(node[k])).map((k) => [k, node[k]]));
+      const has = (v) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0);
+      const keys = Object.keys(bag).filter((k) => !HIDE.has(k) && has(bag[k]));
+      if (!keys.length) return '';
+      const PRIO = ['name', 'title', 'summary', 'description', 'full_text', 'status', 'role', 'timeframe', 'tags'];
+      keys.sort((a, b) => {
+        const pa = PRIO.indexOf(a), pb = PRIO.indexOf(b);
+        if (pa !== -1 || pb !== -1) return (pa === -1 ? 999 : pa) - (pb === -1 ? 999 : pb);
+        return a.localeCompare(b);
+      });
+      const fmt = (v) => {
+        if (Array.isArray(v)) return `<span class="kv-chips">${v.map((x) => `<span class="kv-chip">${esc(String(x))}</span>`).join('')}</span>`;
+        if (typeof v === 'boolean') return `<span class="kv-bool kv-bool-${v}">${v}</span>`;
+        return `<span class="kv-text">${esc(String(v))}</span>`;
+      };
+      const rows = keys.map((k) => `<div class="kv"><span class="kk">${esc(k)}</span><span class="kvv">${fmt(bag[k])}</span></div>`).join('');
+      return `<div class="c-keyvalue">${rows}</div>`;
     },
   },
 };

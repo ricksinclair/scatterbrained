@@ -68,8 +68,9 @@ export function resolveLayout(node = {}, caps = {}) {
   add('ai-summary');
   add('ai-qa');
 
-  // 6. fallback
-  if (out.length === 0) add('keyvalue');
+  // 6. the raw property inspector — always offered (collapsed by default in the UI)
+  //    so every node exposes its full property bag, not just the curated components.
+  add('keyvalue');
   // 7. governance + inbox, always offered: protected facts (#23) a rewrite must honor,
   //    then the deferred-instruction note inbox. Both render their own add affordance.
   add('protected-facts');

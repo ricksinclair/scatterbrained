@@ -207,6 +207,7 @@ const Q_NODE = `
          toString(n.due_at) AS due_at, toString(n.review_at) AS review_at,
          n.status AS status, n.jurisdiction AS jurisdiction,
          n.source_kind AS source_kind, n.file_path AS file_path, n.url AS url, n.tags AS tags,
+         n { .*, embedding: NULL } AS props,
          size([(s2:Source)-[:INFORMS]->(n) | 1]) AS source_count,
          [(s3:Source)-[:INFORMS]->(n) | { id: elementId(s3), name: coalesce(s3.title, s3.name, s3.id),
             source_kind: s3.source_kind, url: s3.url, file_path: s3.file_path }][0..500] AS all_sources,
