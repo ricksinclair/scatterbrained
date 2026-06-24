@@ -9,6 +9,16 @@ can follow, then the technical details underneath.
 > an agent-maintained, bi-temporal graph that keeps an *honest history* instead of quietly
 > forgetting or overwriting things.
 
+## [0.1.0-alpha.2] — Property inspector (2026-06-24)
+
+**TL;DR (explain-like-I'm-5):** Click any node and you can now see *all* of its details, not just
+the highlights. A new **Properties** section in the inspector lists every field on a node
+(names, dates, tags, links, everything), tucked into a collapsible panel so it stays tidy.
+
+**Details:** the server now returns a node's full property bag, and the inspector renders it as an
+always-available, collapsed-by-default *Properties* component — arrays shown as chips, values
+untruncated — replacing the old key-value stub that capped at 16 fields and almost never appeared.
+
 ## [0.1.0-alpha.1] — First public alpha: the Studio ships (2026-06-22)
 
 **TL;DR (explain-like-I'm-5):** Scatterbrained is now a thing you can *see*, not just a toolkit.
