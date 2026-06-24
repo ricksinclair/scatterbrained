@@ -422,9 +422,15 @@ body.dock-closed .dock { transform: translateX(-264px); }
 .gp-duelabel { font-size: 10px; font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--ink-dim); }
 .gp-duelabel.overdue { color: var(--warn, #e5704b); }
 .c-keyvalue { font-size: 11px; }
-.c-keyvalue .kv { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; border-top: 0.5px solid var(--line); }
-.c-keyvalue .kk { color: var(--ink-faint); }
-.c-keyvalue .kvv { color: var(--ink-dim); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-keyvalue .kv { display: grid; grid-template-columns: minmax(70px, 32%) 1fr; gap: 10px; padding: 5px 0; border-top: 0.5px solid var(--line); align-items: start; }
+.c-keyvalue .kk { color: var(--ink-faint); font-family: var(--mono, ui-monospace, monospace); word-break: break-word; }
+.c-keyvalue .kvv { color: var(--ink-dim); min-width: 0; }
+.c-keyvalue .kv-text { white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere; }
+.c-keyvalue .kv-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.c-keyvalue .kv-chip { background: var(--surface-2); border: 0.5px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--ink); white-space: nowrap; }
+.c-keyvalue .kv-bool { font-family: var(--mono, ui-monospace, monospace); padding: 0 6px; border-radius: 4px; border: 0.5px solid var(--line); }
+.c-keyvalue .kv-bool-true { color: var(--ok); }
+.c-keyvalue .kv-bool-false { color: var(--ink-faint); }
 /* key-facts metric row (above the fold, ≤4 chunks) — shared inspector + report */
 .insp-keyfacts, .report-keyfacts { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
 .insp-keyfacts:empty, .report-keyfacts:empty { display: none; }

@@ -64,13 +64,13 @@ describe('resolveLayout — the graph expresses its own UI', () => {
     expect(resolveLayout({ label: 'Insight', ui: ['ai-summary'] }, {})).not.toContain('ai-summary');
   });
 
-  it('falls back to a key-value view when nothing else matches (+ always-on governance/inbox)', () => {
+  it('offers the key-value Properties view (always-on) + governance/inbox', () => {
     expect(resolveLayout({ label: 'Person' })).toEqual(['keyvalue', 'protected-facts', 'notes']);
   });
 
-  it('composes a plain insight as text + resurface + provenance + relations + protected-facts + notes', () => {
+  it('composes a plain insight as text + resurface + provenance + relations + keyvalue + protected-facts + notes', () => {
     expect(resolveLayout({ label: 'Insight', hasText: true, sourceCount: 2, edgeCount: 3 }))
-      .toEqual(['text', 'resurface', 'provenance', 'relations', 'protected-facts', 'notes']);   // protected-facts + notes always offered last
+      .toEqual(['text', 'resurface', 'provenance', 'relations', 'keyvalue', 'protected-facts', 'notes']);   // keyvalue (Properties) always-on; protected-facts + notes last
   });
 
   it('offers notes on every node (deferred-instruction inbox)', () => {

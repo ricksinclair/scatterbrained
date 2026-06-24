@@ -480,6 +480,7 @@ function selectNode(n) {
       resurface: resurfaceState(node.created_at, node.degree, { snoozedUntil: getSnooze(n.id), now: Date.now(), superseded: !!node.superseded_by }),
       chart: relationDistribution(node.rel_types || edges.map((e) => e.type)),
       notes: node.notes || [], protectedFacts: node.protected_facts || [], retiredFacts: node.retired_facts || [], id: n.id,
+      propCount: node.props ? Object.keys(node.props).filter((k) => k !== 'embedding' && k !== 'embedding_hash' && node.props[k] != null).length : null,
     };
     current = { n, signals, data };
     if (studyMode) { study = { cards: buildCards(signals), idx: 0, revealed: false, reviewed: 0 }; renderStudy(); }
@@ -535,13 +536,17 @@ const SEC_TITLES = {
   notes: { title: 'Notes', count: (d) => (d.notes || []).length },
   'protected-facts': { title: 'Protected facts', count: (d) => (d.protectedFacts || []).length },
   timeline: { title: 'History' },
+  keyvalue: { title: 'Properties', count: (d) => d.propCount },
 };
+// Sections that start collapsed (opt-in detail), so they don't bury the curated view.
+const SEC_DEFAULT_COLLAPSED = { keyvalue: true };
 function sectionHtml(p) {
   const meta = SEC_TITLES[p.id];
   if (!meta) return `<div class="insp-c insp-c-${p.id}">${p.html}</div>`;   // always-visible (progress, text, …)
   const n = meta.count ? meta.count(current.data) : null;
-  const collapsed = secCollapsed('sec:' + p.id, false);
-  return `<section class="insp-sec insp-c-${p.id}${collapsed ? ' collapsed' : ''}" data-sec="sec:${p.id}">` +
+  const def = !!SEC_DEFAULT_COLLAPSED[p.id];
+  const collapsed = secCollapsed('sec:' + p.id, def);
+  return `<section class="insp-sec insp-c-${p.id}${collapsed ? ' collapsed' : ''}" data-sec="sec:${p.id}"${def ? ' data-defcollapsed="1"' : ''}>` +
     `<button class="insp-sec-h" type="button"><span class="insp-sec-t">${esc(meta.title)}</span>` +
     `${n != null ? `<span class="insp-sec-n">${n}</span>` : ''}<i class="insp-chev" aria-hidden="true">›</i></button>` +
     `<div class="insp-sec-b">${p.html}</div></section>`;
