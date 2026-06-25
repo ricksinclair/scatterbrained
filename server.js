@@ -77,10 +77,16 @@ const REPO_ROOT = [path.join(__dirname, '..'), __dirname]
   .find((b) => { try { return fs.existsSync(path.join(b, 'examples', 'demo-files')); } catch { return false; } }) || path.join(__dirname, '..');
 const DEMO_DIR = path.join(REPO_ROOT, 'examples', 'demo-files');
 const absSrc = (fp) => { const s = String(fp || ''); return s && !path.isAbsolute(s) ? path.resolve(REPO_ROOT, s) : s; };
+// Resolve symlinks before a sandbox check or read, so a symlink INSIDE an allowlisted root can't
+// point outside it (path.resolve is purely lexical — it normalizes `..` but follows no links).
+// realpath throws on a missing path → fall back to the lexical path so the endpoints' normal
+// existsSync/"missing" handling still runs. Roots are realpath'd too (below) so a root that is
+// itself under a symlink (e.g. macOS /tmp -> /private/tmp) still matches a realpath'd file.
+function realOf(fp) { try { return fs.realpathSync(fp); } catch { return fp; } }
 function loadRoots() {
   try { ROOTS_CFG = JSON.parse(fs.readFileSync(ROOTS_PATH, 'utf8')); } catch { ROOTS_CFG = { roots: [] }; }
-  try { SOURCE_ROOTS = expandRoots(ROOTS_CFG, os.homedir()); } catch { SOURCE_ROOTS = []; }
-  try { if (fs.existsSync(DEMO_DIR) && !SOURCE_ROOTS.some((r) => path.resolve(r) === path.resolve(DEMO_DIR))) SOURCE_ROOTS.push(DEMO_DIR); } catch { /* ignore */ }
+  try { SOURCE_ROOTS = expandRoots(ROOTS_CFG, os.homedir()).map(realOf); } catch { SOURCE_ROOTS = []; }
+  try { if (fs.existsSync(DEMO_DIR) && !SOURCE_ROOTS.some((r) => r === realOf(DEMO_DIR))) SOURCE_ROOTS.push(realOf(DEMO_DIR)); } catch { /* ignore */ }
 }
 loadRoots();
 
@@ -422,9 +428,9 @@ async function api(pathname, params) {
     // { source: null } when there is no file, or a typed payload otherwise.
     const node = rows(await run(driver, Q_NODE, { id: String(params.id || '') }))[0];
     if (!node) return { source: null };
-    const primary = pickPrimarySource(node, node.edges || [], (p) => isWithinRoots(absSrc(p), SOURCE_ROOTS));
+    const primary = pickPrimarySource(node, node.edges || [], (p) => isWithinRoots(realOf(absSrc(p)), SOURCE_ROOTS));
     if (!primary) return { source: null };
-    const fp = absSrc(primary.filePath);
+    const fp = realOf(absSrc(primary.filePath));
     const kind = detectKind(fp);
     const base = { kind, title: primary.title, sourcePath: fp };
     if (!isWithinRoots(fp, SOURCE_ROOTS)) return { source: { ...base, blocked: true } };
@@ -443,7 +449,7 @@ async function api(pathname, params) {
   if (pathname === '/api/file') {
     // The "load the whole file" path behind a source/provenance link or a codebase-map
     // node. Same read sandbox as /api/source, just the full text instead of an excerpt.
-    const fp = absSrc(params.path);
+    const fp = realOf(absSrc(params.path));
     const kind = detectKind(fp);
     const base = { kind, path: fp, title: fp.split('/').pop() || fp };
     if (!fp || !isWithinRoots(fp, SOURCE_ROOTS)) return { file: { ...base, blocked: true } };
@@ -483,11 +489,11 @@ async function api(pathname, params) {
     });
     return { roots, home };
   }
-  if (pathname === '/api/file/history') return fileHistory(absSrc(params.path));
-  if (pathname === '/api/file/version') return fileVersion(absSrc(params.path), String(params.rev || ''));
+  if (pathname === '/api/file/history') return fileHistory(realOf(absSrc(params.path)));
+  if (pathname === '/api/file/version') return fileVersion(realOf(absSrc(params.path)), String(params.rev || ''));
   if (pathname === '/api/file/stat') {
     // Cheap liveness probe for the editor: has the file changed on disk under you?
-    const fp = absSrc(params.path);
+    const fp = realOf(absSrc(params.path));
     if (!fp || !isWithinRoots(fp, SOURCE_ROOTS)) return { error: 'forbidden' };
     try { const text = fs.readFileSync(fp, 'utf8'); return { hash: hashText(text), mtime: fs.statSync(fp).mtimeMs }; }
     catch { return { missing: true }; }
@@ -1254,9 +1260,10 @@ const server = http.createServer(async (req, res) => {
     // Raw byte stream for in-app binary viewers (PDF/images), sandboxed to the allowlist.
     if (url.pathname === '/api/raw') {
       const fp = String(url.searchParams.get('path') || '');
-      const ext = (/\.([a-z0-9]+)$/i.exec(fp) || [, ''])[1].toLowerCase();
-      if (!fp || !isWithinRoots(fp, SOURCE_ROOTS) || !RAW_TYPES[ext]) return send(res, 403, { error: 'forbidden' });
-      if (!fs.existsSync(fp)) return send(res, 404, { error: 'not found' });
+      const real = realOf(fp);   // resolve symlinks so a link inside a root can't escape it
+      const ext = (/\.([a-z0-9]+)$/i.exec(real) || [, ''])[1].toLowerCase();
+      if (!fp || !isWithinRoots(real, SOURCE_ROOTS) || !RAW_TYPES[ext]) return send(res, 403, { error: 'forbidden' });
+      if (!fs.existsSync(real)) return send(res, 404, { error: 'not found' });
       // SVG can carry <script> that runs as THIS origin if navigated to directly. Browsers
       // ignore Content-Disposition on <img> (inline viewers still render it) but honor it on
       // top-level navigation — so `attachment` neutralizes the script vector; nosniff stops
@@ -1268,7 +1275,7 @@ const server = http.createServer(async (req, res) => {
         'X-Content-Type-Options': 'nosniff',
         'Content-Disposition': svg ? 'attachment' : 'inline',
       });
-      const rs = fs.createReadStream(fp);
+      const rs = fs.createReadStream(real);
       rs.on('error', () => { if (!res.headersSent) send(res, 500, { error: 'read failed' }); else res.destroy(); });
       return rs.pipe(res);
     }
