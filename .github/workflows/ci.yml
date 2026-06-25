@@ -54,7 +54,7 @@ jobs:
           for j in package.json examples/*.json; do node -e "JSON.parse(require('fs').readFileSync('$j','utf8'))"; done
       - name: Unit tests — toolkit (node:test) + Studio (vitest)
         run: |
-          node --test test/cli   # methodology pure-function suite; no DB or network needed
+          npm test               # methodology pure-function suite; no DB or network needed
           npm run test:studio    # Studio pure-function suite
       - name: Start Neo4j
         run: |
