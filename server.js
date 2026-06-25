@@ -231,14 +231,19 @@ const Q_NODE = `
             label: head([l IN labels(m) WHERE l <> 'Embeddable'] + labels(m)),
             url: m.url, file_path: m.file_path,
             status: m.status, valid_until: toString(m.valid_until),
-            dir: CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END }][0..60] AS edges`;
+            dir: CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END }][0..60] AS edges,
+         ([(n)-[:ACHIEVED_BY]->(gp:Project)-[:CONTAINS]->(gm:Idea) | { id: elementId(gm), name: coalesce(gm.name, gm.title), status: coalesce(gm.status, ''), valid_until: toString(gm.valid_until) }]
+          + [(n)-[:ACHIEVED_BY]->(gp2:Project)<-[:PART_OF]-(gm2:Idea) | { id: elementId(gm2), name: coalesce(gm2.name, gm2.title), status: coalesce(gm2.status, ''), valid_until: toString(gm2.valid_until) }])[0..40] AS goal_milestones,
+         [(n)-[:BLOCKED_BY]->(gb) | { id: elementId(gb), name: coalesce(gb.name, gb.title, gb.id),
+            label: head([l IN labels(gb) WHERE l <> 'Embeddable'] + labels(gb)) }][0..20] AS goal_blockers`;
 
 // ── Pulse (status board) ────────────────────────────────────────────────────
 const Q_GOALS = `
   MATCH (g:Goal)
   OPTIONAL MATCH (g)-[:ACHIEVED_BY|SUPPORTS]-(p:Project)
   WITH g, collect(DISTINCT p.name) AS projects
-  RETURN g.name AS name, g.timeframe AS timeframe, coalesce(g.status,'active') AS status,
+  RETURN elementId(g) AS id, g.name AS name, g.timeframe AS timeframe, coalesce(g.status,'active') AS status,
+         toString(g.target_date) AS target_date,
          left(coalesce(g.description,''), 200) AS desc, projects[0..5] AS projects
   ORDER BY CASE g.timeframe WHEN '30_days' THEN 0 WHEN 'short_term' THEN 1 WHEN '90_days' THEN 2
                             WHEN '1_year' THEN 3 WHEN 'long_term' THEN 5 ELSE 4 END`;

@@ -421,6 +421,17 @@ body.dock-closed .dock { transform: translateX(-264px); }
 .gp-date:focus { border-color: var(--accent); outline: none; }
 .gp-duelabel { font-size: 10px; font-family: "JetBrains Mono", ui-monospace, monospace; color: var(--ink-dim); }
 .gp-duelabel.overdue { color: var(--warn, #e5704b); }
+/* operational goals: clickable milestone + blocker chips (reuse the --st status palette + nav-node) */
+.gp-milestones { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.gp-ms { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: var(--surface-2); border: 0; border-left: 2px solid var(--st, var(--ink-faint)); color: var(--ink-dim); }
+.gp-ms:hover { color: var(--ink); background: color-mix(in srgb, var(--st, var(--accent)) 16%, transparent); }
+.gp-ms.st-done { color: var(--ink-faint); text-decoration: line-through; }
+.gp-blockers { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 7px; }
+.gp-blockers .gp-label { margin-right: 2px; }
+.gp-blocker { font-size: 10px; padding: 2px 7px; border-radius: 10px; border: 0; background: color-mix(in srgb, var(--warn, #e5704b) 14%, transparent); color: var(--warn, #e5704b); }
+.gp-blocker:hover { color: var(--ink); }
+.gp-degraded { color: var(--ink-faint); font-style: italic; }
+.gp-proj { border-bottom: 0; }
 .c-keyvalue { font-size: 11px; }
 .c-keyvalue .kv { display: grid; grid-template-columns: minmax(70px, 32%) 1fr; gap: 10px; padding: 5px 0; border-top: 0.5px solid var(--line); align-items: start; }
 .c-keyvalue .kk { color: var(--ink-faint); font-family: var(--mono, ui-monospace, monospace); word-break: break-word; }

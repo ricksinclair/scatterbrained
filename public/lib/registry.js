@@ -14,6 +14,7 @@ import { resolveLayout } from './resolve.js';
 import { coerceView } from './views.js';
 import { neighborhoodLayout } from './graph.js';
 import { parseVideoUrl, domainOf, isWebUrl } from './links.js';
+import { classifyStatus } from './roadmap.js';
 
 // Color per node label (mirrors app.js PAL) for inline subgraph dots — kept here so
 // the pure renderer needs no DOM/theme. Falls back to a neutral gray.
@@ -39,8 +40,10 @@ export function keyFacts(node = {}, data = {}) {
   const edges = data.edges || [];
   const facts = [];
   if (node.label === 'Goal') {
-    const reqs = edges.filter((e) => e.type === 'REQUIRES' && e.dir === 'out');
-    if (reqs.length) facts.push({ label: 'progress', value: Math.round(reqs.filter((r) => r.valid_until || /\b(done|complete|achieved|shipped|closed|live|published)\b/i.test(String(r.status || ''))).length / reqs.length * 100) + '%' });
+    // progress from the delivering project's milestone-Ideas (same signal as the goal-progress
+    // component) — NOT REQUIRES (Goal>Skill, null status → always 0%, and it contradicted the panel).
+    const ms = data.goal_milestones || [];
+    if (ms.length) facts.push({ label: 'progress', value: Math.round(ms.filter((m) => m.valid_until || classifyStatus(m.status) === 'done').length / ms.length * 100) + '%' });
   }
   if (node.confidence) facts.push({ label: 'confidence', value: String(node.confidence) });
   const sourceCount = node.source_count != null ? node.source_count
@@ -540,29 +543,48 @@ export const REGISTRY = {
   'goal-progress': {
     id: 'goal-progress',
     render(node, data, { esc, trunc }) {
-      const reqs = (data.edges || []).filter((e) => e.type === 'REQUIRES' && e.dir === 'out');
-      const project = (data.edges || []).find((e) => e.type === 'ACHIEVED_BY');
-      let pct, sub;
-      if (reqs.length) {
-        const met = reqs.filter(isDone).length;
-        pct = Math.round((met / reqs.length) * 100);
-        sub = `${met}/${reqs.length} requirements met`;
+      // Honest progress from the delivering Project's milestone-Ideas (CONTAINS/PART_OF), classified
+      // by the shared classifyStatus(). REQUIRES on a Goal is Goal>Skill (null status) so it can't
+      // drive a %; goal_milestones is the real signal (server Q_NODE). Bi-temporal valid_until = done.
+      const ms = data.goal_milestones || [];
+      const project = (data.edges || []).find((e) => e.type === 'ACHIEVED_BY' && e.dir === 'out')
+        || (data.edges || []).find((e) => e.type === 'ACHIEVED_BY');
+      const projChip = project
+        ? `<a href="#" class="nav-node gp-proj" data-id="${esc(project.id || '')}" data-name="${esc(project.name || '')}">${esc(trunc(project.name, 26))}</a>`
+        : '';
+      let head = '', bar = '', sub = '', milestones = '';
+      if (ms.length) {
+        const cls = ms.map((m) => (m.valid_until ? 'done' : classifyStatus(m.status)));
+        const done = cls.filter((c) => c === 'done').length;
+        const pct = Math.round((done / ms.length) * 100);
+        const active = cls.filter((c) => c === 'active').length;
+        const next = cls.filter((c) => c === 'next').length;
+        head = `<div class="gp-row"><span class="gp-label">progress</span><span class="gp-pct">${pct}%</span></div>`;
+        bar = `<div class="gp-bar"><div class="gp-fill" style="width:${pct}%"></div></div>`;
+        const parts = [`${done}/${ms.length} milestones`];
+        if (active) parts.push(`${active} active`);
+        if (next) parts.push(`${next} next`);
+        sub = `<div class="gp-sub">${esc(parts.join(' · '))}${projChip ? ' · via ' + projChip : ''}</div>`;
+        // each milestone is a clickable nav-node so "what's next" is one click into the work
+        milestones = `<div class="gp-milestones">` + ms.map((m, i) =>
+          `<a href="#" class="nav-node gp-ms st-${cls[i]}" data-id="${esc(m.id || '')}" data-name="${esc(m.name || '')}" title="${esc(m.name || '')}${m.status ? ' · ' + esc(m.status) : ''}">${esc(trunc(m.name || '(unnamed)', 28))}</a>`).join('') + `</div>`;
+      } else if (project) {
+        // a 0% bar reads as failure for a goal with no modeled milestones — show the on-ramp instead
+        sub = `<div class="gp-sub gp-degraded">tracked via ${projChip} · ${esc(node.status || 'active')} — no milestones modeled yet</div>`;
       } else {
-        pct = isDone(node) ? 100 : 0;
-        sub = esc(node.status || 'active');
+        sub = `<div class="gp-sub gp-degraded">${esc(node.status || 'active')} — not yet linked to a delivering project</div>`;
       }
-      const proj = project ? `<div class="gp-proj">delivered by ${esc(trunc(project.name, 28))}</div>` : '';
-      // target_date (#25 P1): an editable intention-date with a relative due label. The
-      // input commits via a delegated change handler → POST /api/goal/target-date.
+      // target_date (#25 P1): an editable intention-date with a relative due label. The input
+      // commits via a delegated change handler → POST /api/goal/target-date. Empty = a call to action.
       const td = node.target_date || '';
       const dl = dueLabel(td, Date.now());
       const dueRow = `<div class="gp-due"><span class="gp-label">target date</span>` +
         `<input type="date" class="gp-date" data-goaldate="${esc(node.id || '')}" value="${esc(td)}" aria-label="goal target date">` +
         (dl ? `<span class="gp-duelabel${td && Date.parse(td + 'T00:00:00') < Date.now() ? ' overdue' : ''}">${esc(dl)}</span>` : '') + `</div>`;
-      return `<div class="c-goal-progress"><div class="gp-row"><span class="gp-label">progress</span>` +
-        `<span class="gp-pct">${pct}%</span></div>` +
-        `<div class="gp-bar"><div class="gp-fill" style="width:${pct}%"></div></div>` +
-        `<div class="gp-sub">${sub}</div>${proj}${dueRow}</div>`;
+      const blk = data.goal_blockers || [];
+      const blockers = blk.length ? `<div class="gp-blockers"><span class="gp-label">blocked by</span>` +
+        blk.map((b) => `<a href="#" class="nav-node gp-blocker" data-id="${esc(b.id || '')}" data-name="${esc(b.name || '')}">${esc(trunc(b.name || '(unnamed)', 24))}</a>`).join('') + `</div>` : '';
+      return `<div class="c-goal-progress">${head}${bar}${sub}${milestones}${blockers}${dueRow}</div>`;
     },
   },
 

@@ -480,6 +480,7 @@ function selectNode(n) {
       resurface: resurfaceState(node.created_at, node.degree, { snoozedUntil: getSnooze(n.id), now: Date.now(), superseded: !!node.superseded_by }),
       chart: relationDistribution(node.rel_types || edges.map((e) => e.type)),
       notes: node.notes || [], protectedFacts: node.protected_facts || [], retiredFacts: node.retired_facts || [], id: n.id,
+      goal_milestones: node.goal_milestones || [], goal_blockers: node.goal_blockers || [],
       propCount: node.props ? Object.keys(node.props).filter((k) => k !== 'embedding' && k !== 'embedding_hash' && node.props[k] != null).length : null,
     };
     current = { n, signals, data };
@@ -865,7 +866,7 @@ document.getElementById('report-x').onclick = closeReport;
 document.getElementById('r-focus').onclick = () => current && focusNode(current.n);
 document.getElementById('r-pin').onclick = () => { const n = current && current.n; if (!n) return; if (n.fx != null) { n.fx = n.fy = undefined; } else { n.fx = n.x; n.fy = n.y; } Graph.d3ReheatSimulation(); poke(); };
 
-function closeInsp() { sel = null; inspOpen = false; layoutGraph(); document.getElementById('insp').hidden = true; poke(); }
+function closeInsp() { sel = null; inspOpen = false; clearFocus(); layoutGraph(); document.getElementById('insp').hidden = true; poke(); }
 document.getElementById('insp-x').onclick = closeInsp;
 
 function focusByName(name) {
@@ -873,6 +874,9 @@ function focusByName(name) {
   if (n) { selectNode(n); focusNode(n); } else { runSearch(name); document.getElementById('q').value = name; }
 }
 window.__focus = focusByName;
+// Open a node by id (works off-canvas: selectNode fetches /api/node by id even when the node
+// isn't a rendered constellation node). Used by the dock so a Goal opens the GOAL, not its project.
+window.__open = (id, name, label) => { selectNode({ id, name, label }); refreshGraphData(name); };
 
 // ── file reader: load a whole source/code file in-app (sandboxed by the server) ──
 const FR = document.getElementById('filereader');
@@ -2498,6 +2502,19 @@ document.getElementById('perms-path').addEventListener('keydown', (e) => { if (e
 PERMS.addEventListener('click', (e) => { if (e.target === PERMS) closePerms(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !PERMS.hidden) closePerms(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.getElementById('codebase').hidden && FR.hidden) closeCodebase(); });
+// Coordinated Escape for the graph's own surfaces — runs after the overlay/modal Esc handlers
+// above (each guards on its own hidden state), so it only acts when no overlay is open and no
+// text field is focused. Unwinds one layer: report → inspector (which also clears focus) → focus.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (!FR.hidden || !document.getElementById('review').hidden || !SETTINGS.hidden
+      || !PERMS.hidden || !document.getElementById('codebase').hidden) return;
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+  if (reportOpen) closeReport();
+  else if (inspOpen) closeInsp();
+  else if (focusId) clearFocus();
+});
 window.addEventListener('resize', () => { if (cbGraph && !document.getElementById('codebase').hidden) { const h = document.getElementById('cb-graph'); cbGraph.width(h.clientWidth).height(h.clientHeight); } });
 
 // ── UI: health, lenses, search, time, zoom, dock, settings ───────────────────
@@ -2627,7 +2644,9 @@ function showIntentHints() {
 }
 function selectByIdOrName(id, name) {
   const n = (id && byId[id]) || NODES.find((x) => x.name === name);
-  if (n) { selectNode(n); focusNode(n); } else if (name) { focusByName(name); }
+  if (n) { selectNode(n); focusNode(n); }
+  else if (id) { selectNode({ id, name }); refreshGraphData(name); }   // off-canvas → fetch by id
+  else if (name) { focusByName(name); }
 }
 // Remove one association edge (#29) by its relationship id, then refresh the inspector
 // (re-select the same node so the relations list reflects the prune) + the graph.
@@ -2668,6 +2687,13 @@ graphEl.addEventListener('mousemove', (e) => { lastMx = e.clientX; lastMy = e.cl
 
 const TF = { '30_days': '30 days', short_term: 'Short term', '90_days': '90 days', '1_year': '1 year', long_term: 'Long term' };
 document.getElementById('dock-toggle').onclick = () => { dockOpen = !dockOpen; layoutGraph(); poke(); };
+// Keyboard activation for the dock's role=button rows + section headers (delegated once;
+// #dock-scroll persists across re-renders). Enter/Space fires the element's click.
+document.getElementById('dock-scroll').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest('.dk-item, .dk-h');
+  if (el) { e.preventDefault(); el.click(); }
+});
 function loadDock() {
   const el = document.getElementById('dock-scroll');
   fetch('/api/pulse').then((r) => r.json()).then((p) => renderDock(p)).catch((e) => { el.innerHTML = '<div class="dk-empty">could not load: ' + esc(String(e)) + '</div>'; });
@@ -2693,11 +2719,18 @@ function cappedItems(key, items, cap) {
 function renderDock(p) {
   dockData = p;
   const J = (name) => `onclick="__focus(${JSON.stringify(name || '').replace(/"/g, '&quot;')})"`;
-  const item = (name, meta, cls) => `<div class="dk-item ${cls || ''}" ${J(name)}>${esc(trunc(name || '(unnamed)', 48))}${meta || ''}</div>`;
+  const item = (name, meta, cls) => `<div class="dk-item ${cls || ''}" role="button" tabindex="0" ${J(name)}>${esc(trunc(name || '(unnamed)', 48))}${meta || ''}</div>`;
   const empty = (t) => `<div class="dk-empty">${t}</div>`;
   const groups = [];
   (p.goals || []).forEach((g) => { const k = TF[g.timeframe] || 'Ongoing'; let grp = groups.find((x) => x.k === k); if (!grp) { grp = { k, items: [] }; groups.push(grp); } grp.items.push(g); });
-  const goalItems = groups.flatMap((grp) => grp.items.map((g) => item(g.projects && g.projects[0] ? g.projects[0] : g.name, `<div class="dk-meta">${esc(grp.k)}${g.projects && g.projects[0] ? ' · ' + esc(g.name) : ''}</div>`)));
+  // A goal row opens the GOAL (by id, off-canvas-safe) — not its project. Goal name is primary;
+  // timeframe · delivering project · due date are secondary meta.
+  const goalItems = groups.flatMap((grp) => grp.items.map((g) => {
+    const proj = g.projects && g.projects[0] ? ' · ' + esc(trunc(g.projects[0], 22)) : '';
+    const due = g.target_date ? ' · ' + esc(dueLabel(g.target_date, Date.now()) || g.target_date) : '';
+    const open = `onclick="__open(${JSON.stringify(g.id || '').replace(/"/g, '&quot;')},${JSON.stringify(g.name || '').replace(/"/g, '&quot;')},'Goal')"`;
+    return `<div class="dk-item" role="button" tabindex="0" ${open}>${esc(trunc(g.name || '(unnamed)', 48))}<div class="dk-meta">${esc(grp.k)}${proj}${due}</div></div>`;
+  }));
   const nowBody = `<span class="dk-pill"><span class="dot-now">●</span> ${(p.projects || []).length} now</span><span class="dk-pill"><span class="dot-next">●</span> ${(p.next || []).length} next</span>` +
     (p.blocked || []).map((b) => item(b.name, `<div class="dk-meta">blocked by ${esc(trunc(b.blocker, 22))}</div>`, 'warn')).join('');
   const newItems = (p.whatsNew || []).map((w) => item(w.name, `<div class="dk-meta">${w.created_at ? w.created_at.slice(0, 10) : ''}${(w.tags && w.tags.length) ? ' · ' + esc(w.tags[0]) : ''}</div>`));
