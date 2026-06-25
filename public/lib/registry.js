@@ -13,7 +13,7 @@
 import { resolveLayout } from './resolve.js';
 import { coerceView } from './views.js';
 import { neighborhoodLayout } from './graph.js';
-import { parseVideoUrl, domainOf } from './links.js';
+import { parseVideoUrl, domainOf, isWebUrl } from './links.js';
 
 // Color per node label (mirrors app.js PAL) for inline subgraph dots — kept here so
 // the pure renderer needs no DOM/theme. Falls back to a neutral gray.
@@ -94,7 +94,11 @@ function miniMarkdown(src, esc) {
   let inList = false;
   const inline = (t) => esc(t)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // Only emit an anchor for real http(s) URLs — never a javascript:/data: scheme. `url`
+    // is already HTML-escaped (esc ran first); isWebUrl rejects non-web schemes, so a
+    // [x](javascript:…) note/AI-summary renders as plain text, not a live link (stored XSS).
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text, url) =>
+      isWebUrl(url) ? `<a href="${url}" target="_blank" rel="noopener">${text}</a>` : text)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
   const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
@@ -261,7 +265,7 @@ export const REGISTRY = {
         let link;
         // File-backed sources load in-app (sandboxed); web sources open externally.
         if (s.file_path) link = `<a class="src-file" href="#" title="${esc(s.name)}" onclick="return __openFile(${esc(JSON.stringify(s.file_path)).replace(/"/g, '&quot;')}),false">${label}</a>`;
-        else if (s.url) link = `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.name)}">${label}</a>`;
+        else if (s.url && isWebUrl(s.url)) link = `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.name)}">${label}</a>`;
         else link = `<span class="src">${label}</span>`;
         return `<div class="prov-row" data-f="${f}">${link}${kind}</div>`;
       }).join('');
@@ -340,7 +344,7 @@ export const REGISTRY = {
   video: {
     id: 'video',
     render(node, data, { esc }) {
-      const url = node.url || data.url;
+      const url = node.url;
       const v = parseVideoUrl(url);
       if (!v) return '';
       const body = v.direct
@@ -355,7 +359,7 @@ export const REGISTRY = {
   link: {
     id: 'link',
     render(node, data, { esc, trunc }) {
-      const url = node.url || data.url;
+      const url = node.url;
       if (!url) return '';
       const dom = domainOf(url);
       const title = esc(trunc(node.name || data.name || dom || url, 90));

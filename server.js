@@ -1023,10 +1023,16 @@ async function reviewChanges({ id, repo, ref, base } = {}) {
   repo = String(repo || ''); ref = String(ref || '');
   if (!repo || !ref || !isWithinRoots(repo, SOURCE_ROOTS)) return { error: 'repo and ref required' };
   const baseIn = (base && String(base).trim()) || (ref + '^');
-  const rp = git(['-C', repo, 'rev-parse', baseIn]);
-  if (!rp.ok) return { changes: [], base: null, note: 'no base to diff against (first commit?)' };
-  const baseSha = rp.out.trim();
-  const d = git(['-C', repo, 'diff', '--name-status', baseSha, ref]);
+  const rpBase = git(['-C', repo, 'rev-parse', baseIn]);
+  if (!rpBase.ok || !/^[0-9a-fA-F]{40}$/.test(rpBase.out.trim())) return { changes: [], base: null, note: 'no base to diff against (first commit?)' };
+  const baseSha = rpBase.out.trim();
+  // Resolve ref to a full SHA and hard-validate BOTH endpoints as 40-hex before they reach
+  // `git diff` — a crafted ref/base like `--output=…` is a git OPTION, not a commit, so an
+  // unvalidated value lets git write an arbitrary file (argument injection). Mirrors line 966.
+  const rpRef = git(['-C', repo, 'rev-parse', ref]);
+  if (!rpRef.ok || !/^[0-9a-fA-F]{40}$/.test(rpRef.out.trim())) return { error: 'bad ref' };
+  const refSha = rpRef.out.trim();
+  const d = git(['-C', repo, 'diff', '--name-status', baseSha, refSha]);
   if (!d.ok) return { changes: [], base: baseSha, error: d.error };
   const changes = d.out.split('\n').filter(Boolean).map((line) => {
     const parts = line.split('\t');
@@ -1207,32 +1213,75 @@ function fileVersion(fp, rev) {
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.mjs': 'text/javascript', '.map': 'application/json' };
 const RAW_TYPES = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp' };
 
+// Baseline defense-in-depth headers for the app document. script/style keep 'unsafe-inline'
+// because the UI uses inline event handlers — the real XSS sinks are scheme-gated at the
+// source (provenance/miniMarkdown/link). object-src 'none' + frame-ancestors 'none' close the
+// <object>/<embed> SVG vector and clickjacking; frame-src is limited to the video embed hosts.
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; frame-src https://www.youtube-nocookie.com https://player.vimeo.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+};
+
+// Read a request body with a hard BYTE cap. Resolves on 'end'; rejects on overflow or abort.
+// A destroyed stream never emits 'end', so we must also settle on 'close'/'error' — otherwise
+// the handler's await hangs forever and the socket leaks. Byte-counted (Buffer.length), not chars.
+function readBody(req, cap) {
+  return new Promise((resolve, reject) => {
+    let body = '', len = 0, settled = false;
+    // Reject (don't destroy the socket — that would also kill the response, so the caller's
+    // 413 never reaches the client) and stop buffering once over cap; later chunks are dropped.
+    const done = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+    req.on('data', (c) => { len += c.length; if (len > cap) done(reject, new Error('too large')); else if (!settled) body += c; });
+    req.on('end', () => done(resolve, body));
+    req.on('close', () => done(reject, new Error('aborted')));
+    req.on('error', () => done(reject, new Error('aborted')));
+  });
+}
+
+// DNS-rebinding / CSRF guard: a state-changing request must arrive with a loopback Host.
+// (Strips the :port and any [::1] brackets.) Defense-in-depth on top of the loopback bind.
+function isLocalHost(req) {
+  const h = String(req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+  return h === '' || h === 'localhost' || h === '127.0.0.1' || h === '::1';
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://localhost:${PORT}`);
+    // Every state-changing request is a POST; reject any that didn't arrive with a loopback
+    // Host (DNS-rebinding / cross-site). The loopback bind is the primary control; this is depth.
+    if (req.method === 'POST' && !isLocalHost(req)) return send(res, 403, { error: 'forbidden' });
     // Raw byte stream for in-app binary viewers (PDF/images), sandboxed to the allowlist.
     if (url.pathname === '/api/raw') {
       const fp = String(url.searchParams.get('path') || '');
       const ext = (/\.([a-z0-9]+)$/i.exec(fp) || [, ''])[1].toLowerCase();
       if (!fp || !isWithinRoots(fp, SOURCE_ROOTS) || !RAW_TYPES[ext]) return send(res, 403, { error: 'forbidden' });
       if (!fs.existsSync(fp)) return send(res, 404, { error: 'not found' });
-      res.writeHead(200, { 'Content-Type': RAW_TYPES[ext], 'Cache-Control': 'no-store', 'Content-Disposition': 'inline' });
-      return fs.createReadStream(fp).pipe(res);
+      // SVG can carry <script> that runs as THIS origin if navigated to directly. Browsers
+      // ignore Content-Disposition on <img> (inline viewers still render it) but honor it on
+      // top-level navigation — so `attachment` neutralizes the script vector; nosniff stops
+      // MIME-confusion on the rest.
+      const svg = ext === 'svg';
+      res.writeHead(200, {
+        'Content-Type': RAW_TYPES[ext],
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': svg ? 'attachment' : 'inline',
+      });
+      const rs = fs.createReadStream(fp);
+      rs.on('error', () => { if (!res.headersSent) send(res, 500, { error: 'read failed' }); else res.destroy(); });
+      return rs.pipe(res);
     }
     // Mutate the folder allowlist (grant/revoke). The one write endpoint; guardrailed.
     if (url.pathname === '/api/roots' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 4096); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = mutateRoots(String(p.action || ''), String(p.path || ''), p.tags);
       return send(res, result.error ? 400 : 200, result);
     }
     // Notes: add a note to a node, or change a note's state.
     if ((url.pathname === '/api/note' || url.pathname === '/api/note/state') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/note' ? await addNote(p) : await setNoteState(p.id, p.state);
       if (!result.error) broadcast('graph-changed');
@@ -1241,9 +1290,7 @@ const server = http.createServer(async (req, res) => {
     // Markdown editing: acquire/release the edit lock, or save (write + git commit).
     if ((url.pathname === '/api/file/lock' || url.pathname === '/api/file/unlock' || url.pathname === '/api/file/save') && req.method === 'POST') {
       const cap = url.pathname === '/api/file/save' ? SOURCE_MAX_BYTES + 16 * 1024 : 8192;
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > cap) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, cap); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       if (p && p.path) p.path = absSrc(p.path);   // resolve repo-relative paths (e.g. demo files)
       const result = url.pathname === '/api/file/lock' ? await lockFile(p)
@@ -1255,9 +1302,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Link intake: save a web link (+ fuzzy associate), or attach an existing link.
     if ((url.pathname === '/api/link' || url.pathname === '/api/link/attach') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/link' ? await addLink(p) : await attachLink(p.linkId, p.targetId);
       if (!result.error) broadcast('graph-changed');
@@ -1265,9 +1310,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Code review (#34): create a review, or set its verdict/status.
     if ((url.pathname === '/api/review' || url.pathname === '/api/review/verdict') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/review' ? await createReview(p) : await setReviewVerdict(p);
       if (!result.error) broadcast('graph-changed');
@@ -1275,9 +1318,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Inline associate (#29): wire / remove a typed edge between two existing nodes.
     if ((url.pathname === '/api/relate' || url.pathname === '/api/relate/remove') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/relate' ? await relate(p) : await unrelate(p);
       if (!result.error) broadcast('graph-changed');
@@ -1285,9 +1326,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Goal target_date (#25 P1) + intention-time scheduler (#25 P2): narrow scalar setters.
     if ((url.pathname === '/api/goal/target-date' || url.pathname === '/api/schedule') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/schedule' ? await setSchedule(p) : await setGoalTargetDate(p);
       if (!result.error) broadcast('graph-changed');
@@ -1295,9 +1334,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Protected key-facts (#23): pin/unpin a fact, check a rewrite (optionally queue), resolve.
     if (url.pathname.startsWith('/api/protected-fact/') && url.pathname !== '/api/protected-fact/suggest' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 64 * 1024) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 64 * 1024); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/protected-fact/pin' ? await pinProtectedFact(p)
         : url.pathname === '/api/protected-fact/unpin' ? await unpinProtectedFact(p)
@@ -1325,8 +1362,10 @@ const server = http.createServer(async (req, res) => {
     const rel = url.pathname === '/' ? '/index.html' : url.pathname;
     const file = path.join(PUBLIC, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
     if (!file.startsWith(PUBLIC) || !fs.existsSync(file)) return send(res, 404, { error: 'not found' });
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'text/plain' });
-    fs.createReadStream(file).pipe(res);
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'text/plain', ...SECURITY_HEADERS });
+    const rs = fs.createReadStream(file);
+    rs.on('error', () => { if (!res.headersSent) send(res, 500, { error: 'read failed' }); else res.destroy(); });
+    rs.pipe(res);
   } catch (err) {
     send(res, 500, { error: String(err.message || err) });
   }
@@ -1334,13 +1373,15 @@ const server = http.createServer(async (req, res) => {
 
 function send(res, code, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   res.end(body);
 }
 
-server.listen(PORT, () => {
+// Bind loopback only — this BFF reads/writes local files and the graph with NO auth, so it
+// must never be reachable from the LAN (the file-header "only ever talks to localhost" intent).
+server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Scatterbrained Studio  ·  observatory`);
-  console.log(`  ▸ http://localhost:${PORT}`);
+  console.log(`  ▸ http://127.0.0.1:${PORT}`);
   console.log(`  ▸ Neo4j: ${process.env.NEO4J_URI || 'bolt://localhost:7687'}\n`);
 });
 

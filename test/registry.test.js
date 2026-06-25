@@ -285,6 +285,22 @@ describe('component renderers are pure and escape input', () => {
     expect(html).not.toContain('__provFilter');
   });
 
+  it('provenance refuses a javascript: source url — inert span, never an href (stored XSS)', () => {
+    const data = { sources: [{ name: 'evil', url: 'javascript:alert(document.cookie)' }, { name: 'ok', url: 'https://e.x' }] };
+    const html = REGISTRY.provenance.render({}, data, { esc, trunc: (s) => s });
+    expect(html).not.toContain('href="javascript');
+    expect(html).toContain('<span class="src">evil</span>');   // non-web scheme → inert
+    expect(html).toContain('href="https://e.x"');              // a real web url still links
+  });
+
+  it('miniMarkdown only links real http(s) urls — a javascript: link becomes plain text', () => {
+    expect(miniMarkdown('see [x](https://e.x)', esc)).toContain('<a href="https://e.x"');
+    const evil = miniMarkdown('[click](javascript:alert(1))', esc);
+    expect(evil).not.toContain('<a ');
+    expect(evil).not.toContain('javascript:alert');            // url never emitted
+    expect(evil).toContain('click');                           // link text preserved as text
+  });
+
   it('notes renders each note with a state pill + anchor, plus an add form wired to the target', () => {
     const data = { id: '4:x:1', notes: [
       { id: 'n1', text: 'research the competitor pricing', state: 'raw', created_at: '2026-06-17T00:00:00Z' },
