@@ -569,10 +569,14 @@ export const REGISTRY = {
         milestones = `<div class="gp-milestones">` + ms.map((m, i) =>
           `<a href="#" class="nav-node gp-ms st-${cls[i]}" data-id="${esc(m.id || '')}" data-name="${esc(m.name || '')}" title="${esc(m.name || '')}${m.status ? ' · ' + esc(m.status) : ''}">${esc(trunc(m.name || '(unnamed)', 28))}</a>`).join('') + `</div>`;
       } else if (project) {
-        // a 0% bar reads as failure for a goal with no modeled milestones — show the on-ramp instead
-        sub = `<div class="gp-sub gp-degraded">tracked via ${projChip} · ${esc(node.status || 'active')} — no milestones modeled yet</div>`;
+        // a 0% bar reads as failure for a goal with no modeled milestones — show the on-ramp instead.
+        // Milestones are the delivering project's CONTAINS Ideas; projChip routes there to add them.
+        sub = `<div class="gp-sub gp-degraded">tracked via ${projChip} · ${esc(node.status || 'active')} — no milestones yet; open the project to add milestone Ideas</div>`;
       } else {
-        sub = `<div class="gp-sub gp-degraded">${esc(node.status || 'active')} — not yet linked to a delivering project</div>`;
+        // no delivering project → the bar can never fill. Offer the fix inline (jump to the
+        // existing "Achieved by" relate picker) instead of a dead-end status line.
+        sub = `<div class="gp-sub gp-degraded">${esc(node.status || 'active')} — not yet linked to a delivering project ` +
+          `<button type="button" class="gp-onramp" data-gp-action="link-project">+ link one</button></div>`;
       }
       // target_date (#25 P1): an editable intention-date with a relative due label. The input
       // commits via a delegated change handler → POST /api/goal/target-date. Empty = a call to action.

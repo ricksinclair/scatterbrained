@@ -300,6 +300,17 @@ const Q_PROTECTED_FACT_REVIEW = `
          coalesce(n.name, n.title, n.summary, n.id) AS target_name, elementId(n) AS target_id
   ORDER BY k.pending_at DESC LIMIT 24`;
 
+// Notes awaiting curation (#note loop): a Note is jotted on a node (state 'raw'), a later sync
+// pass cues/addresses it. Until now the inspector could WRITE notes but nothing surfaced the
+// open ones, so they rotted. Surface raw/cued notes in the dock + resume so the loop closes.
+const Q_NOTES_REVIEW = `
+  MATCH (nt:Note)-[:ABOUT]->(n) WHERE nt.state IN ['raw', 'cued']
+  RETURN nt.id AS id, nt.text AS text, nt.state AS state, toString(nt.created_at) AS created_at,
+         coalesce(n.name, n.title, n.summary, n.id) AS anchor_name,
+         head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS anchor_label,
+         elementId(n) AS anchor_id
+  ORDER BY nt.created_at DESC LIMIT 20`;
+
 // ── Intent queries (the command bar) — uniform shape {id, name, label, sub} ───
 const PLABEL = `head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n))`;
 const QI_BLOCKED = `
@@ -373,18 +384,18 @@ async function api(pathname, params) {
     return { ...h, orphans, byLabel, newest, last_sync };
   }
   if (pathname === '/api/pulse') {
-    const [goals, projects, blocked, next, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview] = await Promise.all([
+    const [goals, projects, blocked, next, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview, notesReview] = await Promise.all([
       run(driver, Q_GOALS), run(driver, Q_PROJECTS), run(driver, Q_BLOCKED), run(driver, Q_NEXT),
       run(driver, QI_DUE),
       run(driver, Q_WHATSNEW), run(driver, Q_SUPERSEDED), run(driver, Q_LOWCONF), run(driver, Q_ORPHAN_LIST),
       run(driver, Q_ALIAS_DRIFT, { aliasLabels: ALIAS_LABELS, aliasNameFields: ALIAS_NAME_FIELDS, brandRe: brandRegexCypher() }),
-      run(driver, Q_PROTECTED_FACT_REVIEW),
+      run(driver, Q_PROTECTED_FACT_REVIEW), run(driver, Q_NOTES_REVIEW),
     ]);
     return {
       goals: rows(goals), projects: rows(projects), blocked: rows(blocked), next: rows(next),
       due: rows(due),
       whatsNew: rows(whatsNew),
-      review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview) },
+      review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview), notes: rows(notesReview) },
     };
   }
   if (pathname === '/api/protected-fact/suggest') {

@@ -435,11 +435,13 @@ describe('goal-progress component', () => {
     expect(html).not.toContain('gp-bar');                 // a 0% bar reads as failure for an unmodeled goal
     expect(html).toContain('tracked via');
     expect(html).toContain('Northwind');
-    expect(html).toContain('no milestones modeled yet');
+    expect(html).toContain('no milestones yet');
   });
-  it('nudges to link a project when none delivers the goal', () => {
+  it('nudges to link a project (with an inline on-ramp) when none delivers the goal', () => {
     const html = REGISTRY['goal-progress'].render({ label: 'Goal', status: 'active' }, { goal_milestones: [], edges: [] }, { esc, trunc: (s) => s });
     expect(html).toContain('not yet linked to a delivering project');
+    expect(html).toContain('gp-onramp');                          // actionable, not a dead-end status line
+    expect(html).toContain('data-gp-action="link-project"');
   });
   it('renders clickable blocker chips from goal_blockers', () => {
     const data = { goal_milestones: [], goal_blockers: [{ id: 'b1', name: 'X' }] };

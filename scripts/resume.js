@@ -102,6 +102,22 @@ async function main() {
       for (const r of blocked) console.log(`   • ${toPlain(r.get('a'))} ← blocked by ${toPlain(r.get('b'))}`);
     }
 
+    // Notes awaiting curation — raw/cued notes jotted on nodes for a later pass to act on.
+    // Surfacing them here closes the loop (the Studio could write them but nothing read them).
+    const notes = await run(
+      driver,
+      `MATCH (nt:Note)-[:ABOUT]->(n) WHERE nt.state IN ['raw','cued']
+       RETURN nt.text AS text, nt.state AS state, coalesce(n.name,n.title,n.summary,n.id) AS anchor
+       ORDER BY nt.created_at DESC LIMIT 12`
+    );
+    if (notes.length) {
+      console.log('\n🗒️  Notes awaiting review');
+      for (const r of notes) {
+        const t = toPlain(r.get('text')) || '';
+        console.log(`   • [${toPlain(r.get('state'))}] ${toPlain(r.get('anchor'))} — ${t.length > 70 ? t.slice(0, 69) + '…' : t}`);
+      }
+    }
+
     console.log('\n' + '─'.repeat(48));
     console.log('Tip: `npm run lint:graph` to check integrity · `npm run insight` to capture a new conclusion.\n');
   } finally {

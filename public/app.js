@@ -812,6 +812,20 @@ function handleCard(action) {
     if (rx) { e.preventDefault(); removeEdge(rx.dataset.unrel, rx.dataset.name); return; }
     const nav = e.target.closest('.nav-node');
     if (nav) { e.preventDefault(); selectByIdOrName(nav.dataset.id, nav.dataset.name); return; }
+    const gp = e.target.closest('[data-gp-action="link-project"]');
+    if (gp) {
+      // Goal degraded-state on-ramp: open the "Edit attributes" section and focus the existing
+      // "Achieved by" relate picker — reuse the field machinery, don't build a parallel one.
+      e.preventDefault();
+      const host = gp.closest('#i-components, #r-components') || document;
+      const sec = host.querySelector('.insp-sec-fields') || document.querySelector('.insp-sec-fields');
+      if (sec) {
+        if (sec.classList.contains('collapsed')) { secToggle(sec.dataset.sec, sec.dataset.defcollapsed === '1'); sec.classList.remove('collapsed'); }
+        const input = sec.querySelector('.ifld-input');
+        if (input) { input.scrollIntoView({ block: 'center', behavior: 'smooth' }); input.focus(); }
+      }
+      return;
+    }
     const rs = e.target.closest('[data-resurface]');
     if (rs) { e.preventDefault(); handleResurface(rs.dataset.resurface); return; }
     const card = e.target.closest('[data-card]');
@@ -2551,21 +2565,42 @@ function paintHealth(h) {
   document.getElementById('s-total').textContent = h.total;
   document.getElementById('s-index').textContent = h.indexed;
   document.getElementById('s-review').textContent = (h.orphans || 0) + (h.superseded || 0);
-  if (h.newest) {
-    document.getElementById('dock-resume').hidden = false;
-    // Stale-memory reminder: if the graph hasn't had a full sync in >24h, the agent's
-    // cross-session memory is drifting from the work. This is a REMINDER, not a button —
-    // a full sync (re-ingest docs, capture insights, lint, back up) is agent work, so
-    // surfacing the staleness + the command is the honest affordance.
-    let staleChip = '';
-    const since = h.last_sync ? Math.round((Date.now() - Date.parse(String(h.last_sync))) / 36e5) : null;
-    if (since != null && since > 24) {
-      const ago = since >= 48 ? `${Math.round(since / 24)}d` : `${since}h`;
-      staleChip = `<div class="dk-stale" title="Run the graph-sync skill to re-ingest docs, capture insights, lint, and back up">⚠️ Memory ${ago} stale — run <code>graph-sync</code></div>`;
-    }
-    document.getElementById('dock-resume-v').innerHTML =
-      `Newest insight: <b>${esc(trunc(h.newest.name, 44))}</b>${h.newest.created_at ? ' — ' + h.newest.created_at.slice(0, 10) : ''}` + staleChip;
+  healthData = h;
+  renderResumeBrief();
+}
+
+// The "where were we" re-entry brief: a one-glance summary at the top of the dock, composed from
+// data already on the client — /api/health (freshness + newest) + /api/pulse (live goals, due,
+// open notes). No /api/resume endpoint: that would re-run queries pulse already issues. Renders
+// progressively — health paints it on boot, pulse enriches the counts when it arrives.
+function renderResumeBrief() {
+  const h = healthData; if (!h) return;
+  const el = document.getElementById('dock-resume-v'); if (!el) return;
+  document.getElementById('dock-resume').hidden = false;
+  const p = dockData;
+  // Actionable stat chips (only when pulse has loaded): goals + undated, due, open notes.
+  const stats = [];
+  if (p) {
+    const goals = p.goals || [];
+    const undated = goals.filter((g) => !g.target_date).length;
+    const due = (p.due || []).length;
+    const notes = (p.review && p.review.notes ? p.review.notes.length : 0);
+    if (goals.length) stats.push(`<span class="br-stat">🎯 ${goals.length} goal${goals.length !== 1 ? 's' : ''}${undated ? ` · ${undated} undated` : ''}</span>`);
+    if (due) stats.push(`<span class="br-stat warn">⏰ ${due} due</span>`);
+    if (notes) stats.push(`<span class="br-stat warn">🗒️ ${notes} note${notes !== 1 ? 's' : ''}</span>`);
   }
+  const newest = h.newest
+    ? `<div class="br-newest">Newest: <b>${esc(trunc(h.newest.name, 40))}</b>${h.newest.created_at ? ' · ' + h.newest.created_at.slice(0, 10) : ''}</div>`
+    : '';
+  // Stale-memory reminder (>24h since last full sync). A REMINDER, not a button — a full sync
+  // (re-ingest docs, capture insights, lint, back up) is agent work; surfacing it is the honest move.
+  let staleChip = '';
+  const since = h.last_sync ? Math.round((Date.now() - Date.parse(String(h.last_sync))) / 36e5) : null;
+  if (since != null && since > 24) {
+    const ago = since >= 48 ? `${Math.round(since / 24)}d` : `${since}h`;
+    staleChip = `<div class="dk-stale" title="Run the graph-sync skill to re-ingest docs, capture insights, lint, and back up">⚠️ Memory ${ago} stale — run <code>graph-sync</code></div>`;
+  }
+  el.innerHTML = (stats.length ? `<div class="br-stats">${stats.join('')}</div>` : '') + newest + staleChip;
 }
 const labelPlural = (d) => (d === 'Person' ? 'People' : d + 's');
 // Repaint + sync both filter surfaces (left shortcut chips, right HUD panel) to state.
@@ -2743,6 +2778,7 @@ const DOCK_COLLAPSE_KEY = 'scatterbrained:dock:collapsed';
 let dockCollapsed = new Set((() => { try { return JSON.parse(localStorage.getItem(DOCK_COLLAPSE_KEY) || '[]'); } catch { return []; } })());
 const dockShowAll = new Set();
 let dockData = null;
+let healthData = null;   // stashed /api/health for the resume brief (composed with pulse, no new endpoint)
 function dockSection(key, icon, title, count, bodyHtml) {
   const collapsed = dockCollapsed.has(key) ? ' collapsed' : '';
   const n = count != null ? ` <span class="dk-n">${count}</span>` : '';
@@ -2785,8 +2821,15 @@ function renderDock(p) {
   const nowBody = `<span class="dk-pill"><span class="dot-now">●</span> ${(p.projects || []).length} now</span><span class="dk-pill"><span class="dot-next">●</span> ${(p.next || []).length} next</span>` +
     (p.blocked || []).map((b) => item(b.name, `<div class="dk-meta">blocked by ${esc(trunc(b.blocker, 22))}</div>`, 'warn')).join('');
   const newItems = (p.whatsNew || []).map((w) => item(w.name, `<div class="dk-meta">${w.created_at ? w.created_at.slice(0, 10) : ''}${(w.tags && w.tags.length) ? ' · ' + esc(w.tags[0]) : ''}</div>`));
-  const rv = p.review || { superseded: [], lowConfidence: [], orphans: [], aliasDrift: [], protectedFacts: [] };
+  const rv = p.review || { superseded: [], lowConfidence: [], orphans: [], aliasDrift: [], protectedFacts: [], notes: [] };
+  // Open Notes (raw/cued) first — they're explicit asks left for the next agent/session, the
+  // most actionable thing in the queue. The row opens the note's anchor node (not the note).
+  const noteRows = (rv.notes || []).map((nt) => {
+    const open = `onclick="__open(${JSON.stringify(nt.anchor_id || '').replace(/"/g, '&quot;')},${JSON.stringify(nt.anchor_name || '').replace(/"/g, '&quot;')},${JSON.stringify(nt.anchor_label || '')})"`;
+    return `<div class="dk-item warn" role="button" tabindex="0" ${open}><span class="dk-badge">note · ${esc(nt.state)}</span> ${esc(trunc(nt.anchor_name || '(unnamed)', 40))}<div class="dk-meta">“${esc(trunc(nt.text || '', 46))}”</div></div>`;
+  });
   const reviewItems = [
+    ...noteRows,
     ...(rv.protectedFacts || []).map((k) => item(k.target_name, `<span class="dk-badge">fact ${esc(k.pending_status)}</span><div class="dk-meta">“${esc(trunc(k.value, 24))}”${k.pending_new ? ' → “' + esc(trunc(k.pending_new, 18)) + '”' : ''}</div>`, 'warn')),
     ...(rv.aliasDrift || []).map((d) => item(d.name, `<span class="dk-badge">renamed · ${esc(d.label)}</span>${d.former_name ? `<div class="dk-meta">was “${esc(trunc(d.former_name, 28))}”</div>` : ''}`, 'warn')),
     ...rv.lowConfidence.map((r) => item(r.name, `<div class="dk-meta">${esc(r.confidence)} confidence</div>`, 'warn')),
@@ -2801,6 +2844,7 @@ function renderDock(p) {
     dockSection('review', 'alert-triangle', 'Needs review', reviewItems.length, reviewItems.length ? cappedItems('review', reviewItems, 8) : empty('all clean')),
   ].join('');
   wireDock();
+  renderResumeBrief();   // enrich the re-entry brief with pulse counts now that they've loaded
 }
 function wireDock() {
   document.querySelectorAll('#dock-scroll .dk-grp').forEach((grp) => {
