@@ -2397,8 +2397,10 @@ function createPicker({ input, menu, chips, onPick, getExclude, filterLabel }) {
   window.__onSelectNode = (id) => { if (!panel.hidden && id !== boundId) collapse(); };
 })();
 
-// ── Calendar lens (#25 P1): a read-only month view over the graph's record + intention
-// dates — created_at activity heatmap, dots for valid_until expiries + Goal target dates.
+// ── Activity heatmap (#25 P1; demoted from "Calendar"): a read-only month view over the graph's
+// record time — created_at activity heatmap, with dots for valid_until expiries + Goal target dates.
+// The forward-looking intention clock (what's due) now lives in the dock's Due/Overdue rail; this
+// surface is backward-looking activity, hence the demotion (renamed + moved last in the nav).
 // Click a day → its items; click an item → open it in the graph. A READ lens, no writes.
 (function initCalendar() {
   const overlay = document.getElementById('calendar');
@@ -2820,8 +2822,6 @@ function renderDock(p) {
     const open = `onclick="__open(${JSON.stringify(d.id || '').replace(/"/g, '&quot;')},${JSON.stringify(d.name || '').replace(/"/g, '&quot;')},${JSON.stringify(d.label || '')})"`;
     return `<div class="dk-item ${overdue ? 'warn' : ''}" role="button" tabindex="0" ${open}>${esc(trunc(d.name || '(unnamed)', 48))}<div class="dk-meta">${esc(d.sub || '')}${d.label ? ' · ' + esc(d.label) : ''}</div></div>`;
   });
-  const nowBody = `<span class="dk-pill"><span class="dot-now">●</span> ${(p.projects || []).length} now</span><span class="dk-pill"><span class="dot-next">●</span> ${(p.next || []).length} next</span>` +
-    (p.blocked || []).map((b) => item(b.name, `<div class="dk-meta">blocked by ${esc(trunc(b.blocker, 22))}</div>`, 'warn')).join('');
   const newItems = (p.whatsNew || []).map((w) => item(w.name, `<div class="dk-meta">${w.created_at ? w.created_at.slice(0, 10) : ''}${(w.tags && w.tags.length) ? ' · ' + esc(w.tags[0]) : ''}</div>`));
   const rv = p.review || { superseded: [], lowConfidence: [], orphans: [], aliasDrift: [], protectedFacts: [], notes: [] };
   // Open Notes (raw/cued) first — they're explicit asks left for the next agent/session, the
@@ -2841,7 +2841,6 @@ function renderDock(p) {
   document.getElementById('dock-scroll').innerHTML = [
     dockSection('goals', 'target', 'Goals', (p.goals || []).length, goalItems.length ? cappedItems('goals', goalItems, 8) : empty('No goals yet — define one to track it here')),
     dockSection('due', 'calendar-clock', 'Due / Overdue', dueItems.length, dueItems.length ? cappedItems('due', dueItems, 8) : empty('nothing due — set target dates on goals')),
-    dockSection('now', 'flame', 'Now · Next · Blocked', null, nowBody),
     dockSection('new', 'sparkles', "What's new", (p.whatsNew || []).length, newItems.length ? cappedItems('new', newItems, 6) : empty('no insights')),
     dockSection('review', 'alert-triangle', 'Needs review', reviewItems.length, reviewItems.length ? cappedItems('review', reviewItems, 8) : empty('all clean')),
   ].join('');

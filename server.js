@@ -191,6 +191,7 @@ const Q_SEARCH = `
   MATCH (n)
   WHERE toLower(coalesce(n.name, n.title, n.summary, '')) CONTAINS toLower($q)
      OR toLower(coalesce(n.description, n.full_text, '')) CONTAINS toLower($q)
+     OR toLower(coalesce(n.former_name, '')) CONTAINS toLower($q)
   WITH n, COUNT { (n)--() } AS degree
   RETURN elementId(n) AS id, ${PRIMARY_LABEL} AS label,
          coalesce(n.name, n.title, n.summary, n.id) AS name,
@@ -247,20 +248,8 @@ const Q_GOALS = `
          left(coalesce(g.description,''), 200) AS desc, projects[0..5] AS projects
   ORDER BY CASE g.timeframe WHEN '30_days' THEN 0 WHEN 'short_term' THEN 1 WHEN '90_days' THEN 2
                             WHEN '1_year' THEN 3 WHEN 'long_term' THEN 5 ELSE 4 END`;
-const Q_PROJECTS = `
-  MATCH (p:Project)
-  RETURN p.name AS name, coalesce(p.status,'') AS status, coalesce(p.domain,'') AS domain,
-         left(coalesce(p.description,''), 140) AS desc
-  ORDER BY p.name`;
-const Q_BLOCKED = `
-  MATCH (a)-[:BLOCKED_BY]->(b)
-  RETURN coalesce(a.name,a.title) AS name, coalesce(b.name,b.title) AS blocker,
-         head([l IN labels(a) WHERE l <> 'Embeddable'] + labels(a)) AS label LIMIT 12`;
-const Q_NEXT = `
-  MATCH (i:Idea)
-  WHERE i.valid_until IS NULL AND toLower(coalesce(i.status,'')) =~ '.*(open|queued|next|planned|backlog).*'
-  RETURN i.name AS name, coalesce(i.status,'open') AS status, left(coalesce(i.description,''),120) AS desc
-  LIMIT 12`;
+// (Q_PROJECTS / Q_BLOCKED / Q_NEXT removed — the dock's "Now · Next · Blocked" section was
+//  retired as redundant with the command bar, which surfaces next/blocked on demand via INTENT_Q.)
 const Q_WHATSNEW = `
   MATCH (n:Insight) WHERE n.created_at IS NOT NULL AND n.valid_until IS NULL
   RETURN coalesce(n.name, n.title, n.summary, left(n.full_text,90)) AS name,
@@ -385,15 +374,17 @@ async function api(pathname, params) {
     return { ...h, orphans, byLabel, newest, last_sync };
   }
   if (pathname === '/api/pulse') {
-    const [goals, projects, blocked, next, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview, notesReview] = await Promise.all([
-      run(driver, Q_GOALS), run(driver, Q_PROJECTS), run(driver, Q_BLOCKED), run(driver, Q_NEXT),
+    // 'now/next/blocked' dropped from the dock (the command bar covers next/blocked on demand),
+    // so the pulse no longer computes Q_PROJECTS/Q_BLOCKED/Q_NEXT.
+    const [goals, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview, notesReview] = await Promise.all([
+      run(driver, Q_GOALS),
       run(driver, QI_DUE),
       run(driver, Q_WHATSNEW), run(driver, Q_SUPERSEDED), run(driver, Q_LOWCONF), run(driver, Q_ORPHAN_LIST),
       run(driver, Q_ALIAS_DRIFT, { aliasLabels: ALIAS_LABELS, aliasNameFields: ALIAS_NAME_FIELDS, brandRe: brandRegexCypher() }),
       run(driver, Q_PROTECTED_FACT_REVIEW), run(driver, Q_NOTES_REVIEW),
     ]);
     return {
-      goals: rows(goals), projects: rows(projects), blocked: rows(blocked), next: rows(next),
+      goals: rows(goals),
       due: rows(due),
       whatsNew: rows(whatsNew),
       review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview), notes: rows(notesReview) },
