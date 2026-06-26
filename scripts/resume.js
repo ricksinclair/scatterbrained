@@ -106,7 +106,8 @@ async function main() {
     // Surfacing them here closes the loop (the Studio could write them but nothing read them).
     const notes = await run(
       driver,
-      `MATCH (nt:Note)-[:ABOUT]->(n) WHERE nt.state IN ['raw','cued']
+      `MATCH (nt:Note)-[:ABOUT]->(n)
+       WHERE nt.state IN ['raw','cued'] AND NOT (nt)-[:PART_OF]->(:Review)
        RETURN nt.text AS text, nt.state AS state, coalesce(n.name,n.title,n.summary,n.id) AS anchor
        ORDER BY nt.created_at DESC LIMIT 12`
     );

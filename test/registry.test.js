@@ -90,7 +90,7 @@ describe('rankEdges — actionable relations before generic references', () => {
 });
 
 describe('view-aware composition', () => {
-  const node = { label: 'Project', name: 'Northwind', edgeCount: 2 };
+  const node = { label: 'Project', name: 'Acme', edgeCount: 2 };
   const data = { edges: [
     { type: 'CONTAINS', dir: 'out', name: 'Governance', label: 'Idea' },
     { type: 'ACHIEVED_BY', dir: 'in', name: 'Ship MVP', label: 'Goal' },
@@ -413,7 +413,7 @@ describe('goal-progress component', () => {
       { id: 'm1', name: 'A', status: 'validated' },   // done
       { id: 'm2', name: 'B', status: 'exploring' },   // active
       { id: 'm3', name: 'C', status: 'deferred' },    // blocked
-    ], edges: [{ type: 'ACHIEVED_BY', dir: 'out', id: 'p1', name: 'Northwind' }] };
+    ], edges: [{ type: 'ACHIEVED_BY', dir: 'out', id: 'p1', name: 'Acme' }] };
     const html = REGISTRY['goal-progress'].render({ label: 'Goal' }, data, { esc, trunc: (s) => s });
     expect(html).toContain('33%');                       // 1 of 3 done
     expect(html).toContain('1/3 milestones');
@@ -430,11 +430,11 @@ describe('goal-progress component', () => {
     expect(html).toContain('50%');
   });
   it('shows the on-ramp (no % bar) when a project is linked but has no milestones', () => {
-    const data = { goal_milestones: [], edges: [{ type: 'ACHIEVED_BY', dir: 'out', id: 'p1', name: 'Northwind' }] };
+    const data = { goal_milestones: [], edges: [{ type: 'ACHIEVED_BY', dir: 'out', id: 'p1', name: 'Acme' }] };
     const html = REGISTRY['goal-progress'].render({ label: 'Goal', status: 'active' }, data, { esc, trunc: (s) => s });
     expect(html).not.toContain('gp-bar');                 // a 0% bar reads as failure for an unmodeled goal
     expect(html).toContain('tracked via');
-    expect(html).toContain('Northwind');
+    expect(html).toContain('Acme');
     expect(html).toContain('no milestones yet');
   });
   it('nudges to link a project (with an inline on-ramp) when none delivers the goal', () => {
@@ -561,7 +561,7 @@ describe('relations component (Phase 0 render)', () => {
     degree: 3, relTypes: ['ABOUT', 'INFORMS'],
     edges: [
       { type: 'ABOUT', dir: 'out', label: 'Person', name: 'Priya', id: 'p1', rel_id: 'r1' },
-      { type: 'INFORMS', dir: 'out', label: 'Project', name: 'Northwind', id: 'pr1', rel_id: 'r2' },
+      { type: 'INFORMS', dir: 'out', label: 'Project', name: 'Acme', id: 'pr1', rel_id: 'r2' },
       { type: 'ABOUT', dir: 'out', label: 'Idea', name: 'NoId', id: 'n9' },   // no rel_id → no ×
     ],
   };

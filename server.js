@@ -304,7 +304,8 @@ const Q_PROTECTED_FACT_REVIEW = `
 // pass cues/addresses it. Until now the inspector could WRITE notes but nothing surfaced the
 // open ones, so they rotted. Surface raw/cued notes in the dock + resume so the loop closes.
 const Q_NOTES_REVIEW = `
-  MATCH (nt:Note)-[:ABOUT]->(n) WHERE nt.state IN ['raw', 'cued']
+  MATCH (nt:Note)-[:ABOUT]->(n)
+  WHERE nt.state IN ['raw', 'cued'] AND NOT (nt)-[:PART_OF]->(:Review)
   RETURN nt.id AS id, nt.text AS text, nt.state AS state, toString(nt.created_at) AS created_at,
          coalesce(n.name, n.title, n.summary, n.id) AS anchor_name,
          head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS anchor_label,

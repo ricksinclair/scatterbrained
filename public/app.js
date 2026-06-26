@@ -388,7 +388,7 @@ function onHover(node) {
   const tip = document.getElementById('tip');
   if (node) {
     tip.hidden = false;
-    tip.innerHTML = `<div class="tt">${node.label}${node.embeddable ? ' · indexed' : ''}</div><div class="tn">${esc(node.name)}</div><div class="ts" style="color:${node.stale ? 'var(--warn)' : 'var(--ok)'}">${statusText(node)}</div>`;
+    tip.innerHTML = `<div class="tt">${esc(node.label)}${node.embeddable ? ' · indexed' : ''}</div><div class="tn">${esc(node.name)}</div><div class="ts" style="color:${node.stale ? 'var(--warn)' : 'var(--ok)'}">${esc(statusText(node))}</div>`;
     positionTip();
   } else tip.hidden = true;
 }
