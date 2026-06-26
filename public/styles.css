@@ -432,6 +432,22 @@ body.dock-closed .dock { transform: translateX(-264px); }
 .gp-blocker:hover { color: var(--ink); }
 .gp-degraded { color: var(--ink-faint); font-style: italic; }
 .gp-proj { border-bottom: 0; }
+/* first-run onboarding (#6) — bootstrap a root owner on an empty graph */
+.onboard { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.62); backdrop-filter: blur(3px); }
+.onboard[hidden] { display: none; }
+.ob-card { width: min(440px, 92vw); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 28px 26px; box-shadow: 0 30px 80px -30px rgba(0,0,0,0.7); }
+.ob-card h2 { margin: 0 0 10px; font-size: 20px; color: var(--ink); }
+.ob-card p { margin: 0 0 16px; color: var(--ink-dim); font-size: 13.5px; line-height: 1.55; }
+.ob-card #ob-name { width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface-2, rgba(0,0,0,0.2)); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; margin-bottom: 14px; }
+.ob-card #ob-name:focus { border-color: var(--accent); outline: none; }
+.ob-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.ob-go, .ob-alt { font: inherit; font-size: 13px; font-weight: 600; padding: 9px 16px; border-radius: 999px; cursor: pointer; }
+.ob-go { background: var(--accent); color: #16130d; border: 0; }
+.ob-go:hover { filter: brightness(1.07); }
+.ob-alt { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+.ob-alt:hover { border-color: var(--accent); }
+.ob-go:disabled, .ob-alt:disabled { opacity: 0.5; cursor: default; }
+.ob-msg { min-height: 1em; margin: 12px 0 0; font-size: 12px; color: var(--warn, #e5704b); }
 .c-keyvalue { font-size: 11px; }
 .c-keyvalue .kv { display: grid; grid-template-columns: minmax(70px, 32%) 1fr; gap: 10px; padding: 5px 0; border-top: 0.5px solid var(--line); align-items: start; }
 .c-keyvalue .kk { color: var(--ink-faint); font-family: var(--mono, ui-monospace, monospace); word-break: break-word; }

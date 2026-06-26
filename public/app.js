@@ -185,7 +185,11 @@ async function boot() {
       fetch('/api/health').then((r) => r.json()),
     ]);
   } catch (e) { return fail(e); }
-  if (!g.nodes || !g.nodes.length) return fail(new Error('The graph returned no nodes.'));
+  if (!g.nodes || !g.nodes.length) {
+    // An empty graph isn't a failure — it's a first run. Offer onboarding instead of erroring.
+    if (h && h.total === 0) { document.getElementById('boot').classList.add('gone'); return showOnboarding(); }
+    return fail(new Error('The graph returned no nodes.'));
+  }
   document.getElementById('conn').textContent = `${window.location.host} · ${h.total} memories`;
   ingest(g);
   initGraph();
@@ -193,6 +197,31 @@ async function boot() {
   buildLenses();
   loadDock();
   document.getElementById('boot').classList.add('gone');
+}
+
+// First-run onboarding (#6): an empty graph gets a welcome that bootstraps a root owner node, so
+// the constellation starts connected instead of as a void. Creating the root re-boots into the app.
+function showOnboarding() {
+  const ov = document.getElementById('onboard');
+  if (!ov) return;
+  ov.hidden = false;
+  const nameIn = document.getElementById('ob-name');
+  const msg = document.getElementById('ob-msg');
+  const btns = ov.querySelectorAll('button');
+  nameIn.focus();
+  async function submit(kind) {
+    const name = nameIn.value.trim();
+    if (!name) { nameIn.focus(); return; }
+    btns.forEach((b) => (b.disabled = true)); msg.textContent = 'creating…';
+    try {
+      const r = await fetch('/api/root', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, name }) }).then((x) => x.json());
+      if (r.error) { msg.textContent = r.error; btns.forEach((b) => (b.disabled = false)); return; }
+      ov.hidden = true; boot();                    // reload — the root is now in the graph
+    } catch (e) { msg.textContent = 'could not reach the server'; btns.forEach((b) => (b.disabled = false)); }
+  }
+  document.getElementById('ob-person').onclick = () => submit('person');
+  document.getElementById('ob-org').onclick = () => submit('org');
+  nameIn.onkeydown = (e) => { if (e.key === 'Enter') submit('person'); };
 }
 
 function ingest(g) {

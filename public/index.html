@@ -232,6 +232,19 @@
     </div>
   </div>
 
+  <div class="onboard" id="onboard" hidden role="dialog" aria-modal="true" aria-labelledby="ob-title">
+    <div class="ob-card">
+      <h2 id="ob-title">Welcome to Scatterbrained</h2>
+      <p>Your graph is empty. Start with a <strong>root</strong> — you, or your organization — so everything you add hangs off a hub instead of drifting as disconnected islands.</p>
+      <input id="ob-name" type="text" placeholder="Your name, or your organization's name" aria-label="root owner name" autocomplete="off" />
+      <div class="ob-actions">
+        <button id="ob-person" class="ob-go" type="button">This is me</button>
+        <button id="ob-org" class="ob-alt" type="button">It's an organization</button>
+      </div>
+      <p id="ob-msg" class="ob-msg" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
   <div class="filereader" id="filereader" hidden>
     <div class="fr-panel">
       <div class="fr-head">

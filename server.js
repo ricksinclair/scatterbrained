@@ -744,6 +744,24 @@ async function setSchedule({ id, kind, when } = {}) {
   return recs.length ? { ok: true, kind, value: toPlain(recs[0].toObject()).value } : { error: 'node not found' };
 }
 
+// First-run onboarding (#6): bootstrap ONE root owner node on a fresh/empty graph so every later
+// Project/Insight has a hub to hang off instead of accumulating as disconnected islands. The single
+// sanctioned node-authoring path in the UI — MERGE-keyed (can't duplicate), is_self:true marks the
+// owner. kind is a closed choice (person|org); name is the only free text and is just a node key.
+async function createRoot({ kind, name } = {}) {
+  const nm = String(name || '').trim();
+  if (!nm) return { error: 'name required' };
+  const org = kind === 'org' || kind === 'organization';
+  const recs = await run(driver,
+    org
+      ? `MERGE (o:Organization {name: $name}) ON CREATE SET o.created_at = datetime() SET o.is_self = true
+         RETURN elementId(o) AS id, o.name AS name`
+      : `MERGE (p:Person {name: $name}) ON CREATE SET p.created_at = datetime() SET p.is_self = true
+         RETURN elementId(p) AS id, p.name AS name`,
+    { name: nm });
+  return recs.length ? { ok: true, root: toPlain(recs[0].toObject()) } : { error: 'could not create root' };
+}
+
 // ── Protected key-facts (#23) ────────────────────────────────────────────────
 // First-class ProtectedFact nodes ABOUT a target: a verified number/$amount/date/citation that a
 // rewrite must HONOR. (1) suggest deterministic candidates to pin; (2) pin/unpin (unpin =
@@ -1341,6 +1359,14 @@ const server = http.createServer(async (req, res) => {
       let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/schedule' ? await setSchedule(p) : await setGoalTargetDate(p);
+      if (!result.error) broadcast('graph-changed');
+      return send(res, result.error ? 400 : 200, result);
+    }
+    // First-run onboarding (#6): bootstrap a single root owner node on an empty graph.
+    if (url.pathname === '/api/root' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 4096); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await createRoot(p);
       if (!result.error) broadcast('graph-changed');
       return send(res, result.error ? 400 : 200, result);
     }
