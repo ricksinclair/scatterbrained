@@ -9,7 +9,7 @@
 //   node scripts/digest.js --project Northwind
 //
 // Schedule the PUSH cadence (examples — NOT installed automatically; your ops call):
-//   • cron (weekdays 8am):  0 8 * * 1-5  cd ~/Projects/rick-knowledge && npm run -s digest
+//   • cron (weekdays 8am):  0 8 * * 1-5  cd ~/Projects/scatterbrained && npm run -s digest
 //   • Claude Code:          the `/schedule` skill, or it already prints inside `npm run resume`.
 //
 // Never throws / always exits 0 — a digest must not break a cron or a session start.
