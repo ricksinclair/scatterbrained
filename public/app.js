@@ -2313,7 +2313,8 @@ function createPicker({ input, menu, chips, onPick, getExclude, filterLabel }) {
       menu.innerHTML = options.map((o, i) => {
         const cls = 'al-opt' + (i === active ? ' active' : '') + (o.superseded ? ' al-opt-superseded' : '');
         const label = o.label ? `<span class="al-opt-label">${esc(o.label)}</span>` : '';
-        return `<div class="${cls}" role="option" data-i="${i}"><span class="al-opt-name">${esc(o.name)}</span>${label}</div>`;
+        const was = o.former ? `<span class="al-opt-was">was ${esc(o.former)}</span>` : '';
+        return `<div class="${cls}" role="option" data-i="${i}"><span class="al-opt-name">${esc(o.name)}</span>${label}${was}</div>`;
       }).join('');
       menu.querySelectorAll('.al-opt').forEach((el) => { el.onmousedown = (e) => { e.preventDefault(); pick(optionAt(options, +el.dataset.i)); }; });
     }
@@ -2745,7 +2746,16 @@ function runSearch(q) {
     results = results || [];
     searchHits = new Set(results.map((r) => r.id));              // graph highlight
     document.getElementById('qcount').textContent = results.length ? `${results.length} found` : 'no matches';
-    renderResultsPanel(`Matches for “${q}” · ${results.length}`, results, (r) => (r.superseded ? 'superseded' : ''));  // clickable list
+    renderResultsPanel(`Matches for “${q}” · ${results.length}`, results, (r) => {
+      // "was <old name>" when this result surfaced because the query matched its former_name
+      // (and not the current name) — explains an otherwise-puzzling alias match.
+      const ql = q.toLowerCase(), nm = (r.name || '').toLowerCase();
+      const sub = [];
+      if (r.former_name && r.former_name.toLowerCase().includes(ql) && !nm.includes(ql)) sub.push('was ' + r.former_name);
+      if (r.superseded) sub.push('superseded');
+      return sub.join(' · ');
+    });  // clickable list
+
     poke();
   }).catch(() => {});
 }

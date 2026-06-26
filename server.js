@@ -195,6 +195,7 @@ const Q_SEARCH = `
   WITH n, COUNT { (n)--() } AS degree
   RETURN elementId(n) AS id, ${PRIMARY_LABEL} AS label,
          coalesce(n.name, n.title, n.summary, n.id) AS name,
+         n.former_name AS former_name,
          (n.valid_until IS NOT NULL) AS superseded
   ORDER BY degree DESC LIMIT 12`;
 

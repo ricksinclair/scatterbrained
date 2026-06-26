@@ -332,6 +332,7 @@ body.dock-closed .dock { transform: translateX(-264px); }
 .al-opt:hover, .al-opt.active { background: var(--surface-hi, rgba(255,255,255,0.08)); }
 .al-opt .al-opt-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .al-opt .al-opt-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); background: var(--surface, rgba(0,0,0,0.25)); border-radius: 9px; padding: 1px 7px; flex: none; }
+.al-opt .al-opt-was { font-size: 9.5px; font-style: italic; color: var(--ink-faint); flex: none; }
 .al-opt.al-opt-create { color: var(--accent); }
 .al-opt.al-opt-superseded .al-opt-name { color: var(--ink-dim); text-decoration: line-through; }
 .al-menu-empty { padding: 6px 8px; font-size: 11px; color: var(--ink-faint); }
