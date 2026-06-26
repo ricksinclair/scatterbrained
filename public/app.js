@@ -647,6 +647,7 @@ function renderFieldRows() {
     const members = membersForField(edges, f);
     const row = document.createElement('div');
     row.className = 'ifld';
+    row.dataset.fieldKey = f.key;   // lets callers target a specific field's picker (e.g. the goal on-ramp) by key, not render order
     row.innerHTML =
       `<div class="ifld-h">${esc(f.label)}</div>` +
       `<div class="ifld-members">${members.map((m) =>
@@ -821,7 +822,8 @@ function handleCard(action) {
       const sec = host.querySelector('.insp-sec-fields') || document.querySelector('.insp-sec-fields');
       if (sec) {
         if (sec.classList.contains('collapsed')) { secToggle(sec.dataset.sec, sec.dataset.defcollapsed === '1'); sec.classList.remove('collapsed'); }
-        const input = sec.querySelector('.ifld-input');
+        // Focus the "Achieved by" (goal-project) picker by KEY, not render order; fall back to the first.
+        const input = sec.querySelector('.ifld[data-field-key="goal-project"] .ifld-input') || sec.querySelector('.ifld-input');
         if (input) { input.scrollIntoView({ block: 'center', behavior: 'smooth' }); input.focus(); }
       }
       return;
