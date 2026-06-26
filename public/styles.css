@@ -121,6 +121,7 @@ body.dock-closed .dock { transform: translateX(-264px); }
 .dk-more { background: none; border: none; color: var(--accent); font-size: 11px; font-family: "JetBrains Mono", ui-monospace, monospace; cursor: pointer; padding: 7px 0 2px; }
 .dk-more:hover { text-decoration: underline; }
 .dk-grp.sec-goals > .dk-h i { color: var(--accent); }
+.dk-grp.sec-due > .dk-h i { color: var(--warn); }
 .dk-grp.sec-now > .dk-h i { color: var(--ok); }
 .dk-grp.sec-new > .dk-h i { color: var(--warn); }
 .dk-grp.sec-review > .dk-h i { color: var(--warn); }
@@ -128,6 +129,9 @@ body.dock-closed .dock { transform: translateX(-264px); }
 .dk-item:hover { color: var(--accent); }
 .dk-item:first-of-type { border-top: none; }
 .dk-item .dk-meta { font-size: 11px; color: var(--ink-dim); font-family: ui-monospace, monospace; margin-top: 3px; line-height: 1.4; }
+.dk-meta .dk-nudge { color: var(--warn); }
+.dk-stale { margin-top: 8px; font-size: 11.5px; color: var(--warn); line-height: 1.45; }
+.dk-stale code { font-family: ui-monospace, monospace; background: var(--surface-2); padding: 0 5px; border-radius: 5px; }
 .dk-badge { font-size: 10px; padding: 1px 7px; border-radius: 8px; background: var(--surface-2); color: var(--ink-dim); margin-left: 5px; }
 .dk-item.warn { color: var(--warn); }
 .dk-pill { display: inline-flex; gap: 6px; align-items: center; font-size: 12.5px; padding: 5px 12px; border-radius: 12px; background: var(--surface-2); border: 0.5px solid var(--line); margin: 0 6px 6px 0; color: var(--ink); font-weight: 500; }

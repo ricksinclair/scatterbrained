@@ -373,14 +373,16 @@ async function api(pathname, params) {
     return { ...h, orphans, byLabel, newest, last_sync };
   }
   if (pathname === '/api/pulse') {
-    const [goals, projects, blocked, next, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview] = await Promise.all([
+    const [goals, projects, blocked, next, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview] = await Promise.all([
       run(driver, Q_GOALS), run(driver, Q_PROJECTS), run(driver, Q_BLOCKED), run(driver, Q_NEXT),
+      run(driver, QI_DUE),
       run(driver, Q_WHATSNEW), run(driver, Q_SUPERSEDED), run(driver, Q_LOWCONF), run(driver, Q_ORPHAN_LIST),
       run(driver, Q_ALIAS_DRIFT, { aliasLabels: ALIAS_LABELS, aliasNameFields: ALIAS_NAME_FIELDS, brandRe: brandRegexCypher() }),
       run(driver, Q_PROTECTED_FACT_REVIEW),
     ]);
     return {
       goals: rows(goals), projects: rows(projects), blocked: rows(blocked), next: rows(next),
+      due: rows(due),
       whatsNew: rows(whatsNew),
       review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview) },
     };

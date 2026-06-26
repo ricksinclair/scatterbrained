@@ -2553,7 +2553,18 @@ function paintHealth(h) {
   document.getElementById('s-review').textContent = (h.orphans || 0) + (h.superseded || 0);
   if (h.newest) {
     document.getElementById('dock-resume').hidden = false;
-    document.getElementById('dock-resume-v').innerHTML = `Newest insight: <b>${esc(trunc(h.newest.name, 44))}</b>${h.newest.created_at ? ' — ' + h.newest.created_at.slice(0, 10) : ''}`;
+    // Stale-memory reminder: if the graph hasn't had a full sync in >24h, the agent's
+    // cross-session memory is drifting from the work. This is a REMINDER, not a button —
+    // a full sync (re-ingest docs, capture insights, lint, back up) is agent work, so
+    // surfacing the staleness + the command is the honest affordance.
+    let staleChip = '';
+    const since = h.last_sync ? Math.round((Date.now() - Date.parse(String(h.last_sync))) / 36e5) : null;
+    if (since != null && since > 24) {
+      const ago = since >= 48 ? `${Math.round(since / 24)}d` : `${since}h`;
+      staleChip = `<div class="dk-stale" title="Run the graph-sync skill to re-ingest docs, capture insights, lint, and back up">⚠️ Memory ${ago} stale — run <code>graph-sync</code></div>`;
+    }
+    document.getElementById('dock-resume-v').innerHTML =
+      `Newest insight: <b>${esc(trunc(h.newest.name, 44))}</b>${h.newest.created_at ? ' — ' + h.newest.created_at.slice(0, 10) : ''}` + staleChip;
   }
 }
 const labelPlural = (d) => (d === 'Person' ? 'People' : d + 's');
@@ -2756,10 +2767,21 @@ function renderDock(p) {
   // timeframe · delivering project · due date are secondary meta.
   const goalItems = groups.flatMap((grp) => grp.items.map((g) => {
     const proj = g.projects && g.projects[0] ? ' · ' + esc(trunc(g.projects[0], 22)) : '';
-    const due = g.target_date ? ' · ' + esc(dueLabel(g.target_date, Date.now()) || g.target_date) : '';
+    // A goal with no target date never reaches the Due rail / digest — nudge to set one.
+    // Clicking the row opens the goal's inspector, where the Schedule control lives.
+    const due = g.target_date
+      ? ' · ' + esc(dueLabel(g.target_date, Date.now()) || g.target_date)
+      : ' · <span class="dk-nudge">⏳ set a date</span>';
     const open = `onclick="__open(${JSON.stringify(g.id || '').replace(/"/g, '&quot;')},${JSON.stringify(g.name || '').replace(/"/g, '&quot;')},'Goal')"`;
     return `<div class="dk-item" role="button" tabindex="0" ${open}>${esc(trunc(g.name || '(unnamed)', 48))}<div class="dk-meta">${esc(grp.k)}${proj}${due}</div></div>`;
   }));
+  // Due / Overdue — the intention clock surfaced where the eye lands (QI_DUE: nodes whose
+  // soonest due_at/review_at/target_date is overdue or within ~14d). Overdue rows go warn.
+  const dueItems = (p.due || []).map((d) => {
+    const overdue = /^overdue/.test(d.sub || '');
+    const open = `onclick="__open(${JSON.stringify(d.id || '').replace(/"/g, '&quot;')},${JSON.stringify(d.name || '').replace(/"/g, '&quot;')},${JSON.stringify(d.label || '')})"`;
+    return `<div class="dk-item ${overdue ? 'warn' : ''}" role="button" tabindex="0" ${open}>${esc(trunc(d.name || '(unnamed)', 48))}<div class="dk-meta">${esc(d.sub || '')}${d.label ? ' · ' + esc(d.label) : ''}</div></div>`;
+  });
   const nowBody = `<span class="dk-pill"><span class="dot-now">●</span> ${(p.projects || []).length} now</span><span class="dk-pill"><span class="dot-next">●</span> ${(p.next || []).length} next</span>` +
     (p.blocked || []).map((b) => item(b.name, `<div class="dk-meta">blocked by ${esc(trunc(b.blocker, 22))}</div>`, 'warn')).join('');
   const newItems = (p.whatsNew || []).map((w) => item(w.name, `<div class="dk-meta">${w.created_at ? w.created_at.slice(0, 10) : ''}${(w.tags && w.tags.length) ? ' · ' + esc(w.tags[0]) : ''}</div>`));
@@ -2772,7 +2794,8 @@ function renderDock(p) {
     ...rv.orphans.map((o) => item(o.name, `<span class="dk-badge">orphan · ${esc(o.label)}</span>`, 'warn')),
   ];
   document.getElementById('dock-scroll').innerHTML = [
-    dockSection('goals', 'target', 'Goals', (p.goals || []).length, goalItems.length ? cappedItems('goals', goalItems, 8) : empty('no goals')),
+    dockSection('goals', 'target', 'Goals', (p.goals || []).length, goalItems.length ? cappedItems('goals', goalItems, 8) : empty('No goals yet — define one to track it here')),
+    dockSection('due', 'calendar-clock', 'Due / Overdue', dueItems.length, dueItems.length ? cappedItems('due', dueItems, 8) : empty('nothing due — set target dates on goals')),
     dockSection('now', 'flame', 'Now · Next · Blocked', null, nowBody),
     dockSection('new', 'sparkles', "What's new", (p.whatsNew || []).length, newItems.length ? cappedItems('new', newItems, 6) : empty('no insights')),
     dockSection('review', 'alert-triangle', 'Needs review', reviewItems.length, reviewItems.length ? cappedItems('review', reviewItems, 8) : empty('all clean')),
