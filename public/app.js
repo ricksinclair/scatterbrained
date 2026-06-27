@@ -2636,7 +2636,29 @@ function applyFilter() {
   // right panel checkboxes
   document.querySelectorAll('#filter-panel .ft-type').forEach((b) => b.classList.toggle('on', activeTypes.has(b.dataset.type)));
   const sb = document.getElementById('ft-stale'); if (sb) sb.classList.toggle('on', staleOnly);
+  renderLensList();
   poke();
+}
+// Lens results list (#32): the active lens's matching nodes as a flat clickable picker in the
+// dock — click a row to open it instead of hunting on the canvas. Reuses lensActive() so it
+// always matches exactly what the graph dims to. Hidden when no lens is active ("All").
+function renderLensList() {
+  const el = document.getElementById('lens-list');
+  if (!el) return;
+  if (!isFiltered()) { el.hidden = true; el.innerHTML = ''; return; }
+  const matches = NODES.filter((n) => lensActive(n) && n.name)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const single = activeTypes.size === 1 ? [...activeTypes][0] : null;
+  const title = single ? labelPlural(single) : (staleOnly && !activeTypes.size ? 'Needs review' : 'Filtered');
+  const cap = 50, shown = matches.slice(0, cap);
+  el.innerHTML = `<div class="ll-head">${esc(title)}<span class="ll-n">${matches.length}</span></div>` +
+    shown.map((n) => `<button class="ll-row" data-id="${esc(n.id)}" data-name="${esc(n.name)}" title="${esc(n.name)}">` +
+      `<span class="ll-dot" style="background:${rgba(colorOf(n.label), 1)}"></span>` +
+      `<span class="ll-name">${esc(trunc(n.name, 34))}</span>` +
+      (n.stale ? '<span class="ll-stale" title="needs review">⚠</span>' : '') + '</button>').join('') +
+    (matches.length > cap ? `<div class="ll-more">+${matches.length - cap} more on the graph</div>` : '');
+  el.querySelectorAll('.ll-row').forEach((b) => { b.onclick = () => selectByIdOrName(b.dataset.id, b.dataset.name); });
+  el.hidden = false;
 }
 function buildLenses() {
   // Left dock = the two primary "what I work on" toggles + All + review. Everything else

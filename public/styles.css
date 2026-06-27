@@ -144,6 +144,16 @@ body.dock-closed .dock { transform: translateX(-264px); }
 
 /* lenses (inside the dock) */
 .lenses { display: flex; flex-wrap: wrap; gap: 6px; }
+/* lens results list (#32): clickable picker of the active lens's nodes */
+.lens-list { margin-top: 10px; max-height: 240px; overflow-y: auto; }
+.lens-list .ll-head { display: flex; align-items: center; gap: 8px; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; color: var(--ink-dim); margin-bottom: 4px; }
+.lens-list .ll-n { color: var(--ink-faint); font-size: 11px; font-weight: 600; background: var(--surface-2); padding: 1px 8px; border-radius: 9px; }
+.lens-list .ll-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; cursor: pointer; padding: 5px 4px; border-radius: 7px; color: var(--ink); font-size: 12.5px; }
+.lens-list .ll-row:hover { background: var(--surface-2); }
+.lens-list .ll-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.lens-list .ll-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lens-list .ll-stale { color: var(--warn); font-size: 11px; flex: none; }
+.lens-list .ll-more { font-size: 10.5px; color: var(--ink-faint); font-style: italic; padding: 5px 4px 2px; }
 .chip {
   font-size: 11px; padding: 4px 11px; border-radius: 20px; cursor: pointer;
   background: var(--surface-2); border: 0.5px solid var(--line); color: var(--ink-dim);
