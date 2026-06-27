@@ -23,6 +23,7 @@ import { isCollapsed as isColRaw, toggleCollapsed as togColRaw } from '/lib/coll
 import { KIND_META } from '/lib/schedule.js';
 import { initCodebase } from '/lib/codebase-ui.js';
 import { langColor } from '/lib/lang-colors.js';
+import { initSettings } from '/lib/settings-ui.js';
 import { quarterAxis, placeItem, classifyStatus } from '/lib/roadmap.js';
 import { highlightCode, jsonDepths } from '/lib/codehl.js';
 import { buildFileTree, flattenTree } from '/lib/filetree.js';
@@ -2094,53 +2095,11 @@ function closePerms() { PERMS.hidden = true; }
 // Settings "manage" link. Guard in case the toolbar button is absent.
 { const b = document.getElementById('set-folders'); if (b) b.onclick = openPerms; }
 
-// ── Settings pane (#27) — appearance prefs + READ-ONLY local system status ──
-const SETTINGS = document.getElementById('settings');
-function closeSettings() { SETTINGS.hidden = true; }
-async function openSettings() {
-  SETTINGS.hidden = false;
-  renderSettings(null);                                   // paint prefs immediately
-  try { renderSettings(await fetch('/api/status').then((r) => r.json())); } catch (e) { renderSettings({ error: true }); }
-}
-function fmtWhen(iso) {
-  if (!iso) return 'never';
-  const d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
-  if (s < 90) return 'just now';
-  if (s < 5400) return Math.round(s / 60) + ' min ago';
-  if (s < 172800) return Math.round(s / 3600) + ' h ago';
-  return d.toISOString().slice(0, 10);
-}
-function renderSettings(st) {
-  const themes = THEME_ORDER.map((name) => {
-    const sw = THEMES[name][curMode].accent;
-    return `<button class="set-theme${name === curTheme ? ' on' : ''}" data-theme="${esc(name)}"><span class="sw" style="background:${sw}"></span>${esc(THEMES[name].label)}</button>`;
-  }).join('');
-  const sys = !st ? '<div class="set-row"><span class="set-k">loading…</span></div>'
-    : st.error ? '<div class="set-row"><span class="set-k">status unavailable</span></div>'
-    : `<div class="set-row"><span class="set-k">Neo4j</span><span class="set-v"><span class="set-dot ${st.neo4j.ok ? 'ok' : 'bad'}"></span>${st.neo4j.ok ? 'connected' : 'unreachable'} · ${esc(st.neo4j.uri)}</span></div>` +
-      `<div class="set-row"><span class="set-k">Graph</span><span class="set-v">${st.counts.nodes} nodes · ${st.counts.edges} edges · ${st.counts.indexed} indexed</span></div>` +
-      `<div class="set-row"><span class="set-k">Last backup</span><span class="set-v">${esc(fmtWhen(st.backup.lastModified))}</span></div>` +
-      `<div class="set-row"><span class="set-k">Allowed folders</span><span class="set-v">${st.folders} · <a class="set-link" id="set-folders-link">manage</a></span></div>` +
-      `<div class="set-row"><span class="set-k">Neo4j browser</span><span class="set-v"><a class="set-link" href="${esc(st.neo4j.browser)}" target="_blank" rel="noopener">open ↗</a></span></div>`;
-  document.getElementById('set-body').innerHTML =
-    '<div class="set-section"><div class="set-section-t">Appearance</div>' +
-      `<div class="set-row"><span class="set-k">Theme</span></div><div class="set-themes">${themes}</div>` +
-      `<div class="set-row"><span class="set-k">Mode</span><button class="set-toggle" id="set-mode-t">${curMode === 'light' ? '☀ Light' : '☾ Dark'}</button></div>` +
-      `<div class="set-row"><span class="set-k">Calm mode <span style="color:var(--ink-faint)">· less motion</span></span><button class="set-toggle${calm ? ' on' : ''}" id="set-calm-t">${calm ? 'On' : 'Off'}</button></div>` +
-      `<div class="set-row"><span class="set-k">Loading animation</span><span class="set-seg" id="set-anim">${['off', 'light', 'full'].map((l) => `<button class="set-seg-b${curAnim === l ? ' on' : ''}" data-anim="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join('')}</span></div>` +
-    '</div>' +
-    '<div class="set-section"><div class="set-section-t">System · read-only</div>' + sys + '</div>';
-  // wire
-  document.querySelectorAll('#set-body .set-theme').forEach((b) => { b.onclick = () => { applyTheme(b.dataset.theme, curMode); renderSettings(st); }; });
-  document.getElementById('set-mode-t').onclick = () => { applyTheme(curTheme, curMode === 'light' ? 'dark' : 'light'); renderSettings(st); };
-  document.getElementById('set-calm-t').onclick = () => { setCalm(!calm); renderSettings(st); };
-  document.querySelectorAll('#set-anim .set-seg-b').forEach((b) => { b.onclick = () => { applyAnim(b.dataset.anim); renderSettings(st); }; });
-  const fl = document.getElementById('set-folders-link'); if (fl) fl.onclick = () => { closeSettings(); openPerms(); };
-}
-document.getElementById('set-settings').onclick = openSettings;
-document.getElementById('settings-x').onclick = closeSettings;
-SETTINGS.addEventListener('click', (e) => { if (e.target === SETTINGS) closeSettings(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !SETTINGS.hidden) closeSettings(); });
+
+initSettings({
+  esc, THEMES, THEME_ORDER, applyTheme, applyAnim, setCalm, openPerms,
+  getTheme: () => ({ curTheme, curMode, calm, curAnim }),
+});
 
 // Add-link intake (#19): save a web/YouTube link as a Resource, fuzzy-attach to a
 // Project/Goal, refresh the constellation and focus the new node.
@@ -2500,7 +2459,7 @@ window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.
 // text field is focused. Unwinds one layer: report → inspector (which also clears focus) → focus.
 window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (!FR.hidden || !document.getElementById('review').hidden || !SETTINGS.hidden
+  if (!FR.hidden || !document.getElementById('review').hidden || !document.getElementById('settings').hidden
       || !PERMS.hidden || !document.getElementById('codebase').hidden) return;
   const ae = document.activeElement;
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
