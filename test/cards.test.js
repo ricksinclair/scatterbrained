@@ -3,11 +3,11 @@ import { parseCards, hasCards, nextReview, isDue } from '../public/lib/cards.js'
 
 describe('parseCards', () => {
   it('extracts Q:/A: cards, A spanning continuation lines', () => {
-    const cards = parseCards('Q: What is Section 12?\nA: The co-op tax regime\nthat allows fair-use deductions.\nQ: NC co-op statute?\nA: USC');
+    const cards = parseCards('Q: What is photosynthesis?\nA: The process plants use\nto convert light into energy.\nQ: Capital of France?\nA: Paris');
     expect(cards.length).toBe(2);
-    expect(cards[0].front).toBe('What is Section 12?');
-    expect(cards[0].back).toContain('fair-use deductions');
-    expect(cards[1].back).toBe('USC');
+    expect(cards[0].front).toBe('What is photosynthesis?');
+    expect(cards[0].back).toContain('light into energy');
+    expect(cards[1].back).toBe('Paris');
   });
   it('falls back to cloze when there are no Q/A cards', () => {
     const cards = parseCards('The capital of {{North Carolina}} is Raleigh.');

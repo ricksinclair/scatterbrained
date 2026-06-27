@@ -18,8 +18,8 @@ import path from 'node:path';
 import neo4j from 'neo4j-driver';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-// Resolve a file across both layouts: the public repo (server.js + scripts/ + examples/ at one
-// root) and the private monorepo (the studio one level below scripts/ + examples/).
+// Resolve a file by trying a few candidate roots, so this works whether it is run from the
+// repo root or one directory below it.
 function resolve(rel) {
   for (const base of [path.join(HERE, '..'), path.join(HERE, '..', '..'), HERE]) {
     const p = path.join(base, rel);
@@ -27,7 +27,7 @@ function resolve(rel) {
   }
   return null;
 }
-const SERVER = resolve('server.js') || resolve('scatterbrained/server.js');
+const SERVER = resolve('server.js');
 const SCHEMA = resolve('scripts/seed-schema.cypher');
 const DEMO = resolve('examples/seed-demo.cypher');
 

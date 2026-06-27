@@ -21,10 +21,10 @@ describe('protected-facts — kind vocab', () => {
 describe('protected-facts — normalizeValue', () => {
   it('is case-, space-, and comma-insensitive on the digits that matter', () => {
     expect(normalizeValue('$4,200')).toBe(normalizeValue('$4200'));
-    expect(normalizeValue('  Section 12 ')).toBe('Section 12');
+    expect(normalizeValue('  Section   12 ')).toBe('section 12');
   });
   it('tightens § spacing and unifies U.S.C. forms', () => {
-    expect(normalizeValue('17 U.S.C. §107')).toBe(normalizeValue('26 USC §107'));
+    expect(normalizeValue('17 U.S.C. § 107')).toBe(normalizeValue('17 USC §107'));
   });
   it('handles null/empty', () => {
     expect(normalizeValue(null)).toBe('');
@@ -34,13 +34,13 @@ describe('protected-facts — normalizeValue', () => {
 
 describe('protected-facts — detectCandidates', () => {
   it('finds money, percent, dates, and statutory citations', () => {
-    const c = detectCandidates('We paid $4,200 (a 12% cut) on 2026-06-17 per 17 U.S.C. §107 and Section 12.');
+    const c = detectCandidates('We paid $4,200 (a 12% cut) on 2026-06-17 per 17 U.S.C. §107.');
     const kinds = c.map((x) => x.kind);
     expect(kinds).toContain('money');
     expect(kinds).toContain('percent');
     expect(kinds).toContain('date');
     expect(kinds).toContain('citation');
-    expect(c.map((x) => x.value)).toContain('Section 12');
+    expect(c.map((x) => x.value)).toContain('17 U.S.C. §107');
   });
   it('detects form numbers as citations', () => {
     const c = detectCandidates('File a 1099-MISC and an 1040-X.');
@@ -74,7 +74,7 @@ describe('protected-facts — checkRewrite (the guard)', () => {
     { id: 'b', value: '$4,200', kind: 'money' },
   ];
   it('passes when every fact still appears (space/comma-tolerant)', () => {
-    const r = checkRewrite(facts, 'Per 26 USC §107 the fair-use dividend was $4200.');
+    const r = checkRewrite(facts, 'Per 17 USC § 107 the filing fee was $4200.');
     expect(r.ok).toBe(true);
     expect(r.violations).toEqual([]);
   });

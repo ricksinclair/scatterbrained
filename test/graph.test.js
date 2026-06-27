@@ -3,9 +3,9 @@ import { statusText, lensActive, computeDoi, placeLabels, neighborhoodLayout, sm
 
 describe('smartLabel', () => {
   it('shows the basename for path-like names so siblings stop colliding', () => {
-    expect(smartLabel('Open Organization/states/alabama.md', 26)).toBe('alabama.md');
-    expect(smartLabel('Open Organization/states/alabama.md', 26))
-      .not.toBe(smartLabel('Open Organization/states/wyoming.md', 26));   // distinguishable now
+    expect(smartLabel('docs/reference/states/alabama.md', 26)).toBe('alabama.md');
+    expect(smartLabel('docs/reference/states/alabama.md', 26))
+      .not.toBe(smartLabel('docs/reference/states/wyoming.md', 26));   // distinguishable now
   });
   it('keeps both ends (middle ellipsis) for long tail-distinguished names', () => {
     const a = smartLabel('Northwind — Partner Code Issue with the union', 22);

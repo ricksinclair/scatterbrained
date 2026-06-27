@@ -3,7 +3,7 @@
 
 // Readable label for a node name in the constellation. Two failure modes of naive
 // end-truncation, both seen live: (1) path-like names collide on a shared prefix
-// ("Open Organization/states/alabama.md" … "/wyoming.md" all show the same head)
+// ("docs/reference/states/alabama.md" … "/wyoming.md" all show the same head)
 // → show the basename instead; (2) long names that differ only in their TAIL
 // ("Northwind — Partner Code…" vs "Northwind — Research…") lose the distinguishing part to a
 // trailing ellipsis → keep both ends with a middle ellipsis. Pure + tested.

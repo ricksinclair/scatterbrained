@@ -11,9 +11,9 @@ describe('parseIntent', () => {
     expect(parseIntent('what is due to revisit').kind).toBe('due');
   });
   it('falls back to search with the term preserved', () => {
-    const r = parseIntent('Northwind fair-use');
+    const r = parseIntent('Northwind logistics');
     expect(r.kind).toBe('search');
-    expect(r.term).toBe('Northwind fair-use');
+    expect(r.term).toBe('Northwind logistics');
   });
   it('empty query is an empty search', () => {
     expect(parseIntent('  ').kind).toBe('search');

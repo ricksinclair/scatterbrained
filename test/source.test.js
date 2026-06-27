@@ -57,11 +57,11 @@ describe('pickPrimarySource', () => {
   });
   it('prefers the source most relevant to the node name over an earlier generic one', () => {
     const edges = [
-      { dir: 'in', label: 'Source', name: 'colorado.md', file_path: '/wc/states/colorado.md' },
-      { dir: 'in', label: 'Source', name: 'IETF-profile.md', file_path: '/wc/IETF-profile.md' },
+      { dir: 'in', label: 'Source', name: 'colorado.md', file_path: '/orgs/regions/colorado.md' },
+      { dir: 'in', label: 'Source', name: 'ietf-profile.md', file_path: '/orgs/ietf-profile.md' },
     ];
-    const r = pickPrimarySource({ name: 'U.S. Federation of Open Organization (IETF)' }, edges);
-    expect(r.filePath).toBe('/wc/IETF-profile.md');   // matches 'IETF', not the first (colorado)
+    const r = pickPrimarySource({ name: 'Internet Engineering Task Force (IETF)' }, edges);
+    expect(r.filePath).toBe('/orgs/ietf-profile.md');   // matches 'ietf', not the first (colorado)
   });
   it('prefers a readable candidate over an earlier unreadable one', () => {
     const edges = [

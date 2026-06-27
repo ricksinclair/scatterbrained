@@ -7,13 +7,13 @@
 //     --organization "Smith & Associates" --jurisdiction "NC" \
 //     --contact "jane@smithlaw.com" --relationship "SME" --tags "legal,acme,nc"
 //
-//   node scripts/add-node.js idea --name "fair-use tracking module" \
+//   node scripts/add-node.js idea --name "Inventory sync module" \
 //     --description "Track quarterly revenue by region" \
 //     --status "open_question" --domain "software" --tags "acme,governance"
 //
-//   node scripts/add-node.js resource --name "Open Organization Toolbox" --type "book" \
-//     --url "https://example.com" --summary "Guide to worker co-op formation" \
-//     --tags "cooperative,legal"
+//   node scripts/add-node.js resource --name "The Pragmatic Programmer" --type "book" \
+//     --url "https://example.com" --summary "A classic guide to software craftsmanship" \
+//     --tags "engineering,reference"
 //
 // Two cross-cutting flags on any type:
 //   --aliases "a,b"  alternate names this entity is known by (searchable; helps

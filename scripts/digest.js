@@ -9,14 +9,14 @@
 //   node scripts/digest.js --project Northwind
 //
 // Schedule the PUSH cadence (examples — NOT installed automatically; your ops call):
-//   • cron (weekdays 8am):  0 8 * * 1-5  cd ~/Projects/knowledge-graph && npm run -s digest
+//   • cron (weekdays 8am):  0 8 * * 1-5  cd ~/Projects/scatterbrained && npm run -s digest
 //   • Claude Code:          the `/schedule` skill, or it already prints inside `npm run resume`.
 //
 // Never throws / always exits 0 — a digest must not break a cron or a session start.
 import { getDriver, parseArgs } from './lib/db.js';
 import { fetchDigestRows } from './lib/digest-query.js';
 import { groupDigest, relativeLabel, isEmptyDigest, BUCKET_ORDER, BUCKET_META }
-  from '../scatterbrained/public/lib/digest.js';
+  from '../public/lib/digest.js';
 
 function isoToday() {
   const x = new Date();

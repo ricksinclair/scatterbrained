@@ -29,7 +29,7 @@ export const SOURCE_KINDS = {
   // — Spreadsheet/tabular lane — VALID kinds the Scatterbrained Studio sheet/chart viewers
   //   render (public/lib/csv.js + lib/xlsx.js, both shipped), but NOT auto-ingested by
   //   document-index.js. They reach the graph by hand or via the Studio (test fixtures use
-  //   them today); auto-ingestion is queued, see scatterbrained ROADMAP Open #10.
+  //   them today); auto-ingestion is queued (not yet automated).
   csv: 'A comma/tab-separated spreadsheet (.csv/.tsv) — rendered as a table + chart by the Studio.',
   xlsx: 'An Excel spreadsheet (.xlsx) — rendered as a table by the Studio.',
 
