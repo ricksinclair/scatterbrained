@@ -12,7 +12,6 @@
 
 import { resolveLayout } from './resolve.js';
 import { coerceView } from './views.js';
-import { neighborhoodLayout } from './graph.js';
 import { parseVideoUrl, domainOf, isWebUrl } from './links.js';
 import { classifyStatus } from './roadmap.js';
 
@@ -186,30 +185,6 @@ export function relationGroups(edges = [], relTypes = null) {
   })).sort((a, b) => b.rank - a.rank || b.total - a.total);
 }
 
-// Inline 1-hop subgraph (relations in report view): a radial SVG of the node + its
-// neighbors, grouped visually by edge. Up to 12 neighbors; the rest summarized.
-function relationsSubgraph(node, edges, { esc, trunc }) {
-  const shown = edges.slice(0, 12);
-  const W = 360, H = 300, cx = W / 2, cy = H / 2;
-  const placed = neighborhoodLayout(shown, { cx, cy, radius: 108 });
-  const spokes = placed.map((e) =>
-    `<line x1="${cx}" y1="${cy}" x2="${e.x.toFixed(1)}" y2="${e.y.toFixed(1)}" stroke="rgba(140,150,200,.28)" stroke-width="1"/>`).join('');
-  const nbs = placed.map((e) => {
-    const tx = e.x, ty = e.y;
-    const anchor = tx < cx - 20 ? 'end' : tx > cx + 20 ? 'start' : 'middle';
-    return `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="7" fill="${hueOf(e.label)}"/>` +
-      `<text x="${tx.toFixed(1)}" y="${(ty - 11).toFixed(1)}" text-anchor="${anchor}" class="sg-rel">${esc(e.type)}</text>` +
-      `<text x="${tx.toFixed(1)}" y="${(ty + 18).toFixed(1)}" text-anchor="${anchor}" class="sg-name">${esc(trunc(e.name, 16))}</text>`;
-  }).join('');
-  const more = edges.length > shown.length ? `<text x="${cx}" y="${H - 6}" text-anchor="middle" class="sg-more">+${edges.length - shown.length} more relations</text>` : '';
-  return `<div class="c-relations c-relations--graph"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Relationship neighborhood">` +
-    spokes + nbs +
-    `<circle cx="${cx}" cy="${cy}" r="13" fill="${hueOf(node.label)}"/>` +
-    `<circle cx="${cx}" cy="${cy}" r="17" fill="none" stroke="var(--accent)" stroke-width="1.5"/>` +
-    `<text x="${cx}" y="${(cy - 22).toFixed(1)}" text-anchor="middle" class="sg-center">${esc(trunc(node.name || '', 20))}</text>` +
-    more + `</svg></div>`;
-}
-
 // ── component renderers (id → render) ────────────────────────────────────────
 export const REGISTRY = {
   text: {
@@ -293,7 +268,9 @@ export const REGISTRY = {
       const sh = relationShape(relDegree, rest);
       const shapeLine = `<div class="rel-shape"><b>${sh.role}</b> · ${sh.degree} connection${sh.degree === 1 ? '' : 's'}${sh.role !== 'leaf' ? ` · ${sh.skew}` : ''}</div>`;
 
-      if (view === 'report') return `<div class="c-relations-report">${shapeLine}${relationsSubgraph(node, rest, { esc, trunc })}</div>`;
+      // Report view: a LIVE force-graph (same vendored library as the main constellation), mounted
+      // and seeded by app.js renderReportGraph() into #rel-live — clickable + prunable, not a dead SVG.
+      if (view === 'report') return `<div class="c-relations-report">${shapeLine}<div class="rel-live" id="rel-live" role="img" aria-label="Relationship neighborhood (interactive)"></div></div>`;
 
       // Inspector: grouped-by-type digest, split into actions vs references, clickable.
       const groups = relationGroups(rest, data.relTypes);

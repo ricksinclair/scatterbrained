@@ -712,6 +712,56 @@ function renderReport() {
       `<button class="rpt-wide" title="toggle width" aria-label="toggle width">⤢</button></div>${p.html}</section>`;
   }).join('');
   wireCardLayout(host, n);
+  renderReportGraph();
+}
+
+// Live 1-hop relations map in the report (the same vendored force-graph as the constellation, not a
+// static SVG): the node + its non-source/non-annotation neighbors, clickable + prunable. #rel-live is
+// re-created on every renderReport (r-components is re-innerHTML'd), so rebuild the instance each time.
+let reportGraph = null, reportGraphHover = null;
+function teardownReportGraph() { if (reportGraph) { reportGraph.pauseAnimation(); reportGraph = null; } }
+function renderReportGraph() {
+  teardownReportGraph();
+  const host = document.getElementById('rel-live');
+  if (!host || !current) return;
+  const n = current.n;
+  const ANN = ['Note', 'ProtectedFact', 'Review'];
+  const rel = ((current.data && current.data.edges) || []).filter((e) => !(e.label === 'Source' && e.dir === 'in') && !ANN.includes(e.label));
+  const cssv = (v, d) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || d;
+  const nodes = [{ id: n.id, center: true, label: trunc(n.name || '', 20), color: rgba(colorOf(n.label), 1), val: 9 }];
+  const links = []; const seen = new Set([n.id]);
+  rel.slice(0, 40).forEach((e) => {
+    if (!e.id || seen.has(e.id)) return; seen.add(e.id);
+    nodes.push({ id: e.id, label: trunc(e.name || '', 16), name: e.name, type: e.type, color: rgba(colorOf(e.label), 1), val: 4 });
+    links.push(e.dir === 'in' ? { source: e.id, target: n.id } : { source: n.id, target: e.id });
+  });
+  reportGraph = ForceGraph()(host);
+  reportGraph.width(host.clientWidth).height(host.clientHeight).backgroundColor('rgba(0,0,0,0)')
+    .graphData({ nodes, links })
+    .nodeLabel((d) => esc(d.center ? (d.label || '') : `${d.type || ''} · ${d.name || ''}`))
+    .nodeCanvasObjectMode(() => 'replace')
+    .nodeCanvasObject((d, ctx, scale) => {
+      const ink = cssv('--ink', '#ece6d8');
+      const r = 1.8 + (d.val || 4) * 0.7;
+      ctx.shadowColor = d.color; ctx.shadowBlur = (d === reportGraphHover ? r * 2.6 : r * 1.5);
+      ctx.fillStyle = d.color; ctx.beginPath(); ctx.arc(d.x, d.y, r, 0, 7); ctx.fill();
+      ctx.shadowBlur = 0;
+      if (d.center) { ctx.strokeStyle = cssv('--accent', '#ef9a5b'); ctx.lineWidth = 1.5 / scale; ctx.beginPath(); ctx.arc(d.x, d.y, r + 3 / scale, 0, 7); ctx.stroke(); }
+      ctx.font = `${(d.center ? 11 : 9.5) / scale}px ui-monospace, monospace`;
+      ctx.fillStyle = ink; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = (d.center || d === reportGraphHover) ? 1 : 0.74;
+      ctx.fillText(d.label, d.x + r + 3 / scale, d.y);
+      ctx.globalAlpha = 1;
+    })
+    .linkColor(() => 'rgba(150,140,124,0.28)').linkWidth(0.6)
+    .linkDirectionalParticles(1).linkDirectionalParticleWidth(1.6).linkDirectionalParticleColor(() => cssv('--accent', '#ef9a5b'))
+    .onNodeHover((d) => { reportGraphHover = d; host.style.cursor = d && !d.center ? 'pointer' : ''; })
+    .onNodeClick((d) => { if (d && !d.center) selectByIdOrName(d.id, d.name); })
+    .warmupTicks(60).cooldownTime(5000);
+  reportGraph.d3Force('charge').strength(-90).distanceMax(400);
+  reportGraph.d3Force('link').distance(46).strength(0.5);
+  reportGraph.d3VelocityDecay(0.36);
+  setTimeout(() => reportGraph && reportGraph.zoomToFit(500, 30), 400);
 }
 const layoutKey = (n) => `scatterbrained:layout:${n.label || 'node'}`;
 function wireCardLayout(host, n) {
@@ -757,12 +807,13 @@ function openReport() {
 }
 function collapseReport() {
   reportOpen = false; studyMode = false;
+  teardownReportGraph();
   document.getElementById('report').hidden = true;
   if (current) { inspOpen = true; document.getElementById('insp').hidden = false; renderInspector(); }
   layoutGraph();
   poke();
 }
-function closeReport() { reportOpen = false; studyMode = false; document.getElementById('report').hidden = true; sel = null; layoutGraph(); clearFocus(); poke(); }
+function closeReport() { reportOpen = false; studyMode = false; teardownReportGraph(); document.getElementById('report').hidden = true; sel = null; layoutGraph(); clearFocus(); poke(); }
 
 // ── Study mode (M-H) — active recall over the current node's cards ────────────
 function openStudy() {

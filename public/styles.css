@@ -537,11 +537,8 @@ body.dock-closed .dock { transform: translateX(-264px); }
 /* let the heavy content components span the full width */
 .rpt-c-excerpt, .rpt-c-text, .rpt-c-markdown, .rpt-c-relations { grid-column: 1 / -1; }
 .report-body .c-excerpt .ex-body { max-height: 420px; font-size: 12px; }
-.report-body .c-relations--graph { max-height: none; }
-.sg-center { font-size: 12px; font-weight: 500; fill: var(--ink); }
-.sg-rel { font-size: 9px; fill: var(--ink-faint); }
-.sg-name { font-size: 10px; fill: var(--ink-dim); }
-.sg-more { font-size: 10px; fill: var(--ink-faint); }
+/* report Relations Inspector = a live force-graph mount (app.js renderReportGraph), not a static SVG */
+.rel-live { width: 100%; height: 320px; border-radius: 10px; overflow: hidden; }
 
 .insp-actions { display: flex; flex-direction: column; gap: 6px; }
 .insp-actions button {
