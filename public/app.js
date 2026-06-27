@@ -895,7 +895,13 @@ function handleResurface(action) {
   current.data.resurface = resurfaceState(current.data.created_at, current.signals.degree, { snoozedUntil: getSnooze(id), now: Date.now(), superseded: !!current.data.superseded_by });
   if (reportOpen) renderReport(); else renderInspector();
 }
-document.getElementById('i-expand').onclick = openReport;
+// Type-aware expand: a Review opens the code-review viewer at its frozen repo@git_ref (so its
+// line-comment Notes load); every other node type expands to the report slide-over.
+document.getElementById('i-expand').onclick = () => {
+  const s = current && current.signals;
+  if (s && s.label === 'Review' && s.props && s.props.repo) openReview({ repo: s.props.repo, gitRef: s.props.git_ref });
+  else openReport();
+};
 document.getElementById('a-study').onclick = openStudy;
 document.getElementById('r-collapse').onclick = collapseReport;
 document.getElementById('r-export').onclick = () => {
@@ -1860,13 +1866,20 @@ async function ensureReview() {
   return rvReview.id;
 }
 
-async function openReview() {
+async function openReview(target) {
   pauseMainGraph();
   document.getElementById('review').hidden = false;
   const sel = document.getElementById('rv-repo');
   if (!cbRepos) { try { cbRepos = (await fetch('/api/repos').then((r) => r.json())).repos || []; } catch { cbRepos = []; } }
   sel.innerHTML = cbRepos.map((r) => `<option value="${esc(r.path)}">${esc(r.name)}</option>`).join('');
   sel.onchange = () => startReview(sel.value);
+  // Expanding a specific Review node: open it at its frozen repo@git_ref so its existing
+  // comments load (resolve returns the persisted review), instead of the default HEAD browse.
+  if (target && target.repo) {
+    if (cbRepos.some((r) => r.path === target.repo)) sel.value = target.repo;
+    startReview(target.repo, target.gitRef || 'HEAD');
+    return;
+  }
   if (!cbRepos.length) { document.getElementById('rv-meta').textContent = 'no repos in the allowlist'; return; }
   const pref = cbRepos[0];
   sel.value = pref.path;
@@ -1874,7 +1887,7 @@ async function openReview() {
 }
 function closeReview() { document.getElementById('review').hidden = true; if (rvGraph) rvGraph.pauseAnimation(); resumeMainGraph(); }
 
-async function startReview(repoPath) {
+async function startReview(repoPath, gitRef = 'HEAD') {
   document.getElementById('rv-meta').textContent = 'opening…';
   document.getElementById('rv-tree').innerHTML = '';
   document.getElementById('rv-code').innerHTML = '<div class="rv-hint">Pick a file from the tree to review it.</div>';
@@ -1885,7 +1898,7 @@ async function startReview(repoPath) {
   // a node — opening to browse should never leave an empty Review. The node is created on
   // the first comment (ensureReview).
   let r;
-  try { r = await fetch(`/api/review/resolve?repo=${encodeURIComponent(repoPath)}&gitRef=HEAD`).then((x) => x.json()); }
+  try { r = await fetch(`/api/review/resolve?repo=${encodeURIComponent(repoPath)}&gitRef=${encodeURIComponent(gitRef)}`).then((x) => x.json()); }
   catch (e) { document.getElementById('rv-meta').textContent = 'failed to open review'; return; }
   if (r.error) { document.getElementById('rv-meta').textContent = r.error; return; }
   rvReview = r.review;                              // id is null until the first comment
