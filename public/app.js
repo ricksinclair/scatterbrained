@@ -21,6 +21,8 @@ import { fieldRowsFor, membersForField, relateArgs } from '/lib/fields.js';
 import { monthGrid, gridRange, bucketByDay, heatIntensity, stepMonth, monthLabel } from '/lib/calendar.js';
 import { isCollapsed as isColRaw, toggleCollapsed as togColRaw } from '/lib/collapse.js';
 import { KIND_META } from '/lib/schedule.js';
+import { initCodebase } from '/lib/codebase-ui.js';
+import { langColor } from '/lib/lang-colors.js';
 import { quarterAxis, placeItem, classifyStatus } from '/lib/roadmap.js';
 import { highlightCode, jsonDepths } from '/lib/codehl.js';
 import { buildFileTree, flattenTree } from '/lib/filetree.js';
@@ -1719,82 +1721,6 @@ async function restoreVersion(rev, subject) {
 }
 document.getElementById('fr-history').onclick = openHistory;
 
-// ── codebase map (dev lens): a repo's module graph in its own canvas/namespace ───
-const LANG_COLORS = {
-  js: '#e0b25a', ts: '#79b4ab', py: '#5a9fd4', go: '#6fc5d6', rust: '#d77f42',
-  css: '#c77dff', html: '#ef9a5b', vue: '#7fd6a0', svelte: '#e06b5a',
-  doc: '#8f8a7c', data: '#9aa0ab', shell: '#9ad06f', sql: '#d6a05a',
-  image: '#d6688a', font: '#b07fd6', media: '#5fb0a0', other: '#6c727c',
-};
-const langColor = (l) => LANG_COLORS[l] || LANG_COLORS.other;
-let cbGraph = null, cbRepos = null, cbHover = null;
-
-async function openCodebase() {
-  pauseMainGraph();
-  document.getElementById('codebase').hidden = false;
-  const sel = document.getElementById('cb-repo');
-  if (!cbRepos) {
-    try { cbRepos = (await fetch('/api/repos').then((r) => r.json())).repos || []; } catch { cbRepos = []; }
-    sel.innerHTML = cbRepos.map((r) => `<option value="${esc(r.path)}">${esc(r.name)}</option>`).join('');
-    sel.onchange = () => loadRepo(sel.value);
-  }
-  if (!cbRepos.length) { showCbEmpty('no mappable repos in the allowlist'); return; }
-  const pref = cbRepos[0];
-  sel.value = pref.path;
-  loadRepo(pref.path);
-}
-function closeCodebase() { document.getElementById('codebase').hidden = true; if (cbGraph) cbGraph.pauseAnimation(); resumeMainGraph(); }
-function showCbEmpty(msg) {
-  const e = document.getElementById('cb-empty'); e.textContent = msg; e.hidden = false;
-  document.getElementById('cb-meta').textContent = '';
-  document.getElementById('cb-legend').innerHTML = '';
-}
-async function loadRepo(repoPath) {
-  document.getElementById('cb-empty').hidden = true;
-  document.getElementById('cb-meta').textContent = 'mapping…';
-  let repo;
-  try { repo = (await fetch('/api/repo?path=' + encodeURIComponent(repoPath)).then((r) => r.json())).repo || {}; }
-  catch (err) { return showCbEmpty(String(err)); }
-  if (repo.blocked) return showCbEmpty('outside the read sandbox');
-  if (repo.missing || repo.notDir) return showCbEmpty('repo not found');
-  if (!repo.nodes || !repo.nodes.length) return showCbEmpty('no files to map');
-  document.getElementById('cb-meta').textContent =
-    `${repo.fileCount} files · ${repo.edgeCount} imports${repo.truncated ? ' · truncated' : ''}`;
-  const langs = [...new Set(repo.nodes.map((n) => n.lang))].sort();
-  document.getElementById('cb-legend').innerHTML = langs
-    .map((l) => `<span class="lg"><i style="background:${langColor(l)}"></i>${esc(l)}</span>`).join('');
-
-  const host = document.getElementById('cb-graph');
-  const maxDeg = Math.max(1, ...repo.nodes.map((n) => n.deg || 0));
-  const nodes = repo.nodes.map((n) => ({ ...n, r: 3 + 7 * Math.sqrt((n.deg || 0) / maxDeg) }));
-  const links = repo.links.map((l) => ({ source: l.source, target: l.target }));
-  const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#ece6d8';
-
-  if (!cbGraph) cbGraph = ForceGraph()(host);
-  cbGraph.resumeAnimation();
-  cbGraph
-    .width(host.clientWidth).height(host.clientHeight)
-    .backgroundColor('rgba(0,0,0,0)')
-    .graphData({ nodes, links })
-    .nodeRelSize(4).nodeVal((n) => n.r)
-    .nodeLabel((n) => n.rel)
-    .nodeColor((n) => langColor(n.lang))
-    .nodeCanvasObjectMode(() => 'after')
-    .nodeCanvasObject((n, ctx, scale) => {
-      if (scale < 0.85 && (n.deg || 0) < 3 && n !== cbHover) return;       // declutter when zoomed out
-      ctx.font = `${11 / scale}px ui-monospace, monospace`;
-      ctx.fillStyle = ink; ctx.textBaseline = 'middle';
-      ctx.globalAlpha = n === cbHover ? 1 : 0.75;
-      ctx.fillText(n.name, n.x + n.r + 2 / scale, n.y);
-      ctx.globalAlpha = 1;
-    })
-    .linkColor(() => 'rgba(150,140,124,0.22)').linkWidth(0.5)
-    .onNodeHover((n) => { cbHover = n; host.style.cursor = n ? 'pointer' : ''; })
-    .onNodeClick((n) => { if (n.path) openFile(n.path); })
-    .cooldownTime(4000);
-  cbGraph.zoomToFit(0, 50);
-  setTimeout(() => cbGraph && cbGraph.zoomToFit(600, 50), 700);
-}
 document.getElementById('set-filter').onclick = (e) => {
   e.stopPropagation();
   const p = document.getElementById('filter-panel');
@@ -1808,8 +1734,14 @@ document.addEventListener('click', (e) => {
     p.hidden = true; document.getElementById('set-filter').classList.remove('on');
   }
 });
-document.getElementById('set-code').onclick = openCodebase;
-document.getElementById('cb-x').onclick = closeCodebase;
+// Repo list cache — shared by the codebase-map + code-review surfaces; reset by the folder-
+// permissions pane so the next open refetches. getRepos() lazily fills it.
+let cbRepos = null;
+async function getRepos() {
+  if (!cbRepos) { try { cbRepos = (await fetch('/api/repos').then((r) => r.json())).repos || []; } catch { cbRepos = []; } }
+  return cbRepos;
+}
+const cbUi = initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, getRepos });
 
 // ── Code review surface (#34) ───────────────────────────────────────────────
 // Open a code-graph'd repo, frozen at a git ref; comment on lines → Notes PART_OF
@@ -2562,7 +2494,7 @@ document.getElementById('perms-grant').onclick = () => {
 document.getElementById('perms-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('perms-grant').click(); });
 PERMS.addEventListener('click', (e) => { if (e.target === PERMS) closePerms(); });
 window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !PERMS.hidden) closePerms(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.getElementById('codebase').hidden && FR.hidden) closeCodebase(); });
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.getElementById('codebase').hidden && FR.hidden) cbUi.close(); });
 // Coordinated Escape for the graph's own surfaces — runs after the overlay/modal Esc handlers
 // above (each guards on its own hidden state), so it only acts when no overlay is open and no
 // text field is focused. Unwinds one layer: report → inspector (which also clears focus) → focus.
@@ -2576,7 +2508,6 @@ window.addEventListener('keydown', (e) => {
   else if (inspOpen) closeInsp();
   else if (focusId) clearFocus();
 });
-window.addEventListener('resize', () => { if (cbGraph && !document.getElementById('codebase').hidden) { const h = document.getElementById('cb-graph'); cbGraph.width(h.clientWidth).height(h.clientHeight); } });
 
 // ── UI: health, lenses, search, time, zoom, dock, settings ───────────────────
 function paintHealth(h) {
