@@ -10,6 +10,7 @@ import { statusText, computeDoi, placeLabels, smartLabel } from '/lib/graph.js';
 import { composeView, keyFacts, resurfaceState, miniMarkdown, dueLabel } from '/lib/registry.js';
 import { detectCandidates } from '/lib/protected-facts.js';
 import { initTour } from '/lib/tour-ui.js';
+import { initStaleBanner } from '/lib/stale-banner-ui.js';
 
 // Resurface snooze state is browser-local (UI state, not canonical knowledge).
 const snoozeKey = (id) => 'scatterbrained:snooze:' + id;
@@ -2714,23 +2715,5 @@ fetch('/api/ai/ping').then((r) => r.json()).then((p) => {
 // ── Guided tour (#14) → lib/tour-ui.js (self-contained: reads window.__focus, drives the DOM) ──
 initTour();
 
-// ── SSE: graph-changed banner ────────────────────────────────────────────────
-(function initStaleBanner() {
-  const banner = document.getElementById('stale-banner');
-  const reloadBtn = document.getElementById('stale-reload');
-  const dismissBtn = document.getElementById('stale-dismiss');
-  if (!banner || !reloadBtn || !dismissBtn) return;
-
-  reloadBtn.onclick = async () => {
-    banner.hidden = true;
-    await refreshGraphData();
-  };
-  dismissBtn.onclick = () => { banner.hidden = true; };
-
-  function connect() {
-    const es = new EventSource('/api/events');
-    es.addEventListener('graph-changed', () => { banner.hidden = false; });
-    es.onerror = () => { es.close(); setTimeout(connect, 5000); };
-  }
-  connect();
-}());
+// ── SSE: graph-changed banner → lib/stale-banner-ui.js ──
+initStaleBanner({ refreshGraphData });
