@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>The tour — Scatterbrained</title>
-<meta name="description" content="Ten moments from the Scatterbrained Studio, on the bundled demo graph: the daily brief, the palette, the agenda, provenance, rewindable decisions, protected facts, and capture receipts." />
+<meta name="description" content="Fourteen moments from the Scatterbrained Studio, on the bundled demo graph: the daily brief, the palette, the agenda, provenance, rewindable decisions, protected facts, document viewers, code review, capture receipts, and the optional local-agent loop." />
 <!-- The demo reel as a page (2026-07-02). Every image is the bundled demo graph — never real data. -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -74,7 +74,7 @@
 
 <section class="hero">
   <p class="kicker">the demo reel, as a page</p>
-  <h1>Ten moments from the Studio.</h1>
+  <h1>Fourteen moments from the Studio.</h1>
   <p>Every image below is the bundled demo graph — a small fictional engineering team's work — captured
     from the running app. Run <code>npx scatterbrained@alpha studio</code> and you're looking at the
     same graph; the in-app tour (Help&nbsp;·&nbsp;<em>Start the tour</em>) plays these beats live.</p>
@@ -147,21 +147,64 @@
   </section>
 
   <section class="beat">
-    <span class="n">09 · REVIEWS THAT PERSIST</span>
-    <h2>The review is a node, not a tab.</h2>
-    <p class="cap">Code-review comments live as graph notes pinned to a repo at a commit, connected to
-      what they were about — and whatever still needs a human collects in one queue.</p>
-    <figure><img loading="lazy" src="screenshots/05-needs-review-dock.png" alt="The needs-review queue: an open review note, a protected-fact change, and a superseded decision" /></figure>
+    <span class="n">09 · DOCUMENTS ARE CITED EVIDENCE</span>
+    <h2>The file opens where the claim lives.</h2>
+    <p class="cap">A decision cites an ADR; the ADR opens rendered, in place, on its node — no detour
+      through a file manager. A benchmark cites a CSV; it opens as a sortable table with a chart view.
+      Every viewer takes anchored notes, so your margin comments land in the graph too.</p>
+    <figure><img loading="lazy" src="screenshots/14-md-viewer.png" alt="The in-app markdown viewer: the demo ADR rendered on its source node, with rendered/raw toggle, edit, and history" /></figure>
+    <figure><img loading="lazy" src="screenshots/15-csv-table.png" alt="The in-app CSV viewer: the demo load-test results as a sortable table with row filter, density, and chart toggles" /></figure>
   </section>
 
   <section class="beat">
-    <span class="n">10 · CAPTURE, RECEIPT, DONE</span>
+    <span class="n">10 · REVIEWS THAT PERSIST</span>
+    <h2>The review is a node, not a tab.</h2>
+    <p class="cap">Grant a folder and its git history becomes reviewable: a file tree of what changed,
+      the code frozen at a commit, and every line comment saved as a graph note pinned to that repo at
+      that sha — connected to what it was about. Whatever still needs a human collects in one queue.</p>
+    <figure><img loading="lazy" src="screenshots/16-code-review.png" alt="The code-review surface: changed-file tree, code frozen at a commit with an inline line comment, and the live review graph with summary" /></figure>
+    <figure><img loading="lazy" src="screenshots/05-needs-review-dock.png" alt="The needs-review queue: an open review note, a protected-fact change, and a superseded decision" /></figure>
+    <p class="sub">six weeks later the review is still one hop from the decision it questioned — and the
+      unresolved rows wait in the needs-review queue below.</p>
+  </section>
+
+  <section class="beat">
+    <span class="n">11 · CAPTURE, RECEIPT, DONE</span>
     <h2>Drop a link; it lands as a glowing dot.</h2>
     <p class="cap">Paste a URL and it becomes a connected source — a talk renders as a playable card on
       its node. Agent-session captures get the same receipt: a toast, then the camera flies to the new node.</p>
     <figure><img loading="lazy" src="screenshots/07-link-video.png" alt="A captured conference talk rendered as a playable card on its source node, connected to the nodes it informs" /></figure>
-    <p class="sub">honest: the Agents lens — the Brief → Session → Capture → Insight loop around a local
-      agent terminal — is feature-detected and optional; capture works with or without it.</p>
+  </section>
+
+  <section class="beat">
+    <span class="n">12 · THE LAUNCHER</span>
+    <h2>The optional local companion.</h2>
+    <p class="cap">Slipway is a separate, optional control panel for running agent CLIs against
+      <em>local</em> models — pick anything in your HuggingFace cache (MLX) or Ollama, start and stop
+      it, and launch Claude Code, OpenCode, or a plain shell against it. No key, no cloud required.</p>
+    <figure><img loading="lazy" src="screenshots/17-launcher.png" alt="The Slipway control panel: an Ollama-backed coder model running with memory shown, the launcher card set to Claude Code, and the active-model card" /></figure>
+    <p class="sub">honest: Slipway is an optional companion (macOS; MLX needs Apple silicon, Ollama runs
+      anywhere) — the Studio feature-detects it, and every other beat on this page works without it.</p>
+  </section>
+
+  <section class="beat">
+    <span class="n">13 · YOUR AGENT, IN THE APP</span>
+    <h2>A real terminal, where the graph lives.</h2>
+    <p class="cap">Slipway embeds real terminal sessions — an agent CLI or a plain shell — and the
+      Studio can talk back: here <code>npx scatterbrained status</code> reads the running graph from
+      inside the session that's about to work on it.</p>
+    <figure><img loading="lazy" src="screenshots/18-terminal.png" alt="An embedded shell session in the demo project: ls, then npx scatterbrained status reporting Studio up, Neo4j reachable, 33 nodes" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">14 · THE LOOP</span>
+    <h2>Brief → Session → Capture → Insight.</h2>
+    <p class="cap">When Slipway is running, the Agents lens closes the loop: the session rail keeps
+      every run (live and past), the loop header shows where each one stands, and an ended session can
+      be captured back into the graph as a source with a receipt.</p>
+    <figure><img loading="lazy" src="screenshots/19-agents-loop.png" alt="The Agents lens: the Brief-Session-Capture-Insight loop header, a session rail with one live and three past sessions, and the embedded Slipway terminal running tests" /></figure>
+    <p class="sub">honest: feature-detected — no Slipway, no Agents lens, and capture still works from
+      the CLI and the Studio alone.</p>
   </section>
 
 </div>
@@ -170,7 +213,9 @@
   <h2>Same graph, on your machine, in one command.</h2>
 <pre class="cmd"><span class="p">$</span> npx scatterbrained@alpha studio <span class="c"># → http://localhost:4317</span></pre>
   <p class="cta-note">Node 18+ · Docker for the bundled database · <a href="getting-started.html">the two-minute walkthrough</a></p>
-  <p class="honest">All captures: the bundled demo graph at 1440×900 — never real data. Scatterbrained is alpha; surfaces can change between versions.</p>
+  <p class="honest">All captures: the bundled demo graph (plus a seeded demo Slipway workspace for beats 12–14)
+    at 1440×900 — never real data. The code-review beat reviews this project's own public repo.
+    Scatterbrained is alpha; surfaces can change between versions.</p>
 </section>
 
 <div id="lightbox" class="lightbox" hidden>
