@@ -1,6 +1,6 @@
 {
   "name": "scatterbrained",
-  "version": "0.1.0-alpha.3",
+  "version": "0.2.0-alpha.1",
   "description": "A second brain you can see — a local-first Studio (no-build visual app) over your Neo4j knowledge graph, plus an agent-maintained, bi-temporal graph toolkit; Notion and local files as capture lanes.",
   "keywords": [
     "knowledge-graph",

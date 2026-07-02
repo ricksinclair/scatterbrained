@@ -3,11 +3,36 @@
 The plain-English story of Scatterbrained. Each version starts with a **TL;DR** anyone
 can follow, then the technical details underneath.
 
-> **What is Scatterbrained, in one breath?** A local-first knowledge observatory. Point it
-> at a Neo4j graph and *see* your knowledge as a living constellation you can explore,
-> interrogate, and act on — See → Understand → Act, all on your own machine. Underneath is
-> an agent-maintained, bi-temporal graph that keeps an *honest history* instead of quietly
-> forgetting or overwriting things.
+> **What is Scatterbrained, in one breath?** A second brain you can *see*. It turns
+> everything you know — notes, decisions, files, projects — into a living star map on your
+> own computer: open it each morning to see what needs you, capture any thought or link in
+> one keystroke and watch it land as a glowing dot, and rewind to see exactly what you
+> believed six months ago and why, with every claim tracing back to its source. No cloud,
+> no subscription — it's yours.
+
+## [0.2.0-alpha.1] — The redesign: a cockpit you can fly (2026-07-02)
+
+**TL;DR (explain-like-I'm-5):** The whole app got rebuilt around how you actually use it.
+A labeled **rail** on the left takes you between four lenses — **Graph** (your star map),
+**Time** (an agenda that tells you what needs you, plus a quarters roadmap), **Code**
+(reviews that never get lost), and **Agents** (watch an AI assistant get briefed from your
+graph and hand its work back as a cited memory). Press **⌘K** and type what you want —
+every feature answers. A **Daily Brief** greets you each morning with what changed and
+what's due. Text is bigger, colors pass accessibility checks everywhere, and there's an
+**S/M/L size setting** if you want everything larger. It's faster, calmer, and much
+easier to look at.
+
+**Details:** full UX redesign — token design system (`public/styles/tokens.css`: type
+scale with a 12px floor, Inter body + Fraunces display + JetBrains Mono data, spacing/
+radius/motion tokens, WCAG-AA ink ramps across all 6 themes × light/dark, `--ui-scale`
+S/M/L setting); labeled mode rail + ⌘K command palette + hash-routed lens shell with one
+Esc stack replacing the icon strip; Time lens (agenda-first with clickable mini-month +
+quarters roadmap); designed empty/error states everywhere; Daily Brief session-start
+card; Agents lens with the visible Brief → Session → Capture → Insight loop and session
+archiving; constellation collision spacing + zoom-stable edge particles; glass/glow
+polish pass; self-hosted fonts (CSP-safe); 14-beat in-app tour. The published CLI is now
+exactly three commands — `studio`, `capture`, `status` — with the full toolkit available
+to repo clones via `npm run <x>`. 587 unit + CLI tests green.
 
 ## [0.1.0-alpha.2] — Property inspector (2026-06-24)
 
