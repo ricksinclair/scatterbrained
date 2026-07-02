@@ -48,9 +48,14 @@ Or install the CLI globally and launch from anywhere:
 
 ```sh
 npm i -g scatterbrained
-scatterbrained studio        # the observatory
-scatterbrained help          # the graph toolkit (lint, search, context, …)
+scatterbrained studio                 # launch the Studio (auto-Neo4j + demo graph)
+scatterbrained capture "a thought"    # drop a note or a URL into the running Studio
+scatterbrained status                 # is it up? what's in the graph?
 ```
+
+The published CLI is intentionally these three commands — what a new user needs.
+The full graph toolkit (lint, resume, search, context, new-project, embed,
+supersede, …) ships with the repo; clone it and run `npm run <command>`.
 
 Config via env (see [`.env.example`](.env.example)): `NEO4J_URI` (default `bolt://localhost:7687`),
 `NEO4J_USER` (`neo4j`), `NEO4J_PASSWORD`, `STUDIO_PORT` (`4317`), `SB_NO_DEMO=1` to skip the demo
@@ -72,7 +77,8 @@ to run it on a throwaway Neo4j by hand.
   them — the pure logic is the shipped logic.
 - **Graph toolkit** — `scripts/`: an agent-maintained, bi-temporal knowledge-graph methodology
   (lint, search, context-assembly, Notion + local-document capture lanes, bi-temporal supersede).
-  Run any of it via `scatterbrained <command>` or the `npm run` scripts.
+  Clone the repo and run any of it via the `npm run` scripts (`npm run lint:graph`,
+  `npm run resume`, `npm run search`, …).
 
 ## Develop
 
