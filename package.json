@@ -42,7 +42,7 @@
   "scripts": {
     "start": "node studio-scripts/start.mjs",
     "studio": "node server.js",
-    "test": "node --test test/cli",
+    "test": "node --test test/cli/*.test.js",
     "test:studio": "vitest run",
     "code-graph": "node bin/code-graph.mjs",
     "context": "node scripts/build-context.js",
