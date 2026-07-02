@@ -16,6 +16,18 @@ describe('typeahead — buildOptions', () => {
     expect(opts[2].superseded).toBe(true);
   });
 
+  it('flags "was <former_name>" only when the OLD name is why the result matched', () => {
+    const renamed = [
+      { id: 'a', name: 'Globex', label: 'Project', former_name: 'Acme' },        // matched via old name
+      { id: 'b', name: 'Acme Plan', label: 'Goal', former_name: 'Acme Plan v0' }, // matched via current name too
+      { id: 'c', name: 'Other', label: 'Idea' },                                  // no former_name
+    ];
+    const opts = buildOptions(renamed, 'acme');
+    expect(opts[0]).toMatchObject({ id: 'a', name: 'Globex', former: 'Acme' });   // alias hint shown
+    expect(opts[1].former).toBeUndefined();   // current name contains the query → no hint
+    expect(opts[2].former).toBeUndefined();   // no former_name → no hint
+  });
+
   it('de-dupes by id and drops blank/nameless rows', () => {
     const dupes = [...results, { id: 'a', name: 'Northwind' }, { id: 'd', name: '  ' }, null];
     const opts = buildOptions(dupes, 'x');

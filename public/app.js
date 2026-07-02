@@ -6,22 +6,32 @@
 // node painting, dock, inspector, lenses, search, time-travel and focus logic.
 // ============================================================================
 
-import { statusText, computeDoi, placeLabels, smartLabel } from '/lib/graph.js';
+import { statusText, computeDoi, placeLabels, smartLabel, collideRadius, particlesForZoom } from '/lib/graph.js';
 import { composeView, keyFacts, resurfaceState, miniMarkdown, dueLabel } from '/lib/registry.js';
 import { detectCandidates } from '/lib/protected-facts.js';
-import { TOUR } from '/lib/tour.js';
+import { initTour } from '/lib/tour-ui.js';
+import { initStaleBanner } from '/lib/stale-banner-ui.js';
+import { initReview } from '/lib/review-ui.js';
+import { initFileReader } from '/lib/file-reader-ui.js';
 
 // Resurface snooze state is browser-local (UI state, not canonical knowledge).
 const snoozeKey = (id) => 'scatterbrained:snooze:' + id;
 const getSnooze = (id) => +localStorage.getItem(snoozeKey(id)) || 0;
 const setSnooze = (id, until) => (until ? localStorage.setItem(snoozeKey(id), String(until)) : localStorage.removeItem(snoozeKey(id)));
 import { parseIntent, INTENTS } from '/lib/intent.js';
+import { buildRegistry, matchCommands } from '/lib/commands.js';
+import { initialState as navInitial, reduce as navReduce, parseHash, serializeHash, sameState, escTarget } from '/lib/nav.js';
 import { buildOptions, nextIndex, optionAt } from '/lib/typeahead.js';
 import { fieldRowsFor, membersForField, relateArgs } from '/lib/fields.js';
-import { monthGrid, gridRange, bucketByDay, heatIntensity, stepMonth, monthLabel } from '/lib/calendar.js';
+import { initTimeLens } from '/lib/time-lenses.js';
 import { isCollapsed as isColRaw, toggleCollapsed as togColRaw } from '/lib/collapse.js';
 import { KIND_META } from '/lib/schedule.js';
-import { quarterAxis, placeItem, classifyStatus } from '/lib/roadmap.js';
+import { initCodebase } from '/lib/codebase-ui.js';
+import { initAgents } from '/lib/agents-ui.js';
+import { laneSummary } from '/lib/act-loop.js';
+import { langColor } from '/lib/lang-colors.js';
+import { initSettings } from '/lib/settings-ui.js';
+import { initPerms } from '/lib/perms-ui.js';
 import { highlightCode, jsonDepths } from '/lib/codehl.js';
 import { buildFileTree, flattenTree } from '/lib/filetree.js';
 import { parseCards, nextReview } from '/lib/cards.js';
@@ -62,82 +72,14 @@ function relationDistribution(types = []) {
 // until then nothing is connected.
 const caps = { llm: false, notion: false };
 
-const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
-const trunc = (s, n) => (s && s.length > n ? s.slice(0, n - 1) + '…' : s || '');
-const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+// esc/trunc/rgba → lib/dom.js (pure, tested); still threaded into *-ui deps below.
+import { esc, trunc, rgba } from '/lib/dom.js';
+import { emptyState } from '/lib/empty-state.js';
+import { buildBrief } from '/lib/daybrief.js';
 
-// ── theming ───────────────────────────────────────────────────────────────────
-const PAL_DEF = { Insight: [127, 119, 221], Rule: [29, 158, 117], Idea: [239, 159, 39], Source: [136, 135, 128], Project: [55, 138, 221], Goal: [212, 83, 126], Person: [212, 83, 126], Organization: [136, 135, 128], Resource: [29, 158, 117], Skill: [239, 159, 39], SyncState: [100, 100, 120] };
-const PAL_TERM = { Insight: [150, 210, 120], Rule: [80, 200, 150], Idea: [220, 210, 110], Source: [120, 150, 120], Project: [120, 230, 160], Goal: [180, 220, 120], Person: [180, 220, 120], Organization: [120, 150, 120], Resource: [80, 200, 150], Skill: [220, 210, 110], SyncState: [110, 140, 110] };
-const PAL_SOLAR = { Insight: [224, 122, 92], Rule: [201, 162, 74], Idea: [240, 176, 64], Source: [176, 150, 120], Project: [230, 150, 60], Goal: [214, 86, 86], Person: [214, 86, 86], Organization: [176, 150, 120], Resource: [201, 162, 74], Skill: [240, 176, 64], SyncState: [150, 130, 110] };
-// Scatterbrained brand palette — warm ember/teal/gold/coral on ink, harmonized with
-// the website + brand kit (ember #ef9a5b, teal #79b4ab, paper #ece6d8).
-const PAL_SCATTER = { Insight: [239, 154, 91], Rule: [224, 178, 90], Idea: [216, 122, 80], Source: [136, 135, 128], Project: [121, 180, 171], Goal: [212, 120, 128], Person: [212, 120, 128], Organization: [150, 140, 122], Resource: [100, 168, 158], Skill: [224, 178, 90], SyncState: [110, 108, 100] };
-// Editor-grade syntax palettes (One Dark / One Light), applied as --hl-* vars by mode.
-const SYNTAX = {
-  dark:  { kw: '#c678dd', str: '#98c379', com: '#7f848e', num: '#d19a66', fn: '#61afef', type: '#e5c07b', prop: '#e06c75', const: '#56b6c2',
-           key0: '#e06c75', key1: '#61afef', key2: '#e5c07b', key3: '#c678dd', key4: '#56b6c2' },
-  light: { kw: '#a626a4', str: '#50a14f', com: '#a0a1a7', num: '#986801', fn: '#4078f2', type: '#c18401', prop: '#e45649', const: '#0184bc',
-           key0: '#e45649', key1: '#4078f2', key2: '#b8860b', key3: '#a626a4', key4: '#0184bc' },
-};
-const THEMES = {
-  scatterbrained: { label: 'Scatterbrained',
-    dark:  { bg: ['#0b0d12', '#06070b'], ink: '#ece6d8', inkDim: '#b6b2a7', inkFaint: '#7e8492', line: 'rgba(236,230,216,.1)', panel: 'rgba(16,19,26,.94)', surface: 'rgba(11,13,18,.95)', surface2: 'rgba(34,28,22,.6)', accent: '#ef9a5b', accentSoft: 'rgba(239,154,91,.22)', warn: '#e0a23f', ok: '#79b4ab', edge: [150, 140, 124], label: [236, 230, 216], ring: 'rgba(236,230,216,.9)', glow: 0.9, palette: PAL_SCATTER },
-    light: { bg: ['#ece6d8', '#e1dac8'], ink: '#16140f', inkDim: '#5f5a4e', inkFaint: '#8c8676', line: 'rgba(20,18,12,.12)', panel: 'rgba(255,252,246,.96)', surface: 'rgba(246,241,231,.96)', surface2: 'rgba(228,220,203,.85)', accent: '#d77f42', accentSoft: 'rgba(215,127,66,.16)', warn: '#b5651d', ok: '#3f7a72', edge: [150, 135, 112], label: [30, 26, 18], ring: 'rgba(22,18,10,.9)', glow: 0.2, palette: PAL_SCATTER } },
-  observatory: { label: 'Observatory',
-    dark:  { bg: ['#0b0f22', '#04050c'], ink: '#dfe4ff', inkDim: '#8b93c8', inkFaint: '#6b73a0', line: 'rgba(140,150,220,.3)', panel: 'rgba(12,16,34,.92)', surface: 'rgba(7,9,18,.92)', surface2: 'rgba(20,24,46,.65)', accent: '#8c97ff', accentSoft: 'rgba(90,105,220,.32)', warn: '#f0a35a', ok: '#7fe0b8', edge: [120, 130, 190], label: [220, 226, 255], ring: 'rgba(255,255,255,.9)', glow: 1, palette: PAL_DEF },
-    light: { bg: ['#ffffff', '#eef1fb'], ink: '#1b2233', inkDim: '#5a6483', inkFaint: '#8b93b0', line: 'rgba(70,80,140,.22)', panel: 'rgba(255,255,255,.92)', surface: 'rgba(246,248,253,.95)', surface2: 'rgba(235,238,250,.85)', accent: '#5a4fc0', accentSoft: 'rgba(90,80,200,.16)', warn: '#b5651d', ok: '#1d8a66', edge: [120, 130, 180], label: [40, 48, 80], ring: 'rgba(20,24,50,.9)', glow: 0.22, palette: PAL_DEF } },
-  nebula: { label: 'Nebula',
-    dark:  { bg: ['#190a26', '#0a0612'], ink: '#f0e2ff', inkDim: '#b89bd6', inkFaint: '#8a6fae', line: 'rgba(190,130,220,.28)', panel: 'rgba(28,14,40,.92)', surface: 'rgba(18,8,28,.92)', surface2: 'rgba(44,22,60,.6)', accent: '#c77dff', accentSoft: 'rgba(180,90,220,.3)', warn: '#ff9e6d', ok: '#6fe0c0', edge: [170, 120, 200], label: [235, 215, 255], ring: 'rgba(255,255,255,.9)', glow: 1, palette: PAL_DEF },
-    light: { bg: ['#ffffff', '#f7edfb'], ink: '#2a1538', inkDim: '#6b4a82', inkFaint: '#9a7bb0', line: 'rgba(150,90,180,.22)', panel: 'rgba(255,255,255,.92)', surface: 'rgba(250,244,253,.95)', surface2: 'rgba(244,232,250,.85)', accent: '#9a4fc0', accentSoft: 'rgba(150,80,190,.16)', warn: '#b5651d', ok: '#1d8a66', edge: [160, 110, 190], label: [60, 30, 80], ring: 'rgba(40,20,55,.9)', glow: 0.22, palette: PAL_DEF } },
-  terminal: { label: 'Terminal',
-    dark:  { bg: ['#0a140a', '#050805'], ink: '#c8f0c8', inkDim: '#7fb37f', inkFaint: '#5a805a', line: 'rgba(110,200,120,.25)', panel: 'rgba(8,18,8,.92)', surface: 'rgba(5,12,5,.94)', surface2: 'rgba(16,34,16,.6)', accent: '#5dca7a', accentSoft: 'rgba(90,200,120,.25)', warn: '#e0c060', ok: '#5dca7a', edge: [90, 160, 100], label: [180, 230, 180], ring: 'rgba(220,255,220,.9)', glow: 0.9, palette: PAL_TERM },
-    light: { bg: ['#fbfdf6', '#eef3e2'], ink: '#1c3a1c', inkDim: '#4a6b4a', inkFaint: '#7a957a', line: 'rgba(60,120,60,.22)', panel: 'rgba(252,253,248,.94)', surface: 'rgba(244,249,236,.95)', surface2: 'rgba(232,242,222,.85)', accent: '#2f7d3f', accentSoft: 'rgba(60,140,70,.16)', warn: '#9a6b10', ok: '#2f7d3f', edge: [90, 150, 90], label: [30, 70, 30], ring: 'rgba(20,55,20,.9)', glow: 0.2, palette: PAL_TERM } },
-  solar: { label: 'Solar',
-    dark:  { bg: ['#1c1206', '#0f0a04'], ink: '#f6e9d6', inkDim: '#c9a87f', inkFaint: '#9a7e5a', line: 'rgba(230,170,90,.25)', panel: 'rgba(34,22,10,.92)', surface: 'rgba(22,14,6,.93)', surface2: 'rgba(54,36,16,.6)', accent: '#ef9f4f', accentSoft: 'rgba(230,150,60,.28)', warn: '#e2585a', ok: '#6fc59a', edge: [200, 150, 90], label: [240, 220, 190], ring: 'rgba(255,250,235,.9)', glow: 1, palette: PAL_SOLAR },
-    light: { bg: ['#fffdf7', '#fdf3e3'], ink: '#3a2410', inkDim: '#7a5a35', inkFaint: '#a8895f', line: 'rgba(180,120,40,.22)', panel: 'rgba(255,253,247,.94)', surface: 'rgba(253,247,236,.95)', surface2: 'rgba(248,238,222,.85)', accent: '#c47318', accentSoft: 'rgba(200,120,30,.16)', warn: '#b03a3a', ok: '#1d8a66', edge: [200, 150, 90], label: [70, 45, 20], ring: 'rgba(60,40,15,.9)', glow: 0.22, palette: PAL_SOLAR } },
-  slate: { label: 'Slate',
-    dark:  { bg: ['#15171b', '#0a0b0d'], ink: '#e6e8ec', inkDim: '#9aa0ab', inkFaint: '#6c727c', line: 'rgba(150,160,180,.22)', panel: 'rgba(22,25,30,.92)', surface: 'rgba(14,16,20,.93)', surface2: 'rgba(34,38,46,.6)', accent: '#7aa2c0', accentSoft: 'rgba(120,160,190,.24)', warn: '#d8a25a', ok: '#7fc0a0', edge: [120, 130, 145], label: [210, 215, 224], ring: 'rgba(255,255,255,.9)', glow: 0.7, palette: PAL_DEF },
-    light: { bg: ['#ffffff', '#f3f5f8'], ink: '#1c2230', inkDim: '#56607a', inkFaint: '#878fa0', line: 'rgba(60,70,90,.2)', panel: 'rgba(255,255,255,.94)', surface: 'rgba(247,249,252,.95)', surface2: 'rgba(236,240,246,.85)', accent: '#3f6f93', accentSoft: 'rgba(70,110,150,.15)', warn: '#9a6b10', ok: '#1d8a66', edge: [110, 120, 140], label: [40, 48, 64], ring: 'rgba(20,28,45,.9)', glow: 0.18, palette: PAL_DEF } },
-};
-const THEME_ORDER = ['scatterbrained', 'observatory', 'nebula', 'terminal', 'solar', 'slate'];
-let THEME = THEMES.observatory.dark;
-let curTheme = 'scatterbrained', curMode = 'dark', calm = false, curAnim = 'full';
-// Loading-animation intensity (Settings): 'off' | 'light' | 'full'. Gates the boot
-// constellation's drama via <html data-anim>; persisted locally.
-function applyAnim(level) {
-  curAnim = ['off', 'light', 'full'].includes(level) ? level : 'full';
-  document.documentElement.setAttribute('data-anim', curAnim);
-  try { localStorage.setItem('scatterbrained.anim', curAnim); } catch (e) {}
-}
-const colorOf = (label) => THEME.palette[label] || [120, 130, 190];
-
-function applyTheme(name, mode) {
-  curTheme = THEMES[name] ? name : 'scatterbrained';
-  curMode = mode === 'light' ? 'light' : 'dark';
-  THEME = THEMES[curTheme][curMode];
-  const r = document.documentElement.style, v = THEME;
-  r.setProperty('--bg0', v.bg[1]); r.setProperty('--bg1', v.bg[0]);
-  r.setProperty('--ink', v.ink); r.setProperty('--ink-dim', v.inkDim); r.setProperty('--ink-faint', v.inkFaint);
-  r.setProperty('--line', v.line); r.setProperty('--panel', v.panel); r.setProperty('--surface', v.surface); r.setProperty('--surface-2', v.surface2);
-  r.setProperty('--accent', v.accent); r.setProperty('--accent-soft', v.accentSoft); r.setProperty('--warn', v.warn); r.setProperty('--ok', v.ok);
-  // Syntax-highlight palette (code review viewer) — editor-grade, mode-aware: One Dark
-  // for dark, One Light for light. Driven here (not CSS) since mode is JS-applied.
-  const hl = SYNTAX[curMode] || SYNTAX.dark;
-  for (const k in hl) r.setProperty('--hl-' + k, hl[k]);
-  document.documentElement.setAttribute('data-mode', curMode);
-  try { localStorage.setItem('scatterbrained.theme', curTheme); localStorage.setItem('scatterbrained.mode', curMode); } catch (e) {}
-  const mb = document.getElementById('set-mode'); if (mb) mb.innerHTML = curMode === 'light' ? '<i class="ti ti-sun" aria-hidden="true"></i>' : '<i class="ti ti-moon" aria-hidden="true"></i>';
-  const tb = document.getElementById('set-theme'); if (tb) tb.title = 'Theme: ' + THEMES[curTheme].label + ' (click to cycle)';
-  poke();
-}
-function setCalm(on) {
-  calm = !!on; document.body.classList.toggle('calm', calm);
-  const b = document.getElementById('set-calm'); if (b) b.classList.toggle('on', calm);
-  try { localStorage.setItem('scatterbrained.calm', calm ? '1' : '0'); } catch (e) {}
-  if (Graph) { Graph.linkDirectionalParticles(particleCount); if (calm) poke(); else { clearTimeout(idleTimer); Graph.resumeAnimation(); } }
-}
-
+// ── theming → lib/themes.js (data) + lib/theme-ui.js (engine) ────────────────
+import { THEMES, THEME_ORDER } from '/lib/themes.js';
+import { initTheme } from '/lib/theme-ui.js';
 // ── state ─────────────────────────────────────────────────────────────────────
 let Graph = null;
 let lastNodeClick = { id: null, t: 0 };       // for double-click-to-open-file detection
@@ -154,7 +96,7 @@ let tMin = 0, tMax = 1, tv = 100;
 let focusId = null, focusDoi = {};
 let didInitialFit = false;
 let lastMx = 0, lastMy = 0, idleTimer = null;
-const HEADER = 60, DOCKW = 264, INSPW = 300, TIMEBAR = 50;
+const HEADER = 60, DOCKW = 264, INSPW = 300, TIMEBAR = 50, RAILW = 64;
 let dockOpen = true, inspOpen = false, reportOpen = false, studyMode = false;
 let current = null;                       // cached selection payload {n, signals, data}
 let study = null;                         // active study session { cards, idx, revealed, reviewed }
@@ -168,13 +110,25 @@ const lensActive = (n) => (activeTypes.size === 0 || activeTypes.has(n.label)) &
 function poke() {
   if (!Graph) return;
   Graph.resumeAnimation();
-  if (calm) { clearTimeout(idleTimer); idleTimer = setTimeout(() => Graph.pauseAnimation(), 1600); }
+  if (themeState.calm) { clearTimeout(idleTimer); idleTimer = setTimeout(() => Graph.pauseAnimation(), 1600); }
 }
 // A full-screen overlay (review / calendar / roadmap / codebase) covers the constellation —
 // pause its render loop so the main thread isn't competing while the overlay builds (the
 // code-review open freeze, #34). Resume when the overlay closes.
 function pauseMainGraph() { if (Graph) Graph.pauseAnimation(); }
 function resumeMainGraph() { if (Graph) poke(); }
+
+// The theme engine (lib/theme-ui.js): owns theme/mode/calm/anim, wires the toolbar
+// buttons, and restores persisted prefs now. themeState is the LIVE state object —
+// read themeState.theme / .calm fresh wherever the old THEME / calm locals were.
+let notifyEmbedsHook = null;   // late-bound below (agents-ui registers after the theme engine boots)
+const themeUi = initTheme({
+  poke,
+  onCalmChange: (on) => { if (Graph) { Graph.linkDirectionalParticles(particleCount); if (on) poke(); else { clearTimeout(idleTimer); Graph.resumeAnimation(); } } },
+  notifyEmbeds: () => { if (notifyEmbedsHook) notifyEmbedsHook(); },
+});
+const { applyTheme, setCalm, applyAnim, applyUiScale, colorOf } = themeUi;
+const themeState = themeUi.current();
 
 // ── data load ───────────────────────────────────────────────────────────────
 async function boot() {
@@ -185,7 +139,11 @@ async function boot() {
       fetch('/api/health').then((r) => r.json()),
     ]);
   } catch (e) { return fail(e); }
-  if (!g.nodes || !g.nodes.length) return fail(new Error('The graph returned no nodes.'));
+  if (!g.nodes || !g.nodes.length) {
+    // An empty graph isn't a failure — it's a first run. Offer onboarding instead of erroring.
+    if (h && h.total === 0) { document.getElementById('boot').classList.add('gone'); return showOnboarding(); }
+    return fail(new Error('The graph returned no nodes.'));
+  }
   document.getElementById('conn').textContent = `${window.location.host} · ${h.total} memories`;
   ingest(g);
   initGraph();
@@ -193,6 +151,31 @@ async function boot() {
   buildLenses();
   loadDock();
   document.getElementById('boot').classList.add('gone');
+}
+
+// First-run onboarding (#6): an empty graph gets a welcome that bootstraps a root owner node, so
+// the constellation starts connected instead of as a void. Creating the root re-boots into the app.
+function showOnboarding() {
+  const ov = document.getElementById('onboard');
+  if (!ov) return;
+  ov.hidden = false;
+  const nameIn = document.getElementById('ob-name');
+  const msg = document.getElementById('ob-msg');
+  const btns = ov.querySelectorAll('button');
+  nameIn.focus();
+  async function submit(kind) {
+    const name = nameIn.value.trim();
+    if (!name) { nameIn.focus(); return; }
+    btns.forEach((b) => (b.disabled = true)); msg.textContent = 'creating…';
+    try {
+      const r = await fetch('/api/root', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, name }) }).then((x) => x.json());
+      if (r.error) { msg.textContent = r.error; btns.forEach((b) => (b.disabled = false)); return; }
+      ov.hidden = true; boot();                    // reload — the root is now in the graph
+    } catch (e) { msg.textContent = 'could not reach the server'; btns.forEach((b) => (b.disabled = false)); }
+  }
+  document.getElementById('ob-person').onclick = () => submit('person');
+  document.getElementById('ob-org').onclick = () => submit('org');
+  nameIn.onkeydown = (e) => { if (e.key === 'Enter') submit('person'); };
 }
 
 function ingest(g) {
@@ -220,13 +203,28 @@ function ingest(g) {
 
 // ── the force-graph instance ─────────────────────────────────────────────────
 const particleCount = (l) => {
-  if (calm) return 0;
+  if (themeState.calm) return 0;
   const A = l.source, B = l.target;
   if (A.bornTime > selT() || B.bornTime > selT()) return 0;
   if (focusId && Math.max(focusDoi[A.id] || 0, focusDoi[B.id] || 0) < 0.3) return 0;
   if (isFiltered() && !(lensActive(A) || lensActive(B))) return 0;
-  return 1;
+  // Zoom-stable particles (2026-07-02): the choppiness zoomed in is the per-frame particle
+  // redraw cost on a DPR2 canvas. Above a zoom threshold, thin then pause them — overview
+  // zoom (where the flow is judged) is unchanged. Calm already returned 0 above.
+  return particlesForZoom(1, Graph ? Graph.zoom() : 1);
 };
+// force-graph only re-reads the particle accessor when told to. Re-apply it when the zoom
+// crosses a particle band (base/thin/pause) — not every zoom frame — so the thin/pause takes
+// effect without churning the accessor mid-pan. Bands mirror particlesForZoom's thresholds.
+const zoomBand = (z) => (z > 6 ? 2 : z > 3 ? 1 : 0);
+let lastZoomBand = 0;
+function syncParticlesToZoom(k) {
+  if (!Graph || themeState.calm) return;
+  const band = zoomBand(Number(k) || 1);
+  if (band === lastZoomBand) return;
+  lastZoomBand = band;
+  Graph.linkDirectionalParticles(particleCount);
+}
 function initGraph() {
   Graph = ForceGraph()(document.getElementById('graph'))
     .graphData({ nodes: NODES, links: LINKS })
@@ -241,7 +239,11 @@ function initGraph() {
     .linkWidth((l) => (sel && (l.source.id === sel || l.target.id === sel) ? 1.4 : 0.5))
     .linkDirectionalParticles(particleCount)
     .linkDirectionalParticleWidth(1.8)
-    .linkDirectionalParticleSpeed(0.006)
+    // Speed is a fraction of link length per frame, so the on-screen hop grows linearly with
+    // zoom (0.006 × linkLen × zoom px/frame) — zoomed into a cluster the dots visibly jump
+    // instead of flow. √zoom compensation keeps the per-frame step near-constant while still
+    // letting particles read faster up close; at overview zoom (≤1) it's exactly the old 0.006.
+    .linkDirectionalParticleSpeed(() => 0.006 / Math.sqrt(Math.max(1, Graph ? Graph.zoom() : 1)))
     .linkDirectionalParticleColor((l) => rgba(colorOf(l.target.label), 0.9))
     .onNodeHover(onHover)
     .onNodeClick((n) => {
@@ -254,15 +256,90 @@ function initGraph() {
     .onNodeDrag(() => poke())
     .onBackgroundClick(() => { if (reportOpen) closeReport(); else { closeInsp(); clearFocus(); } })
     .onRenderFramePre((_ctx, scale) => computeLabelVisibility(scale))
+    .onZoom((z) => syncParticlesToZoom(z && z.k))
     .warmupTicks(80)
     .cooldownTime(7000)
     .onEngineStop(() => { if (!didInitialFit) { didInitialFit = true; Graph.zoomToFit(500, 60); } });
+  // Calm mode pauses the render loop ~1.6s after the last poke — before the 7s cooldown ends —
+  // so onEngineStop (and the initial fit) never fires and the camera strands at the library's
+  // default zoom (a small central blob). The layout is frozen at that point, so fitting it is
+  // final. Non-calm keeps the original engine-stop fit (fitting the still-moving layout early
+  // would freeze a stale frame instead).
+  setTimeout(() => { if (!didInitialFit && Graph && themeState.calm) { didInitialFit = true; Graph.zoomToFit(500, 60); } }, 2200);
   // Spread the constellation so labels have room to breathe (was a tight central blob);
   // stronger repulsion + longer links, still bounded so it can't fly apart / NaN.
   Graph.d3Force('charge').strength(-110).distanceMax(600);
   Graph.d3Force('link').distance(44).strength(0.45);
+  // SPACING (2026-07-02): nodes clumped center-left. Two additions, both bounded so the
+  // layout can't fly apart / NaN:
+  //  · a COLLIDE force so dots (scaled to their render radius) stop overlapping — the lib
+  //    doesn't bundle a d3.forceCollide factory, so we set our own via d3Force(name, force)
+  //    (a d3 force is just `f(alpha)` + `.initialize(nodes)`; this is the documented hook).
+  //  · a gentle X/Y centering pull so the freed-up nodes fill the canvas around the origin
+  //    instead of drifting off to one side. Weak (0.03) — charge/link still shape the graph.
+  Graph.d3Force('collide', makeCollideForce());
+  Graph.d3Force('centerX', makeAxisCenterForce('x', 0.03));
+  Graph.d3Force('centerY', makeAxisCenterForce('y', 0.03));
   Graph.d3VelocityDecay(0.36);
+  // Re-fit once the collide has settled the newly-spread layout (the engine-stop fit can fire
+  // before collision fully relaxes on a big graph). Idempotent: guarded on didInitialFit.
+  setTimeout(() => { if (Graph && !themeState.calm && didInitialFit && !userCam && !focusId && !sel) Graph.zoomToFit(500, 60); }, 4200);
   layoutGraph();
+}
+
+// A minimal collision force (the vendored bundle exposes no forceCollide factory). Each tick
+// it does a few relaxation passes, pushing any pair closer than the sum of their collide radii
+// apart by half the overlap each. O(n·passes) via a coarse spatial hash so it stays cheap at
+// the 300-node cap. `alpha` from the simulation scales the correction so it eases off as the
+// layout cools — standard d3-force convention.
+function makeCollideForce({ passes = 2, cell = 40 } = {}) {
+  let nodes = [];
+  function force(alpha) {
+    const strength = Math.min(1, alpha * 4);          // firmer while hot, gentle as it cools
+    for (let p = 0; p < passes; p++) {
+      const grid = new Map();
+      const key = (x, y) => Math.floor(x / cell) + ',' + Math.floor(y / cell);
+      for (const n of nodes) {
+        if (!isFinite(n.x) || !isFinite(n.y)) continue;
+        const kk = key(n.x, n.y);
+        let bucket = grid.get(kk);
+        if (!bucket) { bucket = []; grid.set(kk, bucket); }
+        bucket.push(n);
+      }
+      for (const a of nodes) {
+        if (!isFinite(a.x) || !isFinite(a.y)) continue;
+        const ra = a._cr;
+        const gx = Math.floor(a.x / cell), gy = Math.floor(a.y / cell);
+        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+          const bucket = grid.get((gx + dx) + ',' + (gy + dy));
+          if (!bucket) continue;
+          for (const b of bucket) {
+            if (b === a || (a.index !== undefined && b.index !== undefined && b.index <= a.index)) continue;
+            let vx = a.x - b.x, vy = a.y - b.y;
+            let d = Math.hypot(vx, vy);
+            const min = ra + b._cr;
+            if (d >= min || d === 0) { if (d === 0) { vx = (Math.random() - 0.5) * 0.01; vy = (Math.random() - 0.5) * 0.01; d = 0.01; } else continue; }
+            const push = ((min - d) / d) * strength * 0.5;
+            const ox = vx * push, oy = vy * push;
+            a.x += ox; a.y += oy; b.x -= ox; b.y -= oy;
+          }
+        }
+      }
+    }
+  }
+  force.initialize = (ns) => { nodes = ns; for (const n of nodes) n._cr = collideRadius(n); };
+  return force;
+}
+
+// A gentle per-axis pull toward the origin (fills the canvas, kills the center-left drift).
+function makeAxisCenterForce(axis, strength) {
+  let nodes = [];
+  function force(alpha) {
+    const k = strength * alpha;
+    for (const n of nodes) { if (isFinite(n[axis])) n['v' + axis] -= n[axis] * k; }
+  }
+  force.initialize = (ns) => { nodes = ns; };
+  return force;
 }
 
 function linkColor(l) {
@@ -271,7 +348,7 @@ function linkColor(l) {
   const lit = sel && (A.id === sel || B.id === sel);
   const lf = !isFiltered() ? 1 : (lensActive(A) || lensActive(B) ? 1 : 0.12);
   const ff = focusId ? Math.max(focusDoi[A.id] || 0.06, focusDoi[B.id] || 0.06) : 1;
-  return lit ? rgba([160, 175, 255], 0.55) : rgba(THEME.edge, 0.16 * lf * ff);
+  return lit ? rgba([160, 175, 255], 0.55) : rgba(themeState.theme.edge, 0.16 * lf * ff);
 }
 
 // Per-frame label declutter: choose which node labels render so they never overlap.
@@ -279,7 +356,23 @@ function linkColor(l) {
 // first, then by rank (degree). Runs in graph space at the current zoom, via the
 // tested `placeLabels`. Recomputed each frame because positions + zoom change.
 let labelShow = new Set();
+// Canvas label tokens (SPEC §11: the hero surface must read from the token layer, not
+// literals). Refreshed once per frame from tokens.css so theme + --ui-scale changes flow
+// through to the constellation. `labelPx` is the on-screen label size in graph-independent
+// px; paintNode divides it by the zoom to draw in graph units.
+let labelFont = 'var(--font-ui)', labelPx = 12;
+function refreshLabelTokens() {
+  const cs = getComputedStyle(document.documentElement);
+  labelFont = (cs.getPropertyValue('--font-ui').trim() || 'Inter, -apple-system, sans-serif');
+  // --fs-md is `calc(14px * var(--ui-scale))` — getPropertyValue returns the raw calc, so pull
+  // the base px out of it and re-apply --ui-scale ourselves (parseFloat('calc(…') is NaN).
+  const raw = cs.getPropertyValue('--fs-md');
+  const base = parseFloat((raw.match(/([\d.]+)px/) || [])[1]) || 14;
+  const uiScale = parseFloat(cs.getPropertyValue('--ui-scale')) || 1;
+  labelPx = base * uiScale;
+}
 function computeLabelVisibility(scale) {
+  refreshLabelTokens();
   const sc = scale || (Graph && Graph.zoom()) || 1;
   const searchOn = searchHits.size > 0;
   // Only the selected/hovered/searched node is *forced* (always drawn). Focus-subgraph
@@ -294,7 +387,7 @@ function computeLabelVisibility(scale) {
     if (!f && searchOn && !searchHits.has(n.id)) continue;        // dimmed by search → no label
     if (!f && focusId && doi < 0.9) continue;                     // in focus, label only the subgraph
     const name = smartLabel(n.name, 26);
-    const fs = 12 / sc;
+    const fs = labelPx / sc;
     const boost = f ? 1e7 : doi >= 0.9 ? 1e6 : 0;
     cand.push({
       id: n.id, x: n.x, y: n.y + n.r + 2 / sc,
@@ -318,26 +411,31 @@ function paintNode(node, ctx, scale) {
   const recede = prov && !(focusId && doi >= 0.9) ? 0.55 : 1;
   const dim = (future ? 0.05 : 1) * doi * lf * sf * recede;
   if (dim < 0.015) return;
-  const r = node.r, GLOW = calm ? 0 : THEME.glow, isSel = sel === node.id, isFocus = focusId === node.id;
+  const r = node.r, GLOW = themeState.calm ? 0 : themeState.theme.glow, isSel = sel === node.id, isFocus = focusId === node.id;
   const px = 1 / scale;                                          // 1 screen px in graph units
 
   if (node.stale && lf > 0.5 && !future) { ctx.strokeStyle = rgba([240, 163, 90], 0.7); ctx.lineWidth = 1.4 * px; ctx.beginPath(); ctx.arc(node.x, node.y, r + 4 * px, 0, 7); ctx.stroke(); }
   if (node.fx != null && !node._ffrz) { ctx.strokeStyle = rgba([200, 210, 255], 0.85 * Math.max(dim, 0.4)); ctx.lineWidth = 1.3 * px; ctx.setLineDash([2 * px, 2 * px]); ctx.beginPath(); ctx.arc(node.x, node.y, r + 3 * px, 0, 7); ctx.stroke(); ctx.setLineDash([]); }
   if (node.embeddable) { ctx.strokeStyle = rgba(col, 0.3 * dim); ctx.lineWidth = 1.2 * px; ctx.beginPath(); ctx.arc(node.x, node.y, r + 3 * px, 0, 7); ctx.stroke(); }
 
-  ctx.shadowColor = rgba(col, 0.85 * dim); ctx.shadowBlur = (isFocus || isSel ? r * 2.2 : r * 1.3) * GLOW;
+  // The halo blur is specified in graph units, so the ctx transform scales it with zoom:
+  // unchecked it reaches hundreds of DEVICE px per node when zoomed into a cluster (canvas
+  // blur cost grows ~radius², ×DPR²) — the user-visible "choppy when zoomed in". Cap the
+  // halo at ~40 SCREEN px: invisible at overview zoom (cap never engages), and zoomed in a
+  // 40px halo still reads as glow while costing a fraction of the uncapped one.
+  ctx.shadowColor = rgba(col, 0.85 * dim); ctx.shadowBlur = Math.min((isFocus || isSel ? r * 2.2 : r * 1.3) * GLOW, 40 * px);
   const g = ctx.createRadialGradient(node.x, node.y, 0.4, node.x, node.y, r);
   g.addColorStop(0, rgba([Math.min(255, col[0] + 38), Math.min(255, col[1] + 38), Math.min(255, col[2] + 38)], dim));
   g.addColorStop(0.55, rgba(col, dim));
   g.addColorStop(1, rgba([col[0] * 0.7, col[1] * 0.7, col[2] * 0.7], dim));
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
-  if (isSel) { ctx.strokeStyle = THEME.ring; ctx.lineWidth = 2 * px; ctx.beginPath(); ctx.arc(node.x, node.y, r + 2 * px, 0, 7); ctx.stroke(); }
+  if (isSel) { ctx.strokeStyle = themeState.theme.ring; ctx.lineWidth = 2 * px; ctx.beginPath(); ctx.arc(node.x, node.y, r + 2 * px, 0, 7); ctx.stroke(); }
 
   const show = labelShow.has(node.id);   // chosen by the decluttering pass (no overlaps)
   if (show && dim > 0.12) {
-    const fs = 12 * px;
-    ctx.font = `${fs}px -apple-system, sans-serif`;
-    ctx.fillStyle = rgba(THEME.label, Math.min(1, dim * 1.2));
+    const fs = labelPx * px;             // token-driven size (--fs-md × --ui-scale)
+    ctx.font = `${fs}px ${labelFont}`;   // token-driven family (--font-ui / Inter)
+    ctx.fillStyle = rgba(themeState.theme.label, Math.min(1, dim * 1.2));
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText(smartLabel(node.name, 26), node.x, node.y + r + 2 * px);
   }
@@ -350,7 +448,7 @@ function nodeArea(node, color, ctx, scale) {
   ctx.fillStyle = color;
   const r = node.r, px = 1 / scale;
   ctx.beginPath(); ctx.arc(node.x, node.y, r + 3 * px, 0, 7); ctx.fill();
-  const fs = 12 * px, w = smartLabel(node.name, 26).length * fs * 0.55;
+  const fs = labelPx * px, w = smartLabel(node.name, 26).length * fs * 0.55;
   ctx.fillRect(node.x - w / 2, node.y + r + px, w, fs + 2 * px);
 }
 
@@ -359,7 +457,7 @@ function onHover(node) {
   const tip = document.getElementById('tip');
   if (node) {
     tip.hidden = false;
-    tip.innerHTML = `<div class="tt">${node.label}${node.embeddable ? ' · indexed' : ''}</div><div class="tn">${esc(node.name)}</div><div class="ts" style="color:${node.stale ? 'var(--warn)' : 'var(--ok)'}">${statusText(node)}</div>`;
+    tip.innerHTML = `<div class="tt">${esc(node.label)}${node.embeddable ? ' · indexed' : ''}</div><div class="tn">${esc(node.name)}</div><div class="ts" style="color:${node.stale ? 'var(--warn)' : 'var(--ok)'}">${esc(statusText(node))}</div>`;
     positionTip();
   } else tip.hidden = true;
 }
@@ -379,11 +477,37 @@ function layoutGraph() {
   if (!Graph) return;
   // Report mode keeps the graph as a context rail on the left of the big panel.
   const rightPanel = reportOpen ? reportWidth() : (inspOpen ? INSPW : 0);
-  const w = window.innerWidth - (dockOpen ? DOCKW : 0) - rightPanel;
+  const w = window.innerWidth - RAILW - (dockOpen ? DOCKW : 0) - rightPanel;
   const h = window.innerHeight - HEADER - TIMEBAR;
   Graph.width(Math.max(120, w)).height(Math.max(120, h));
 }
-window.addEventListener('resize', layoutGraph);
+// Re-fit on WINDOW resize (debounced) until the user takes the camera (wheel/drag/zoom
+// buttons) or frames a focus — the one-shot initial fit goes stale when the window is
+// resized/maximized after load, leaving the constellation a tiny blob at center (the
+// long-standing "blob on load" report: fit at size A, viewed at size B).
+let userCam = false;
+let refitTimer = null;
+window.addEventListener('resize', () => {
+  layoutGraph();
+  syncDockOverflow();
+  if (userCam || focusId || sel || !didInitialFit || !Graph) return;
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(() => { if (!userCam && !focusId && !sel && Graph) Graph.zoomToFit(300, 60); }, 200);
+});
+
+// Scroll affordance for the dock Lenses block (QA polish): the CSS cue (persistent thumb +
+// bottom fade) only shows when the block actually overflows, so toggle .has-overflow when it
+// does. Called on resize, after the lenses rebuild, and via a ResizeObserver on the block so
+// a viewport change with no window 'resize' (dock open/close animation) still updates it.
+function syncDockOverflow() {
+  const el = document.getElementById('lens-sec');
+  if (!el) return;
+  el.classList.toggle('has-overflow', el.scrollHeight > el.clientHeight + 1);
+}
+if (window.ResizeObserver) {
+  const sec = document.getElementById('lens-sec');
+  if (sec) new ResizeObserver(syncDockOverflow).observe(sec);
+}
 
 // ── focus / inspector ────────────────────────────────────────────────────────
 // While focused, freeze the simulation positions of OUT-of-focus nodes so the dimmed
@@ -425,6 +549,9 @@ function focusNode(node) {
 
 function selectNode(n) {
   sel = n.id;
+  // Daily Brief (D3): remember the last node the user was on, so tomorrow's brief can
+  // offer "pick up where you left off". Name-keyed — focusByName resolves it on click.
+  if (n.name) { try { localStorage.setItem('scatterbrained.lastFocus', n.name); } catch (e) { /* private mode */ } }
   if (window.__onSelectNode) window.__onSelectNode(n.id);   // collapse associate panel on a node switch
   if (!reportOpen) {                          // report stays open across selections; it just updates
     inspOpen = true; layoutGraph();
@@ -480,9 +607,18 @@ function selectNode(n) {
       resurface: resurfaceState(node.created_at, node.degree, { snoozedUntil: getSnooze(n.id), now: Date.now(), superseded: !!node.superseded_by }),
       chart: relationDistribution(node.rel_types || edges.map((e) => e.type)),
       notes: node.notes || [], protectedFacts: node.protected_facts || [], retiredFacts: node.retired_facts || [], id: n.id,
+      goal_milestones: node.goal_milestones || [], goal_blockers: node.goal_blockers || [],
       propCount: node.props ? Object.keys(node.props).filter((k) => k !== 'embedding' && k !== 'embedding_hash' && node.props[k] != null).length : null,
     };
     current = { n, signals, data };
+    // Off-canvas opens (__open from the dock/search) pass no file_path, so the pre-fetch
+    // "Open file" gating above hid the button — re-gate on the node's OWN file now we know it.
+    const filePath = node.file_path || n.file_path;
+    if (!reportOpen) {
+      const ofBtn = document.getElementById('i-openfile');
+      ofBtn.hidden = !filePath;
+      if (filePath) ofBtn.onclick = () => openFile(filePath);
+    }
     if (studyMode) { study = { cards: buildCards(signals), idx: 0, revealed: false, reviewed: 0 }; renderStudy(); }
     else if (reportOpen) renderReport(); else renderInspector();
   }).catch(() => { const c = document.getElementById(reportOpen ? 'r-components' : 'i-components'); if (c) c.innerHTML = '<div class="dk-empty" style="font-size:11px">load failed</div>'; });
@@ -493,6 +629,7 @@ function selectNode(n) {
   pinBtn.onclick = () => { if (n.fx != null) { n.fx = n.fy = undefined; } else { n.fx = n.x; n.fy = n.y; } setPinLabel(); Graph.d3ReheatSimulation(); poke(); };
   document.getElementById('a-focus').onclick = () => focusNode(n);
   document.getElementById('a-similar').onclick = () => runSearch(n.name);
+  document.getElementById('a-agent').onclick = () => agentLauncher.open(n.id);   // Act plane: open agent here
   poke();
 }
 // A key-fact that maps to a component you can jump to (click the count → see the items).
@@ -617,6 +754,7 @@ function renderFieldRows() {
     const members = membersForField(edges, f);
     const row = document.createElement('div');
     row.className = 'ifld';
+    row.dataset.fieldKey = f.key;   // lets callers target a specific field's picker (e.g. the goal on-ramp) by key, not render order
     row.innerHTML =
       `<div class="ifld-h">${esc(f.label)}</div>` +
       `<div class="ifld-members">${members.map((m) =>
@@ -678,6 +816,56 @@ function renderReport() {
       `<button class="rpt-wide" title="toggle width" aria-label="toggle width">⤢</button></div>${p.html}</section>`;
   }).join('');
   wireCardLayout(host, n);
+  renderReportGraph();
+}
+
+// Live 1-hop relations map in the report (the same vendored force-graph as the constellation, not a
+// static SVG): the node + its non-source/non-annotation neighbors, clickable + prunable. #rel-live is
+// re-created on every renderReport (r-components is re-innerHTML'd), so rebuild the instance each time.
+let reportGraph = null, reportGraphHover = null;
+function teardownReportGraph() { if (reportGraph) { reportGraph.pauseAnimation(); reportGraph = null; } }
+function renderReportGraph() {
+  teardownReportGraph();
+  const host = document.getElementById('rel-live');
+  if (!host || !current) return;
+  const n = current.n;
+  const ANN = ['Note', 'ProtectedFact', 'Review'];
+  const rel = ((current.data && current.data.edges) || []).filter((e) => !(e.label === 'Source' && e.dir === 'in') && !ANN.includes(e.label));
+  const cssv = (v, d) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || d;
+  const nodes = [{ id: n.id, center: true, label: trunc(n.name || '', 20), color: rgba(colorOf(n.label), 1), val: 9 }];
+  const links = []; const seen = new Set([n.id]);
+  rel.slice(0, 40).forEach((e) => {
+    if (!e.id || seen.has(e.id)) return; seen.add(e.id);
+    nodes.push({ id: e.id, label: trunc(e.name || '', 16), name: e.name, type: e.type, color: rgba(colorOf(e.label), 1), val: 4 });
+    links.push(e.dir === 'in' ? { source: e.id, target: n.id } : { source: n.id, target: e.id });
+  });
+  reportGraph = ForceGraph()(host);
+  reportGraph.width(host.clientWidth).height(host.clientHeight).backgroundColor('rgba(0,0,0,0)')
+    .graphData({ nodes, links })
+    .nodeLabel((d) => esc(d.center ? (d.label || '') : `${d.type || ''} · ${d.name || ''}`))
+    .nodeCanvasObjectMode(() => 'replace')
+    .nodeCanvasObject((d, ctx, scale) => {
+      const ink = cssv('--ink', '#ece6d8');
+      const r = 1.8 + (d.val || 4) * 0.7;
+      ctx.shadowColor = d.color; ctx.shadowBlur = (d === reportGraphHover ? r * 2.6 : r * 1.5);
+      ctx.fillStyle = d.color; ctx.beginPath(); ctx.arc(d.x, d.y, r, 0, 7); ctx.fill();
+      ctx.shadowBlur = 0;
+      if (d.center) { ctx.strokeStyle = cssv('--accent', '#ef9a5b'); ctx.lineWidth = 1.5 / scale; ctx.beginPath(); ctx.arc(d.x, d.y, r + 3 / scale, 0, 7); ctx.stroke(); }
+      ctx.font = `${(d.center ? 11 : 9.5) / scale}px ui-monospace, monospace`;
+      ctx.fillStyle = ink; ctx.textBaseline = 'middle';
+      ctx.globalAlpha = (d.center || d === reportGraphHover) ? 1 : 0.74;
+      ctx.fillText(d.label, d.x + r + 3 / scale, d.y);
+      ctx.globalAlpha = 1;
+    })
+    .linkColor(() => 'rgba(150,140,124,0.28)').linkWidth(0.6)
+    .linkDirectionalParticles(1).linkDirectionalParticleWidth(1.6).linkDirectionalParticleColor(() => cssv('--accent', '#ef9a5b'))
+    .onNodeHover((d) => { reportGraphHover = d; host.style.cursor = d && !d.center ? 'pointer' : ''; })
+    .onNodeClick((d) => { if (d && !d.center) selectByIdOrName(d.id, d.name); })
+    .warmupTicks(60).cooldownTime(5000);
+  reportGraph.d3Force('charge').strength(-90).distanceMax(400);
+  reportGraph.d3Force('link').distance(46).strength(0.5);
+  reportGraph.d3VelocityDecay(0.36);
+  setTimeout(() => reportGraph && reportGraph.zoomToFit(500, 30), 400);
 }
 const layoutKey = (n) => `scatterbrained:layout:${n.label || 'node'}`;
 function wireCardLayout(host, n) {
@@ -723,12 +911,13 @@ function openReport() {
 }
 function collapseReport() {
   reportOpen = false; studyMode = false;
+  teardownReportGraph();
   document.getElementById('report').hidden = true;
   if (current) { inspOpen = true; document.getElementById('insp').hidden = false; renderInspector(); }
   layoutGraph();
   poke();
 }
-function closeReport() { reportOpen = false; studyMode = false; document.getElementById('report').hidden = true; sel = null; layoutGraph(); clearFocus(); poke(); }
+function closeReport() { reportOpen = false; studyMode = false; teardownReportGraph(); document.getElementById('report').hidden = true; sel = null; layoutGraph(); clearFocus(); poke(); }
 
 // ── Study mode (M-H) — active recall over the current node's cards ────────────
 function openStudy() {
@@ -782,6 +971,21 @@ function handleCard(action) {
     if (rx) { e.preventDefault(); removeEdge(rx.dataset.unrel, rx.dataset.name); return; }
     const nav = e.target.closest('.nav-node');
     if (nav) { e.preventDefault(); selectByIdOrName(nav.dataset.id, nav.dataset.name); return; }
+    const gp = e.target.closest('[data-gp-action="link-project"]');
+    if (gp) {
+      // Goal degraded-state on-ramp: open the "Edit attributes" section and focus the existing
+      // "Achieved by" relate picker — reuse the field machinery, don't build a parallel one.
+      e.preventDefault();
+      const host = gp.closest('#i-components, #r-components') || document;
+      const sec = host.querySelector('.insp-sec-fields') || document.querySelector('.insp-sec-fields');
+      if (sec) {
+        if (sec.classList.contains('collapsed')) { secToggle(sec.dataset.sec, sec.dataset.defcollapsed === '1'); sec.classList.remove('collapsed'); }
+        // Focus the "Achieved by" (goal-project) picker by KEY, not render order; fall back to the first.
+        const input = sec.querySelector('.ifld[data-field-key="goal-project"] .ifld-input') || sec.querySelector('.ifld-input');
+        if (input) { input.scrollIntoView({ block: 'center', behavior: 'smooth' }); input.focus(); }
+      }
+      return;
+    }
     const rs = e.target.closest('[data-resurface]');
     if (rs) { e.preventDefault(); handleResurface(rs.dataset.resurface); return; }
     const card = e.target.closest('[data-card]');
@@ -849,10 +1053,16 @@ function handleResurface(action) {
   current.data.resurface = resurfaceState(current.data.created_at, current.signals.degree, { snoozedUntil: getSnooze(id), now: Date.now(), superseded: !!current.data.superseded_by });
   if (reportOpen) renderReport(); else renderInspector();
 }
-document.getElementById('i-expand').onclick = openReport;
+// Type-aware expand: a Review opens the code-review viewer at its frozen repo@git_ref (so its
+// line-comment Notes load); every other node type expands to the report slide-over.
+document.getElementById('i-expand').onclick = () => {
+  const s = current && current.signals;
+  if (s && s.label === 'Review' && s.props && s.props.repo) navigate({ type: 'open', lens: 'code', tab: 'review', payload: { repo: s.props.repo, gitRef: s.props.git_ref } });
+  else openReport();
+};
 document.getElementById('a-study').onclick = openStudy;
 document.getElementById('r-collapse').onclick = collapseReport;
-document.getElementById('r-export').onclick = () => {
+function exportBriefing() {
   if (!current) return;
   const md = nodeToMarkdown(current.signals, current.data);
   const blob = new Blob([md], { type: 'text/markdown' });
@@ -860,12 +1070,13 @@ document.getElementById('r-export').onclick = () => {
   a.href = URL.createObjectURL(blob); a.download = exportFilename(current.n.name);
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-};
+}
+document.getElementById('r-export').onclick = exportBriefing;
 document.getElementById('report-x').onclick = closeReport;
 document.getElementById('r-focus').onclick = () => current && focusNode(current.n);
 document.getElementById('r-pin').onclick = () => { const n = current && current.n; if (!n) return; if (n.fx != null) { n.fx = n.fy = undefined; } else { n.fx = n.x; n.fy = n.y; } Graph.d3ReheatSimulation(); poke(); };
 
-function closeInsp() { sel = null; inspOpen = false; layoutGraph(); document.getElementById('insp').hidden = true; poke(); }
+function closeInsp() { sel = null; inspOpen = false; clearFocus(); layoutGraph(); document.getElementById('insp').hidden = true; poke(); }
 document.getElementById('insp-x').onclick = closeInsp;
 
 function focusByName(name) {
@@ -873,165 +1084,15 @@ function focusByName(name) {
   if (n) { selectNode(n); focusNode(n); } else { runSearch(name); document.getElementById('q').value = name; }
 }
 window.__focus = focusByName;
+// Open a node by id (works off-canvas: selectNode fetches /api/node by id even when the node
+// isn't a rendered constellation node). Used by the dock so a Goal opens the GOAL, not its project.
+window.__open = (id, name, label) => { selectNode({ id, name, label }); refreshGraphData(name); };
 
-// ── file reader: load a whole source/code file in-app (sandboxed by the server) ──
-const FR = document.getElementById('filereader');
-let frState = null;   // { text, kind, path } of the loaded file, for view switching
-let pdfTask = null;
-function closeFile() {
-  if (frEdit.active) { releaseLock(true); leaveEditUi(); }   // release the edit lock on close
-  FR.hidden = true;
-  document.getElementById('fr-body').innerHTML = ''; document.getElementById('fr-md').innerHTML = '';
-  document.getElementById('fr-embed').src = 'about:blank';
-  const pane = document.getElementById('fr-pdf'); pane.innerHTML = ''; pane.hidden = true;
-  document.getElementById('fr-loading').hidden = true; setHistoryOpen(false);
-  if (pdfTask) { try { pdfTask.destroy(); } catch { /* ignore */ } pdfTask = null; }
-}
-function renderReader(mode) {
-  const body = document.getElementById('fr-body'), md = document.getElementById('fr-md');
-  const rendered = mode === 'rendered';
-  body.hidden = rendered; md.hidden = !rendered;
-  document.getElementById('fr-rendered').classList.toggle('on', rendered);
-  document.getElementById('fr-raw').classList.toggle('on', !rendered);
-  if (rendered) {
-    if (frState.kind === 'csv' || frState.kind === 'xlsx') {
-      const rows = frState.rows || (frState.rows = parseCsv(frState.text));
-      buildSheet(md, rows, { notes: frState.notes, filePath: frState.path });
-    } else {
-      md.innerHTML = miniMarkdown(frState.text, esc);
-      decorateSections(md, frState.notes);   // heading note-buttons + existing section notes
-      md.scrollTop = 0;
-    }
-  } else {
-    body.innerHTML = rawLinesHtml(frState.text, frState.notes, esc);   // per-line gutters + anchored notes
-    body.scrollTop = 0;
-  }
-}
-// Per-line ("anchored") notes — click a line's gutter (raw view) to attach a note
-// to that line; it persists as a Note ABOUT the file's Source, anchored by line +
-// snippet. Works for documents and for a CSV opened raw (a line is a row).
-document.getElementById('fr-body').addEventListener('click', (e) => {
-  const gut = e.target.closest('.fr-gut');
-  if (gut) openLineNoteInput(gut.closest('.fr-line'));
-});
-function openLineNoteInput(lineEl) {
-  if (!lineEl || !frState) return;
-  const next = lineEl.nextElementSibling;
-  if (next && next.classList.contains('fr-addrow')) { next.querySelector('textarea').focus(); return; }
-  const ln = Number(lineEl.dataset.line);
-  const row = document.createElement('div');
-  row.className = 'fr-addrow';
-  row.innerHTML = `<textarea class="fr-add-tx" rows="2" placeholder="note on line ${ln}…" aria-label="note text"></textarea><button class="fr-add-expand" title="open large editor" aria-label="open large editor">⤢</button><button class="fr-add-go">add note</button>`;
-  lineEl.after(row);
-  const ta = row.querySelector('.fr-add-tx'); ta.focus();
-  const snippet = lineEl.querySelector('.fr-tx') ? lineEl.querySelector('.fr-tx').textContent : '';
-  const submitText = async (text) => {
-    text = String(text || '').trim(); if (!text) { row.remove(); return; }
-    try {
-      const res = await fetch('/api/note', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: frState.path, anchor_kind: 'line', locator: ln, snippet, text }) });
-      const j = await res.json();
-      if (j.note) { frState.notes = [...(frState.notes || []), j.note]; renderReader('raw'); } else { row.remove(); }
-    } catch (e) { row.remove(); }
-  };
-  const submit = () => submitText(ta.value);
-  row.querySelector('.fr-add-go').onclick = submit;
-  row.querySelector('.fr-add-expand').onclick = () => { const draft = ta.value; row.remove(); openNoteModal({ title: `note on line ${ln}`, text: draft, onSubmit: submitText }); };
-  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); if (e.key === 'Escape') row.remove(); });
-}
-// POST a note (any anchor kind) and return the created note, or null on failure.
-async function postNote(body) {
-  try {
-    const res = await fetch('/api/note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const j = await res.json();
-    return j.note || null;
-  } catch { return null; }
-}
-// 0-based column index -> spreadsheet letter ("A", "Z", "AA").
-function colLabel(c) {
-  let s = '', n = c;
-  do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
-  return s;
-}
-// A single floating note popover, reused by cell + section anchors: shows existing
-// notes (annoHtml) and an add form. onSubmit(text) gets the trimmed note text.
-let notePop = null;
-function closeNotePop() { if (notePop) { notePop.remove(); notePop = null; } }
-function showNotePopover(rect, { title, existing, onSubmit }) {
-  closeNotePop();
-  const p = document.createElement('div');
-  p.className = 'fr-pop';
-  p.innerHTML =
-    `<div class="fr-pop-h">${esc(title)}</div>` +
-    (existing && existing.length ? `<div class="fr-pop-notes">${annoHtml(existing, esc)}</div>` : '') +
-    `<textarea class="fr-pop-tx" rows="2" placeholder="note…" aria-label="note text"></textarea>` +
-    `<div class="fr-pop-actions"><button class="fr-pop-expand" title="open large editor" aria-label="open large editor">⤢</button><button class="fr-pop-go">add note</button><button class="fr-pop-cancel">cancel</button></div>`;
-  document.body.appendChild(p);
-  notePop = p;
-  // position under the anchor, clamped on-screen
-  const w = 260, pad = 8;
-  const left = Math.min(Math.max(pad, rect.left), window.innerWidth - w - pad);
-  const top = Math.min(rect.bottom + 6, window.innerHeight - 140);
-  p.style.left = left + 'px'; p.style.top = top + 'px'; p.style.width = w + 'px';
-  const ta = p.querySelector('.fr-pop-tx'); ta.focus();
-  const submit = async () => {
-    const text = ta.value.trim(); if (!text) { closeNotePop(); return; }
-    p.querySelector('.fr-pop-go').disabled = true;
-    await onSubmit(text);
-    closeNotePop();
-  };
-  p.querySelector('.fr-pop-go').onclick = submit;
-  p.querySelector('.fr-pop-cancel').onclick = closeNotePop;
-  p.querySelector('.fr-pop-expand').onclick = () => openNoteModal({ title, text: ta.value, existing, onSubmit });
-  ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
-    if (e.key === 'Escape') { e.stopPropagation(); closeNotePop(); }
-  });
-}
-// dismiss the popover on outside click / Escape
-document.addEventListener('mousedown', (e) => { if (notePop && !notePop.contains(e.target) && !e.target.closest('.cell-note-btn,.md-sec-note')) closeNotePop(); });
+// ── file reader → lib/file-reader-ui.js (deps esc+trunc; openFile/openNoteModal/postNote come back) ──
+const fr = initFileReader({ esc, trunc });
+const { openFile, openNoteModal, postNote } = fr;
 
-// A large, comfortable note editor modal — opened via the ⤢ on any note input (line /
-// cell / row / column / section / PDF page / node). Carries the in-progress draft over and
-// submits through the SAME onSubmit, with a Markdown preview. onSubmit(text) gets trimmed text.
-let noteModal = null;
-function closeNoteModal() { if (noteModal) { noteModal.remove(); noteModal = null; document.removeEventListener('keydown', noteModalKey, true); } }
-function noteModalKey(e) { if (noteModal && e.key === 'Escape') { e.stopPropagation(); closeNoteModal(); } }
-function openNoteModal({ title, text = '', existing = [], onSubmit }) {
-  closeNoteModal(); closeNotePop();
-  const m = document.createElement('div');
-  m.className = 'note-modal-backdrop';
-  m.innerHTML =
-    '<div class="note-modal" role="dialog" aria-modal="true">' +
-      `<div class="nm-head"><span class="nm-title">${esc(title || 'note')}</span><button class="nm-x" aria-label="close">×</button></div>` +
-      (existing && existing.length ? `<div class="nm-existing">${annoHtml(existing, esc)}</div>` : '') +
-      '<textarea class="nm-text" placeholder="write your note… (Markdown supported · ⌘↵ to save)" aria-label="note text"></textarea>' +
-      '<div class="nm-prev fr-md" hidden></div>' +
-      '<div class="nm-actions"><button class="nm-preview fe-btn">preview</button><span class="nm-grow"></span>' +
-      '<button class="nm-cancel fe-btn">cancel</button><button class="nm-go fe-btn fe-save">add note</button></div>' +
-    '</div>';
-  document.body.appendChild(m);
-  noteModal = m;
-  const ta = m.querySelector('.nm-text');
-  ta.value = text; ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
-  const submit = async () => {
-    const t = ta.value.trim(); if (!t) { closeNoteModal(); return; }
-    m.querySelector('.nm-go').disabled = true;
-    await onSubmit(t);
-    closeNoteModal();
-  };
-  m.querySelector('.nm-go').onclick = submit;
-  m.querySelector('.nm-cancel').onclick = closeNoteModal;
-  m.querySelector('.nm-x').onclick = closeNoteModal;
-  m.querySelector('.nm-preview').onclick = () => {
-    const prev = m.querySelector('.nm-prev'), btn = m.querySelector('.nm-preview');
-    if (prev.hidden) { prev.innerHTML = miniMarkdown(ta.value, esc); prev.hidden = false; ta.style.display = 'none'; btn.textContent = 'edit'; }
-    else { prev.hidden = true; ta.style.display = ''; btn.textContent = 'preview'; }
-  };
-  m.addEventListener('mousedown', (e) => { if (e.target === m) closeNoteModal(); });   // backdrop click
-  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); });
-  document.addEventListener('keydown', noteModalKey, true);
-}
+// ── inspector note + protected-fact handlers (window.__*) — drive the inspector/report panels ──
 // expand handler for the node-notes panel form (registry.js renders the ⤢ button)
 window.__expandNote = (btn) => {
   const form = btn.closest('form'); if (!form) return;
@@ -1048,305 +1109,6 @@ window.__expandNote = (btn) => {
   });
 };
 
-// Add a section ("heading") note affordance to a rendered-markdown container:
-// each heading gets a stable slug id, a hover note-button, and any existing notes.
-function decorateSections(host, notes) {
-  const idx = sectionNotesIndex(notes);
-  host.querySelectorAll('h1,h2,h3,h4').forEach((h) => {
-    if (h.querySelector('.md-sec-note')) return;          // idempotent
-    const heading = h.textContent.trim();
-    const slug = slugify(heading);
-    h.classList.add('md-h');
-    const btn = document.createElement('button');
-    btn.className = 'md-sec-note'; btn.type = 'button';
-    btn.title = 'add a note on this section'; btn.textContent = '🗒';
-    btn.dataset.section = slug; btn.dataset.heading = heading;
-    h.prepend(btn);
-    const list = idx.get(slug);
-    if (list && list.length) {
-      h.classList.add('has-note');
-      const box = document.createElement('div');
-      box.className = 'fr-secnotes'; box.innerHTML = annoHtml(list, esc);
-      h.after(box);
-    }
-  });
-}
-
-async function openFile(filePath) {
-  if (!filePath) return;
-  const body = document.getElementById('fr-body'), md = document.getElementById('fr-md'), embed = document.getElementById('fr-embed');
-  const toggle = document.getElementById('fr-toggle');
-  const newtab = document.getElementById('fr-newtab');
-  const pdfPane = document.getElementById('fr-pdf'), loading = document.getElementById('fr-loading');
-  if (frEdit.active) { releaseLock(true); leaveEditUi(); }   // abandon any edit when switching files
-  frState = null; toggle.hidden = true; md.hidden = true; embed.hidden = true; embed.src = 'about:blank'; body.hidden = false; newtab.hidden = true;
-  pdfPane.hidden = true; pdfPane.innerHTML = ''; loading.hidden = true;
-  document.getElementById('fr-edit').hidden = true; document.getElementById('fr-history').hidden = true; setHistoryOpen(false);
-  if (pdfTask) { try { pdfTask.destroy(); } catch { /* ignore */ } pdfTask = null; }
-  document.getElementById('fr-path').textContent = filePath;
-  document.getElementById('fr-meta').textContent = '';
-  document.getElementById('fr-kind').textContent = '…';
-  body.innerHTML = '<span class="fr-note">loading…</span>';
-  FR.hidden = false;
-  try {
-    const r = await fetch('/api/file?path=' + encodeURIComponent(filePath));
-    const f = (await r.json()).file || {};
-    document.getElementById('fr-kind').textContent = f.kind || 'file';
-    document.getElementById('fr-path').textContent = f.path || filePath;
-    if (f.blocked) return void (body.innerHTML = '<span class="fr-note">outside the read sandbox — not loaded</span>');
-    if (f.missing) return void (body.innerHTML = '<span class="fr-note">file not found</span>');
-    if (f.tooLarge) return void (body.innerHTML = '<span class="fr-note">file too large to load here</span>');
-    if (f.embed === 'pdf') {                                  // render PDFs in-app via pdf.js → canvas
-      const raw = '/api/raw?path=' + encodeURIComponent(f.path || filePath);
-      frState = { kind: 'pdf', path: f.path || filePath, notes: f.notes || [], text: '', rows: null };
-      const nCount = anchoredCount(frState.notes);
-      document.getElementById('fr-meta').textContent = 'PDF' + (nCount ? ` · ${nCount} note${nCount > 1 ? 's' : ''}` : '');
-      newtab.href = raw; newtab.hidden = false;               // always-available fallback
-      renderPdf(raw);
-      return;
-    }
-    if (f.unsupported) return void (body.innerHTML = `<span class="fr-note">${esc(f.kind)} — no in-app viewer yet</span>`);
-    if (f.error) return void (body.innerHTML = `<span class="fr-note">${esc(f.error)}</span>`);
-    frState = { text: String(f.text || ''), kind: f.kind, path: f.path || filePath, notes: f.notes || [], rows: f.rows || null };
-    const extracted = f.extracted ? ` · extracted from ${esc(f.extracted)}` : '';
-    const nCount = anchoredCount(frState.notes);
-    const noteTag = nCount ? ` · ${nCount} note${nCount > 1 ? 's' : ''}` : '';
-    document.getElementById('fr-meta').textContent = `${f.lines || frState.text.split('\n').length} lines${extracted}${noteTag}`;
-    // Markdown, CSV and xlsx get a pretty ⇄ raw switch (rendered prose / spreadsheet table).
-    const isSheet = f.kind === 'csv' || f.kind === 'xlsx';
-    const pretty = f.kind === 'markdown' || isSheet;
-    toggle.hidden = !pretty;
-    document.getElementById('fr-rendered').textContent = isSheet ? 'table' : 'rendered';
-    // Markdown files are editable (lock + save + git history); show the affordances.
-    const editable = f.kind === 'markdown';
-    document.getElementById('fr-edit').hidden = !editable;
-    document.getElementById('fr-history').hidden = !editable;
-    renderReader(pretty ? 'rendered' : 'raw');
-  } catch (err) { body.innerHTML = `<span class="fr-note">${esc(String(err))}</span>`; }
-}
-// Interactive spreadsheet: sort (click header), filter (search), resize columns,
-// toggle row density. State is per-open and local to this view; the data is read-only.
-function buildSheet(host, allRows, noteCtx = { notes: [], filePath: null }) {
-  let sortCol = null, sortDir = 'none', query = '', comfy = false, view = 'table', chartCol = null;
-  const numericCols = (allRows[0] || []).map((_, c) => isNumericColumn(allRows, c));
-  // Reference→original-row-index map (sort/filter preserve row identity) so a cell
-  // note anchors to its true position regardless of the current view ordering.
-  const origIdx = new Map(allRows.map((r, i) => [r, i]));
-  // Open the shared note popover for a cell, a whole row, or a whole column.
-  const openCellNote = (cellEl) => {
-    const r = Number(cellEl.dataset.r), c = Number(cellEl.dataset.c);
-    const snippet = String((allRows[r] && allRows[r][c]) != null ? allRows[r][c] : '');
-    const existing = cellNotesIndex(noteCtx.notes).get(`${r},${c}`) || [];
-    showNotePopover(cellEl.getBoundingClientRect(), {
-      title: `cell ${colLabel(c)}${r + 1}`, existing,
-      onSubmit: async (text) => {
-        const note = await postNote({ filePath: noteCtx.filePath, anchor_kind: 'cell', locator: makeCellLocator(r, c), snippet, text });
-        if (note) { noteCtx.notes.push(note); render(); }
-      },
-    });
-  };
-  const openRowNote = (el) => {
-    const r = Number(el.dataset.r);
-    const snippet = (allRows[r] || []).filter(Boolean).slice(0, 4).join(' · ');
-    const existing = rowNotesIndex(noteCtx.notes).get(r) || [];
-    showNotePopover(el.getBoundingClientRect(), {
-      title: `row ${r}`, existing,
-      onSubmit: async (text) => {
-        const note = await postNote({ filePath: noteCtx.filePath, anchor_kind: 'row', locator: makeRowLocator(r), snippet, text });
-        if (note) { noteCtx.notes.push(note); render(); }
-      },
-    });
-  };
-  const openColNote = (el) => {
-    const c = Number(el.dataset.c);
-    const snippet = String((allRows[0] && allRows[0][c]) != null ? allRows[0][c] : '');
-    const existing = colNotesIndex(noteCtx.notes).get(c) || [];
-    showNotePopover(el.getBoundingClientRect(), {
-      title: `column ${colLabel(c)}${snippet ? ` (${snippet})` : ''}`, existing,
-      onSubmit: async (text) => {
-        const note = await postNote({ filePath: noteCtx.filePath, anchor_kind: 'col', locator: makeColLocator(c), snippet, text });
-        if (note) { noteCtx.notes.push(note); render(); }
-      },
-    });
-  };
-  const numCols = profileColumns(allRows).filter((c) => c.numeric);
-  const viewBtn = () => `<button class="sheet-view ${view === 'chart' ? 'on' : ''}" title="table / chart">${view === 'chart' ? '▦ table' : '📊 chart'}</button>`;
-  const render = (focusFilter) => {
-    if (view === 'chart') {
-      const header = allRows[0] || [];
-      const spec = chartCol != null
-        ? histogramSpec(columnValues(allRows, chartCol), 12, `distribution of ${header[chartCol]}`)
-        : recommendChart(allRows);
-      const picker = numCols.length
-        ? `<select class="sheet-col" title="column"><option value="">auto</option>` +
-          numCols.map((c) => `<option value="${c.index}" ${chartCol === c.index ? 'selected' : ''}>${esc(c.name)}</option>`).join('') + `</select>`
-        : '';
-      const chartHtml = spec ? REGISTRY.chart.render({}, { chart: spec }, { esc, trunc })
-        : `<div class="fr-note" style="padding:24px">no numeric columns to chart</div>`;
-      host.innerHTML = `<div class="sheet-bar">${picker}<span class="sheet-count">${spec ? spec.kind : ''}</span>${viewBtn()}</div>` +
-        `<div class="sheet-scroll sheet-chartview">${chartHtml}</div>`;
-      wire(focusFilter); return;
-    }
-    let rows = filterRows(allRows, query);
-    rows = sortRows(rows, sortCol, sortDir);
-    const header = rows[0] || [], body = rows.slice(1);
-    const cellIdx = cellNotesIndex(noteCtx.notes), rowIdx = rowNotesIndex(noteCtx.notes), colIdx = colNotesIndex(noteCtx.notes);
-    const dot = (n) => (n ? `<span class="cell-dot" title="${n} note${n > 1 ? 's' : ''}"></span>` : '');
-    const ind = (i) => (sortCol === i ? (sortDir === 'asc' ? '▲' : sortDir === 'desc' ? '▼' : '') : '');
-    const ncols = header.length;
-    // header row: corner cell + a column-note button on every header
-    const ths = `<th class="rownum-h"></th>` + header.map((h, i) => {
-      const noted = (colIdx.get(i) || []).length;
-      return `<th data-col="${i}" data-c="${i}" class="${numericCols[i] ? 'num ' : ''}${noted ? 'has-note' : ''}">` +
-        `<span class="th-l">${esc(h)}</span><span class="sort-ind">${ind(i)}</span>` +
-        `<button class="col-note-btn" type="button" title="note on this column" tabindex="-1">+</button>` +
-        dot(noted) + `<span class="col-resize" data-col="${i}"></span></th>`;
-    }).join('');
-    const trs = body.map((r) => {
-      const ri = origIdx.has(r) ? origIdx.get(r) : -1;
-      const rNotes = ri >= 0 ? (rowIdx.get(ri) || []) : [];
-      const rownum = `<td class="rownum ${rNotes.length ? 'has-note' : ''}" data-r="${ri}">` +
-        `<span class="rn-v">${ri >= 0 ? ri : ''}</span>` +
-        `<button class="row-note-btn" type="button" title="note on this row" tabindex="-1">+</button>` + dot(rNotes.length) + `</td>`;
-      const cells = r.map((c, i) => {
-        const noted = ri >= 0 ? (cellIdx.get(`${ri},${i}`) || []).length : 0;
-        return `<td data-r="${ri}" data-c="${i}" class="${numericCols[i] ? 'num ' : ''}${noted ? 'has-note' : ''}">` +
-          `<span class="cell-v">${esc(c)}</span>` +
-          `<button class="cell-note-btn" type="button" title="note on this cell" tabindex="-1">+</button>` + dot(noted) + `</td>`;
-      }).join('');
-      let tr = `<tr>${rownum}${cells}</tr>`;
-      if (rNotes.length) tr += `<tr class="row-anno"><td class="rownum"></td><td colspan="${ncols}">${annoHtml(rNotes, esc)}</td></tr>`;
-      return tr;
-    }).join('');
-    const total = Math.max(0, allRows.length - 1), shown = body.length;
-    host.innerHTML =
-      `<div class="sheet-bar"><input class="sheet-filter" placeholder="filter rows…" value="${esc(query)}"/>` +
-      `<span class="sheet-count">${shown === total ? total + ' rows' : shown + ' of ' + total}</span>` +
-      `<button class="sheet-density ${comfy ? 'on' : ''}" title="row height">↕ density</button>${viewBtn()}</div>` +
-      `<div class="sheet-scroll"><table class="csv-table sheet ${comfy ? 'comfy' : ''}"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div>`;
-    wire(focusFilter);
-  };
-  const wire = (focusFilter) => {
-    host.querySelector('.sheet-view').onclick = () => { view = view === 'chart' ? 'table' : 'chart'; render(); };
-    const sel = host.querySelector('.sheet-col');
-    if (sel) sel.onchange = () => { chartCol = sel.value === '' ? null : +sel.value; render(); };
-    const fi = host.querySelector('.sheet-filter');
-    if (!fi) return;                              // chart view has no table controls
-    fi.oninput = () => { const p = fi.selectionStart; query = fi.value; render(true); const n = host.querySelector('.sheet-filter'); n.focus(); n.setSelectionRange(p, p); };
-    if (focusFilter) fi.focus();
-    host.querySelector('.sheet-density').onclick = () => { comfy = !comfy; render(); };
-    host.querySelectorAll('td:not(.rownum) .cell-note-btn').forEach((b) => {
-      b.onclick = (e) => { e.stopPropagation(); openCellNote(b.closest('td')); };
-    });
-    host.querySelectorAll('.row-note-btn').forEach((b) => {
-      b.onclick = (e) => { e.stopPropagation(); openRowNote(b.closest('td.rownum')); };
-    });
-    host.querySelectorAll('.col-note-btn').forEach((b) => {
-      b.onclick = (e) => { e.stopPropagation(); openColNote(b.closest('th')); };
-    });
-    host.querySelectorAll('th:not(.rownum-h)').forEach((th) => {
-      th.addEventListener('click', (e) => {
-        if (e.target.classList.contains('col-resize') || e.target.closest('.col-note-btn')) return;
-        const c = +th.dataset.col;
-        if (sortCol === c) { sortDir = sortDir === 'asc' ? 'desc' : sortDir === 'desc' ? 'none' : 'asc'; if (sortDir === 'none') sortCol = null; }
-        else { sortCol = c; sortDir = 'asc'; }
-        render();
-      });
-    });
-    host.querySelectorAll('.col-resize').forEach((rz) => {
-      rz.addEventListener('mousedown', (e) => {
-        e.preventDefault(); e.stopPropagation();
-        const th = rz.closest('th'); const startX = e.pageX, startW = th.offsetWidth;
-        const mv = (me) => { th.style.width = Math.max(44, startW + me.pageX - startX) + 'px'; };
-        const up = () => { document.removeEventListener('mousemove', mv); document.removeEventListener('mouseup', up); };
-        document.addEventListener('mousemove', mv); document.addEventListener('mouseup', up);
-      });
-    });
-  };
-  render();
-}
-// Render a PDF in-app via vendored pdf.js → canvas (reliable in headless/plugin-less
-// browsers, unlike a native <iframe>). The constellation loader covers the load — the
-// lib is ~1.6 MB but lazy-imported only when a PDF opens. Falls back to the iframe.
-async function renderPdf(raw) {
-  const body = document.getElementById('fr-body'), embed = document.getElementById('fr-embed');
-  const pane = document.getElementById('fr-pdf'), loading = document.getElementById('fr-loading');
-  body.hidden = true; embed.hidden = true; pane.hidden = true; pane.innerHTML = ''; delete pane.dataset.rendered;
-  loading.hidden = false;
-  try {
-    const pdfjs = await import('/vendor/pdfjs/pdf.min.mjs');
-    pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
-    pdfTask = pdfjs.getDocument({ url: raw });
-    const pdf = await pdfTask.promise;
-    const pageCount = pdf.numPages;
-    const updateMeta = () => {
-      const n = anchoredCount(frState ? frState.notes : []);
-      document.getElementById('fr-meta').textContent = `PDF · ${pageCount} page${pageCount > 1 ? 's' : ''}` + (n ? ` · ${n} note${n > 1 ? 's' : ''}` : '');
-    };
-    updateMeta();
-    const dpr = window.devicePixelRatio || 1;
-    // Re-render just one page's notes box in place (after adding a note).
-    const refreshPageNotes = (num) => {
-      const wrap = pane.querySelector(`.pdf-page[data-page="${num}"]`); if (!wrap) return;
-      let box = wrap.querySelector('.pdf-pagenotes');
-      const list = pageNotesIndex(frState ? frState.notes : []).get(num) || [];
-      if (!box) { box = document.createElement('div'); box.className = 'pdf-pagenotes'; wrap.appendChild(box); }
-      box.innerHTML = annoHtml(list, esc);
-      wrap.classList.toggle('has-note', list.length > 0);
-    };
-    const renderPage = async (num) => {
-      const page = await pdf.getPage(num);
-      const vp = page.getViewport({ scale: 1.5 });
-      const wrap = document.createElement('div');
-      wrap.className = 'pdf-page'; wrap.dataset.page = String(num);
-      wrap.style.width = Math.floor(vp.width) + 'px';
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = Math.floor(vp.width * dpr); canvas.height = Math.floor(vp.height * dpr);
-      canvas.style.width = Math.floor(vp.width) + 'px';
-      wrap.appendChild(canvas);
-      // Selectable text layer over the canvas (so a note can quote selected text).
-      const tlDiv = document.createElement('div');
-      tlDiv.className = 'pdf-textlayer';
-      tlDiv.style.setProperty('--scale-factor', vp.scale);
-      tlDiv.style.width = Math.floor(vp.width) + 'px'; tlDiv.style.height = Math.floor(vp.height) + 'px';
-      wrap.appendChild(tlDiv);
-      // Per-page note affordance (select text first to quote it as context).
-      const btn = document.createElement('button');
-      btn.className = 'pdf-note-btn'; btn.type = 'button';
-      btn.title = 'add a note on this page (select text first to quote it)';
-      btn.textContent = '🗒 note';
-      btn.onclick = () => {
-        const sel = (window.getSelection && String(window.getSelection())).trim ? String(window.getSelection()).trim() : '';
-        const existing = pageNotesIndex(frState ? frState.notes : []).get(num) || [];
-        const quoted = sel ? ` · “${sel.slice(0, 38)}${sel.length > 38 ? '…' : ''}”` : '';
-        showNotePopover(btn.getBoundingClientRect(), {
-          title: `page ${num}${quoted}`, existing,
-          onSubmit: async (text) => {
-            const note = await postNote({ filePath: frState.path, anchor_kind: 'pdf', locator: makePageLocator(num), snippet: sel, text });
-            if (note) { frState.notes.push(note); refreshPageNotes(num); updateMeta(); }
-          },
-        });
-      };
-      wrap.appendChild(btn);
-      pane.appendChild(wrap);
-      await page.render({ canvasContext: ctx, viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
-      try {
-        const tc = await page.getTextContent();
-        await new pdfjs.TextLayer({ textContentSource: tc, container: tlDiv, viewport: vp }).render();
-      } catch { /* selection is a nicety; canvas + page notes still work */ }
-      refreshPageNotes(num);
-    };
-    await renderPage(1);                       // first page, then reveal
-    loading.hidden = true; pane.hidden = false;
-    for (let i = 2; i <= pdf.numPages; i++) { if (FR.hidden || pdfTask === null) return; await renderPage(i); }
-    pane.dataset.rendered = '1';               // sentinel for headless screenshot tests
-  } catch (err) {
-    loading.hidden = true; pane.hidden = true; // graceful fallback: native iframe + the open-in-tab link
-    embed.hidden = false; embed.src = raw;
-  }
-}
-window.__openFile = openFile;
 // Inline filter for the provenance source list — shows/hides rows by name/kind
 // substring so a long source list stays scannable without leaving the inspector.
 window.__provFilter = (input) => {
@@ -1465,688 +1227,112 @@ window.__suggestFacts = (btn) => {
     });
   }).catch(() => { btn.disabled = false; out.innerHTML = '<span class="pf-hint">scan failed</span>'; });
 };
-document.getElementById('fr-x').onclick = closeFile;
-document.getElementById('fr-rendered').onclick = () => renderReader('rendered');
-document.getElementById('fr-raw').onclick = () => renderReader('raw');
-// Section ("heading") notes in the rendered-markdown view.
-document.getElementById('fr-md').addEventListener('click', (e) => {
-  const b = e.target.closest('.md-sec-note'); if (!b || !frState) return;
-  const slug = b.dataset.section, heading = b.dataset.heading || slug;
-  const existing = sectionNotesIndex(frState.notes).get(slug) || [];
-  showNotePopover(b.getBoundingClientRect(), {
-    title: `section “${heading}”`, existing,
-    onSubmit: async (text) => {
-      const note = await postNote({ filePath: frState.path, anchor_kind: 'section', locator: slug, snippet: heading, text });
-      if (note) { frState.notes.push(note); renderReader('rendered'); }
-    },
-  });
-});
-FR.addEventListener('click', (e) => { if (e.target === FR && !frEdit.active) closeFile(); });
-window.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || FR.hidden) return;
-  if (frEdit.active) cancelEdit(); else closeFile();   // Escape cancels an edit before closing
-});
 
-// ── Markdown editor: lock + save-confirm + git versioning ───────────────────
-// Edit mode swaps the raw view for a <textarea>; the file is locked on its :Source node
-// (so agents see it), saved atomically, committed to git, and the lock released.
-let frEdit = { active: false, path: null, baseHash: null };
-const feText = () => document.getElementById('fe-text');
-
-function startEditUi(text, baseHash) {
-  frEdit = { active: true, path: frState.path, baseHash };
-  document.getElementById('fr-body').hidden = true;
-  document.getElementById('fr-md').hidden = true;
-  document.getElementById('fr-toggle').hidden = true;
-  document.getElementById('fr-edit').hidden = true;
-  document.getElementById('fr-history').hidden = true;
-  setHistoryOpen(false);
-  const ta = feText(); ta.value = text; ta.style.display = '';
-  document.getElementById('fe-prev').hidden = true;
-  document.getElementById('fe-conflict').hidden = true;
-  document.getElementById('fe-confirm').hidden = true;
-  document.getElementById('fr-edit-pane').hidden = false;
-  document.getElementById('fe-lock').textContent = '🔒 editing — locked for you';
-  const live = document.getElementById('fe-live'); live.hidden = true; live.dataset.hash = '';
-  ta.focus();
-  startLiveWatch();
-}
-function leaveEditUi() {
-  stopLiveWatch();
-  document.getElementById('fr-edit-pane').hidden = true;
-  document.getElementById('fr-body').hidden = false;
-  document.getElementById('fr-toggle').hidden = false;
-  if (frState && frState.kind === 'markdown') { document.getElementById('fr-edit').hidden = false; document.getElementById('fr-history').hidden = false; }
-  frEdit = { active: false, path: null, baseHash: null };
-}
-// Live watch: while editing, poll for an on-disk change (an agent / another editor writing
-// the same file) and warn BEFORE save. Non-blocking — the save-time conflict check + the
-// git snapshot are the actual safety net; this is just an early heads-up.
-let frWatch = null;
-function startLiveWatch() {
-  stopLiveWatch();
-  frWatch = setInterval(async () => {
-    if (!frEdit.active) return;
-    try {
-      const s = await fetch('/api/file/stat?path=' + encodeURIComponent(frEdit.path)).then((r) => r.json());
-      if (s && s.hash && s.hash !== frEdit.baseHash) showLiveWarning(s.hash);
-    } catch { /* ignore a transient poll failure */ }
-  }, 3000);
-}
-function stopLiveWatch() { if (frWatch) { clearInterval(frWatch); frWatch = null; } }
-function showLiveWarning(diskHash) {
-  const box = document.getElementById('fe-live');
-  if (box.dataset.hash === diskHash) return;                 // already warned for this version
-  box.dataset.hash = diskHash; box.hidden = false;
-  box.innerHTML = '⚠ This file just changed on disk (an agent or another editor). Your edits are safe — saving will catch the conflict and the prior bytes are kept in git. ' +
-    '<button class="fe-btn" id="fe-live-reload">load theirs</button>';
-  document.getElementById('fe-live-reload').onclick = async () => {
-    const lk = await fetch('/api/file/lock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: frEdit.path, reason: 'reload after external change' }) }).then((r) => r.json());
-    if (lk.acquired) { feText().value = lk.text; frEdit.baseHash = lk.baseHash; box.hidden = true; box.dataset.hash = ''; }
-  };
-}
-async function releaseLock(useBeacon) {
-  if (!frEdit.active || !frEdit.path) return;
-  const body = JSON.stringify({ path: frEdit.path });
-  if (useBeacon && navigator.sendBeacon) { navigator.sendBeacon('/api/file/unlock', new Blob([body], { type: 'application/json' })); return; }
-  try { await fetch('/api/file/unlock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }); } catch { /* best-effort */ }
-}
-async function enterEdit(force) {
-  if (!frState || frState.kind !== 'markdown') return;
-  const res = await fetch('/api/file/lock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: frState.path, reason: 'editing in Studio', force: !!force }) });
-  const j = await res.json().catch(() => ({}));
-  if (!force && (res.status === 423 || j.acquired === false)) {
-    const since = j.lockAt ? new Date(j.lockAt).toLocaleString() : 'recently';
-    if (confirm(`This file is locked by "${j.holder || 'someone'}" since ${since}.\n\nTake over the lock?`)) return enterEdit(true);
-    return;
-  }
-  if (j.error || !j.acquired) { alert('Could not start editing: ' + (j.error || 'lock unavailable')); return; }
-  startEditUi(j.text || '', j.baseHash);
-}
-async function cancelEdit() {
-  await releaseLock(false);
-  leaveEditUi();
-  renderReader(document.getElementById('fr-rendered').classList.contains('on') ? 'rendered' : 'raw');
-}
-async function doSave(overwrite) {
-  document.getElementById('fe-confirm').hidden = true;
-  const text = feText().value;
-  const res = await fetch('/api/file/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: frEdit.path, text, baseHash: frEdit.baseHash, overwrite: !!overwrite }) });
-  const j = await res.json().catch(() => ({}));
-  if (res.status === 409 || j.conflict) { showConflict(j.currentText || ''); return; }
-  if (res.status === 423 || j.lockLost) { alert(`The lock was taken over by "${j.holder || 'someone'}". Your changes were NOT saved — copy them out before closing.`); return; }
-  if (j.error) { alert('Save failed: ' + j.error); return; }
-  frState.text = text;
-  leaveEditUi();
-  renderReader(document.getElementById('fr-rendered').classList.contains('on') ? 'rendered' : 'raw');
-  const snap = j.snapshot ? (j.snapshot.method === 'commit' ? `prior bytes snapshotted ${(j.snapshot.rev || '').slice(0, 7)} · ` : 'prior bytes backed up · ') : '';
-  fileToast(snap + (j.committed ? `saved · committed ${(j.rev || '').slice(0, 7)}` : (j.gitError ? `saved · not versioned (${j.gitError})` : 'saved')));
-}
-function showConflict(currentText) {
-  const box = document.getElementById('fe-conflict');
-  box.hidden = false;
-  box.innerHTML = '<span class="fe-conflict-msg">⚠ This file changed on disk since you opened it (an agent or another editor).</span>' +
-    '<button class="fe-btn" id="fe-reload">load theirs</button>' +
-    '<button class="fe-btn fe-save" id="fe-overwrite">overwrite with mine</button>' +
-    '<button class="fe-btn" id="fe-cdismiss">keep editing</button>';
-  document.getElementById('fe-reload').onclick = () => { feText().value = currentText; box.hidden = true; };
-  document.getElementById('fe-overwrite').onclick = () => { box.hidden = true; doSave(true); };
-  document.getElementById('fe-cdismiss').onclick = () => { box.hidden = true; };
-}
-function togglePreview() {
-  const prev = document.getElementById('fe-prev'), ta = feText();
-  if (prev.hidden) { prev.innerHTML = miniMarkdown(ta.value, esc); prev.hidden = false; ta.style.display = 'none'; }
-  else { prev.hidden = true; ta.style.display = ''; }
-}
-let frToastT = null;
-function fileToast(msg) {
-  let el = document.getElementById('fr-toast');
-  if (!el) { el = document.createElement('div'); el.id = 'fr-toast'; el.className = 'fr-toast'; document.querySelector('.fr-panel').appendChild(el); }
-  el.textContent = msg; el.classList.add('on');
-  clearTimeout(frToastT); frToastT = setTimeout(() => el.classList.remove('on'), 4500);
-}
-document.getElementById('fr-edit').onclick = () => enterEdit(false);
-document.getElementById('fe-cancel').onclick = cancelEdit;
-document.getElementById('fe-save').onclick = () => { document.getElementById('fe-confirm').hidden = false; };
-document.getElementById('fe-confirm-go').onclick = () => doSave(false);
-document.getElementById('fe-confirm-no').onclick = () => { document.getElementById('fe-confirm').hidden = true; };
-document.getElementById('fe-preview').onclick = togglePreview;
-window.addEventListener('pagehide', () => releaseLock(true));
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') releaseLock(true); });
-
-// ── Version history (git log of the file) + one-click restore ───────────────
-// History shows as a right-side column beside the content; widen the panel for it.
-function setHistoryOpen(open) {
-  document.getElementById('fr-versions').hidden = !open;
-  const p = document.querySelector('.fr-panel');
-  if (p) p.classList.toggle('history-open', open);
-}
-async function openHistory() {
-  const box = document.getElementById('fr-versions');
-  if (!box.hidden) { setHistoryOpen(false); return; }          // toggle off
-  if (!frState) return;
-  box.innerHTML = '<div class="vh-h">loading history…</div>'; setHistoryOpen(true);
-  const j = await fetch('/api/file/history?path=' + encodeURIComponent(frState.path)).then((r) => r.json()).catch(() => ({ error: 'failed' }));
-  if (j.error) { box.innerHTML = `<div class="vh-h">version history</div><div class="fr-note">${esc(j.error)}</div>`; return; }
-  if (!j.versions || !j.versions.length) { box.innerHTML = `<div class="vh-h">version history</div><div class="fr-note">${j.repo ? 'no commits yet for this file' : 'not in a git repo — saves won’t be versioned'}</div>`; return; }
-  box.innerHTML = `<div class="vh-h">version history · ${j.versions.length}</div>` + j.versions.map((v, i) =>
-    `<div class="vh-row" data-rev="${esc(v.rev)}"><span class="vh-rev">${esc(v.rev.slice(0, 7))}</span>` +
-    `<span class="vh-sub">${esc(v.subject)}</span><span class="vh-date">${esc((v.date || '').slice(0, 10))}</span>` +
-    `<button class="vh-restore" data-rev="${esc(v.rev)}" data-sub="${esc(v.subject)}"${i === 0 ? ' disabled title="current version"' : ''}>restore</button></div>`).join('');
-}
-document.getElementById('fr-versions').addEventListener('click', async (e) => {
-  const rb = e.target.closest('.vh-restore');
-  if (rb) { e.stopPropagation(); return restoreVersion(rb.dataset.rev, rb.dataset.sub); }
-  const row = e.target.closest('.vh-row'); if (!row) return;
-  // toggle an inline rendered preview of that version under the row
-  const next = row.nextElementSibling;
-  if (next && next.classList.contains('vh-preview')) { next.remove(); return; }
-  document.querySelectorAll('.vh-preview').forEach((n) => n.remove());
-  const j = await fetch(`/api/file/version?path=${encodeURIComponent(frState.path)}&rev=${encodeURIComponent(row.dataset.rev)}`).then((r) => r.json()).catch(() => ({ error: 'failed' }));
-  const div = document.createElement('div'); div.className = 'vh-preview fr-md';
-  div.innerHTML = j.error ? `<span class="fr-note">${esc(j.error)}</span>` : miniMarkdown(j.text || '', esc);
-  row.after(div);
-});
-async function restoreVersion(rev, subject) {
-  if (!frState) return;
-  const short = String(rev).slice(0, 7);
-  const v = await fetch(`/api/file/version?path=${encodeURIComponent(frState.path)}&rev=${encodeURIComponent(rev)}`).then((r) => r.json()).catch(() => ({ error: 'failed' }));
-  if (v.error) { alert('Could not read that version: ' + v.error); return; }
-  if (!confirm(`Restore to ${short} — “${subject}”?\n\nThis writes that version over the current file and adds a new commit (your current version stays in history).`)) return;
-  const lock = await fetch('/api/file/lock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: frState.path, reason: 'restoring a version' }) }).then((r) => r.json());
-  if (!lock.acquired) { alert(`File is locked by "${lock.holder || 'someone'}". Try again shortly.`); return; }
-  const save = await fetch('/api/file/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: frState.path, text: v.text, baseHash: lock.baseHash, overwrite: true, restoreOf: short }) }).then((r) => r.json());
-  if (!save.saved) { alert('Restore failed: ' + (save.error || 'unknown')); return; }
-  frState.text = v.text;
-  setHistoryOpen(false);
-  renderReader(document.getElementById('fr-rendered').classList.contains('on') ? 'rendered' : 'raw');
-  fileToast(save.committed ? `restored ${short} · committed ${(save.rev || '').slice(0, 7)}` : `restored ${short}`);
-}
-document.getElementById('fr-history').onclick = openHistory;
-
-// ── codebase map (dev lens): a repo's module graph in its own canvas/namespace ───
-const LANG_COLORS = {
-  js: '#e0b25a', ts: '#79b4ab', py: '#5a9fd4', go: '#6fc5d6', rust: '#d77f42',
-  css: '#c77dff', html: '#ef9a5b', vue: '#7fd6a0', svelte: '#e06b5a',
-  doc: '#8f8a7c', data: '#9aa0ab', shell: '#9ad06f', sql: '#d6a05a',
-  image: '#d6688a', font: '#b07fd6', media: '#5fb0a0', other: '#6c727c',
-};
-const langColor = (l) => LANG_COLORS[l] || LANG_COLORS.other;
-let cbGraph = null, cbRepos = null, cbHover = null;
-
-async function openCodebase() {
-  pauseMainGraph();
-  document.getElementById('codebase').hidden = false;
-  const sel = document.getElementById('cb-repo');
-  if (!cbRepos) {
-    try { cbRepos = (await fetch('/api/repos').then((r) => r.json())).repos || []; } catch { cbRepos = []; }
-    sel.innerHTML = cbRepos.map((r) => `<option value="${esc(r.path)}">${esc(r.name)}</option>`).join('');
-    sel.onchange = () => loadRepo(sel.value);
-  }
-  if (!cbRepos.length) { showCbEmpty('no mappable repos in the allowlist'); return; }
-  const pref = cbRepos[0];
-  sel.value = pref.path;
-  loadRepo(pref.path);
-}
-function closeCodebase() { document.getElementById('codebase').hidden = true; if (cbGraph) cbGraph.pauseAnimation(); resumeMainGraph(); }
-function showCbEmpty(msg) {
-  const e = document.getElementById('cb-empty'); e.textContent = msg; e.hidden = false;
-  document.getElementById('cb-meta').textContent = '';
-  document.getElementById('cb-legend').innerHTML = '';
-}
-async function loadRepo(repoPath) {
-  document.getElementById('cb-empty').hidden = true;
-  document.getElementById('cb-meta').textContent = 'mapping…';
-  let repo;
-  try { repo = (await fetch('/api/repo?path=' + encodeURIComponent(repoPath)).then((r) => r.json())).repo || {}; }
-  catch (err) { return showCbEmpty(String(err)); }
-  if (repo.blocked) return showCbEmpty('outside the read sandbox');
-  if (repo.missing || repo.notDir) return showCbEmpty('repo not found');
-  if (!repo.nodes || !repo.nodes.length) return showCbEmpty('no files to map');
-  document.getElementById('cb-meta').textContent =
-    `${repo.fileCount} files · ${repo.edgeCount} imports${repo.truncated ? ' · truncated' : ''}`;
-  const langs = [...new Set(repo.nodes.map((n) => n.lang))].sort();
-  document.getElementById('cb-legend').innerHTML = langs
-    .map((l) => `<span class="lg"><i style="background:${langColor(l)}"></i>${esc(l)}</span>`).join('');
-
-  const host = document.getElementById('cb-graph');
-  const maxDeg = Math.max(1, ...repo.nodes.map((n) => n.deg || 0));
-  const nodes = repo.nodes.map((n) => ({ ...n, r: 3 + 7 * Math.sqrt((n.deg || 0) / maxDeg) }));
-  const links = repo.links.map((l) => ({ source: l.source, target: l.target }));
-  const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#ece6d8';
-
-  if (!cbGraph) cbGraph = ForceGraph()(host);
-  cbGraph.resumeAnimation();
-  cbGraph
-    .width(host.clientWidth).height(host.clientHeight)
-    .backgroundColor('rgba(0,0,0,0)')
-    .graphData({ nodes, links })
-    .nodeRelSize(4).nodeVal((n) => n.r)
-    .nodeLabel((n) => n.rel)
-    .nodeColor((n) => langColor(n.lang))
-    .nodeCanvasObjectMode(() => 'after')
-    .nodeCanvasObject((n, ctx, scale) => {
-      if (scale < 0.85 && (n.deg || 0) < 3 && n !== cbHover) return;       // declutter when zoomed out
-      ctx.font = `${11 / scale}px ui-monospace, monospace`;
-      ctx.fillStyle = ink; ctx.textBaseline = 'middle';
-      ctx.globalAlpha = n === cbHover ? 1 : 0.75;
-      ctx.fillText(n.name, n.x + n.r + 2 / scale, n.y);
-      ctx.globalAlpha = 1;
-    })
-    .linkColor(() => 'rgba(150,140,124,0.22)').linkWidth(0.5)
-    .onNodeHover((n) => { cbHover = n; host.style.cursor = n ? 'pointer' : ''; })
-    .onNodeClick((n) => { if (n.path) openFile(n.path); })
-    .cooldownTime(4000);
-  cbGraph.zoomToFit(0, 50);
-  setTimeout(() => cbGraph && cbGraph.zoomToFit(600, 50), 700);
-}
-document.getElementById('set-filter').onclick = (e) => {
-  e.stopPropagation();
-  const p = document.getElementById('filter-panel');
-  p.hidden = !p.hidden;
-  document.getElementById('set-filter').classList.toggle('on', !p.hidden);
-};
-// click outside closes the filter panel
-document.addEventListener('click', (e) => {
-  const p = document.getElementById('filter-panel');
-  if (!p.hidden && !p.contains(e.target) && e.target.closest('#set-filter') == null) {
-    p.hidden = true; document.getElementById('set-filter').classList.remove('on');
-  }
-});
-document.getElementById('set-code').onclick = openCodebase;
-document.getElementById('cb-x').onclick = closeCodebase;
-
-// ── Code review surface (#34) ───────────────────────────────────────────────
-// Open a code-graph'd repo, frozen at a git ref; comment on lines → Notes PART_OF
-// a Review node (author='you'). Reuses /api/repo (tree), /api/file/version (frozen
-// read), the file-reader's line rendering (rawLinesHtml), and /api/note.
-let rvReview = null, rvFiles = [], rvComments = [], rvActive = null, rvFrozenLines = [];
-let rvCollapsed = new Set();   // collapsed directory paths in the review tree
-let rvChanges = new Map(), rvChangedOnly = true;   // rel → A|M|D|R status; "changed only" filter
-
-function rvExtLang(rel) {
-  const e = (String(rel).split('.').pop() || '').toLowerCase();
-  return ({ js: 'js', mjs: 'js', cjs: 'js', ts: 'ts', tsx: 'ts', jsx: 'js', py: 'py', go: 'go', md: 'markdown', json: 'json', css: 'css', html: 'html', cypher: 'cypher', sql: 'sql', yml: 'yaml', yaml: 'yaml' })[e] || e || 'file';
-}
-// File nodes to show when "Changed only" is on: every changed rel, using the code-graph
-// node if present, else a synthetic node (so files outside the walked set still appear).
-function changedFileNodes() {
-  return [...rvChanges.keys()].map((rel) => rvFiles.find((x) => x.rel === rel) || { rel, path: rvReview.repo + '/' + rel, lang: rvExtLang(rel) });
-}
-// Fetch the changed-file set for the current base and refresh the tree; auto-open the
-// first changed file so the reviewer lands on real work, not a random file.
-// Populate the "vs <base>" dropdown with real refs so the user PICKS instead of typing
-// git syntax: a parent default, a few range presets, branches (for a PR), recent commits.
-async function populateBaseSelect() {
-  const sel = document.getElementById('rv-base');
-  let refs; try { refs = await fetch('/api/review/refs?repo=' + encodeURIComponent(rvReview.repo)).then((x) => x.json()); } catch (e) { refs = {}; }
-  const ref = rvReview.git_ref;
-  let html = '<option value="">Parent commit (last change)</option>' +
-    `<optgroup label="Range"><option value="${esc(ref)}~3">3 commits back</option><option value="${esc(ref)}~5">5 commits back</option><option value="${esc(ref)}~10">10 commits back</option></optgroup>`;
-  if (refs.branches && refs.branches.length) html += '<optgroup label="Branch (PR base)">' + refs.branches.map((b) => `<option value="${esc(b)}">${esc(b)}</option>`).join('') + '</optgroup>';
-  if (refs.commits && refs.commits.length) html += '<optgroup label="Recent commits">' + refs.commits.map((c) => `<option value="${esc(c.sha)}">${esc(c.sha)} — ${esc(trunc(c.subject, 38))}</option>`).join('') + '</optgroup>';
-  sel.innerHTML = html;
-  sel.value = '';
-}
-async function loadReviewChanges() {
-  const base = document.getElementById('rv-base').value.trim();
-  const q = `repo=${encodeURIComponent(rvReview.repo)}&ref=${encodeURIComponent(rvReview.git_ref)}${base ? '&base=' + encodeURIComponent(base) : ''}`;
-  let ch; try { ch = await fetch('/api/review/changes?' + q).then((x) => x.json()); } catch (e) { ch = { changes: [] }; }
-  rvChanges = new Map((ch.changes || []).map((c) => [c.rel, c.status]));
-  renderReviewTree();
-  const firstRel = [...rvChanges.keys()].find((rel) => rvFiles.some((f) => f.rel === rel));
-  const f = firstRel && rvFiles.find((x) => x.rel === firstRel);
-  if (f) openReviewFile(f);
-}
-function rvShortRef() { return rvReview ? (rvReview.git_ref || '').slice(0, 7) : ''; }
-function rvCommentsForFile(fp) { return rvComments.filter((c) => c.file_path === fp && c.anchor_kind === 'line'); }
-// Create the Review node on demand (lazy creation): the first comment or verdict
-// materializes it at repo@sha; until then it has id:null and nothing is persisted.
-async function ensureReview() {
-  if (rvReview && rvReview.id) return rvReview.id;
-  try {
-    const r = await fetch('/api/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repo: rvReview.repo, gitRef: rvReview.git_ref }) }).then((x) => x.json());
-    if (r.review && r.review.id) { rvReview.id = r.review.id; rvReview.created_at = r.review.created_at; rvReview.status = r.review.status; }
-  } catch (e) { /* leave id null; caller handles */ }
-  return rvReview.id;
-}
-
-async function openReview() {
-  pauseMainGraph();
-  document.getElementById('review').hidden = false;
-  const sel = document.getElementById('rv-repo');
+// Repo list cache — shared by the codebase-map + code-review surfaces; reset by the folder-
+// permissions pane so the next open refetches. getRepos() lazily fills it.
+let cbRepos = null;
+async function getRepos() {
   if (!cbRepos) { try { cbRepos = (await fetch('/api/repos').then((r) => r.json())).repos || []; } catch { cbRepos = []; } }
-  sel.innerHTML = cbRepos.map((r) => `<option value="${esc(r.path)}">${esc(r.name)}</option>`).join('');
-  sel.onchange = () => startReview(sel.value);
-  if (!cbRepos.length) { document.getElementById('rv-meta').textContent = 'no repos in the allowlist'; return; }
-  const pref = cbRepos[0];
-  sel.value = pref.path;
-  startReview(pref.path);
+  return cbRepos;
 }
-function closeReview() { document.getElementById('review').hidden = true; if (rvGraph) rvGraph.pauseAnimation(); resumeMainGraph(); }
+const requestLensClose = () => navigate({ type: 'close' });   // threaded into every lens (C2)
+const cbUi = initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, getRepos });
+// ── Agents surface → lib/agents-ui.js (embeds Slipway, the local + hosted model/agent runtime) ──
+// showInGraph = the capture receipt's payoff: back to the constellation, focused on the
+// new Source (refreshGraphData(name) refetches, then focuses once the node lands).
+const agentsUi = initAgents({
+  pauseMainGraph, resumeMainGraph,
+  showInGraph: (title) => { navigate({ type: 'close' }); refreshGraphData(title); },
+  onSessionsChanged: () => refreshAgentSessions(),
+  // First-paint theme for the embed URL (?mode/&accent/&uiscale) — read live off <html>
+  // so it always matches what theme-ui last applied.
+  embedTheme: () => {
+    const cs = getComputedStyle(document.documentElement);
+    return { mode: themeState.mode, accent: cs.getPropertyValue('--accent').trim(), uiscale: cs.getPropertyValue('--ui-scale').trim() || '1' };
+  },
+});
+notifyEmbedsHook = agentsUi.notifyTheme;   // theme/mode/UI-size switches restyle the embed live (D5)
+// Dock rows use inline onclick (global scope) like __focus/__open — expose the deep-link opener.
+window.__agentOpen = (sid) => navigate({ type: 'open', lens: 'agents', payload: { hash: 'term:' + sid } });
+window.__openAgents = () => navigate({ type: 'open', lens: 'agents' });   // the dock's compact lane row
 
-async function startReview(repoPath) {
-  document.getElementById('rv-meta').textContent = 'opening…';
-  document.getElementById('rv-tree').innerHTML = '';
-  document.getElementById('rv-code').innerHTML = '<div class="rv-hint">Pick a file from the tree to review it.</div>';
-  document.getElementById('rv-view-head').textContent = '';
-  rvActive = null; rvCollapsed = new Set(); rvChanges = new Map();
-  document.getElementById('rv-base').value = '';
-  // Lazy creation (#34): RESOLVE the commit + load any existing review, but DON'T create
-  // a node — opening to browse should never leave an empty Review. The node is created on
-  // the first comment (ensureReview).
-  let r;
-  try { r = await fetch(`/api/review/resolve?repo=${encodeURIComponent(repoPath)}&gitRef=HEAD`).then((x) => x.json()); }
-  catch (e) { document.getElementById('rv-meta').textContent = 'failed to open review'; return; }
-  if (r.error) { document.getElementById('rv-meta').textContent = r.error; return; }
-  rvReview = r.review;                              // id is null until the first comment
-  document.getElementById('rv-ref').textContent = (rvReview.ref_label || 'HEAD') + ' · ' + rvShortRef();
-  const repo = await fetch('/api/repo?path=' + encodeURIComponent(repoPath)).then((x) => x.json()).then((x) => x.repo || {});
-  rvFiles = (repo.nodes || []).slice().sort((a, b) => (a.rel || '').localeCompare(b.rel || ''));
-  rvComments = rvReview.comments || [];
-  renderReviewSummary();
-  renderReviewGraph();
-  await populateBaseSelect();                        // refs dropdown for the diff base
-  loadReviewChanges();                              // marks/filters changed files + opens the first one
-}
+// ── Act plane (Phase 2): "Open agent here" launch popover. On a node's a-agent button we
+// ping Slipway (server-side — the browser can't reach it cross-origin), dry-run /api/agent/plan
+// to preview the resolved cwd + model + brief, then POST /api/agent/launch and reveal the
+// Slipway panel so the seeded terminal is visible. Fails soft: Slipway-down / cwd-less nodes
+// show a reason instead of launching. ──
+const agentLauncher = (function initAgentLaunch() {
+  const pop = document.getElementById('agent-pop');
+  if (!pop) return { open() {} };
+  const dirEl = document.getElementById('agent-dir');
+  const modelEl = document.getElementById('agent-model');
+  const briefWrap = document.getElementById('agent-brief');
+  const briefPre = document.getElementById('agent-brief-pre');
+  const goBtn = document.getElementById('agent-go');
+  const msg = document.getElementById('agent-msg');
+  let curId = null;
 
-// The live review graph (#34 make-or-break: real + click-through, not decorative):
-// Review (center) → the files that carry comments → each comment (colored by state) →
-// the Project (if linked). Clicking a comment opens its file + scrolls to the line;
-// clicking a file opens it. Reflects live review state, never a static picture.
-let rvGraph = null, rvGraphHover = null;
-function relBasename(p) { const f = rvFiles.find((x) => x.path === p); return f ? f.rel : (p || '').split('/').pop(); }
-function renderReviewGraph() {
-  const host = document.getElementById('rv-graph');
-  const wrap = document.querySelector('.rv-graph-wrap');
-  let empty = wrap.querySelector('.rv-graph-empty');
-  if (!rvComments.length) {
-    if (rvGraph) { rvGraph.graphData({ nodes: [], links: [] }); }
-    if (!empty) { empty = document.createElement('div'); empty.className = 'rv-graph-empty'; empty.textContent = 'Comment on a line — the review takes shape here.'; host.appendChild(empty); }
-    return;
+  function close() { pop.hidden = true; }
+  function reset() {
+    dirEl.textContent = 'resolving…'; modelEl.hidden = true; modelEl.textContent = '';
+    briefWrap.hidden = true; briefPre.textContent = ''; goBtn.disabled = true; msg.textContent = '';
   }
-  if (empty) empty.remove();
-  const cssv = (v, d) => getComputedStyle(document.documentElement).getPropertyValue(v).trim() || d;
-  const ember = cssv('--accent', '#ef9a5b'), teal = cssv('--teal', '#5ad1c4'), faint = cssv('--ink-faint', '#7c7568');
-  const stateColor = { raw: ember, cued: '#c9a98f', addressed: teal, skipped: faint };
-  const nodes = [{ id: 'review', kind: 'review', label: rvShortRef(), color: ember, val: 10 }];
-  const links = [];
-  if (rvReview.project) { nodes.push({ id: 'project', kind: 'project', label: rvReview.project, color: cssv('--node-project', '#7aa2f7'), val: 7 }); links.push({ source: 'review', target: 'project' }); }
-  const filesWith = [...new Set(rvComments.map((c) => c.file_path))];
-  filesWith.forEach((fp) => { nodes.push({ id: 'file:' + fp, kind: 'file', path: fp, label: relBasename(fp).split('/').pop(), color: faint, val: 4 }); links.push({ source: 'review', target: 'file:' + fp }); });
-  rvComments.forEach((c) => { nodes.push({ id: c.id, kind: 'comment', commentId: c.id, path: c.file_path, locator: c.locator, text: c.text, label: 'L' + (c.locator != null ? c.locator : '?'), color: stateColor[c.state] || ember, val: 3.5 }); links.push({ source: 'file:' + c.file_path, target: c.id }); });
+  const stale = (id) => pop.hidden || curId !== id;   // popover closed or switched to another node
 
-  if (!rvGraph) rvGraph = ForceGraph()(host);
-  rvGraph.resumeAnimation();
-  rvGraph
-    .width(host.clientWidth).height(host.clientHeight)
-    .backgroundColor('rgba(0,0,0,0)')
-    .graphData({ nodes, links })
-    .nodeLabel((n) => n.kind === 'comment' ? `${esc(n.text || '')} (line ${n.locator})` : (n.kind === 'file' ? relBasename(n.path) : n.label))
-    // Constellation-style glow nodes — same library AND look/physics as the main graph:
-    // a soft radial halo + a readable label on EVERY node (review/project/file/comment).
-    .nodeCanvasObjectMode(() => 'replace')
-    .nodeCanvasObject((n, ctx, scale) => {
-      const ink = cssv('--ink', '#ece6d8');
-      const r = 1.8 + (n.val || 4) * 0.7;
-      ctx.shadowColor = n.color; ctx.shadowBlur = (n === rvGraphHover ? r * 2.6 : r * 1.5);
-      ctx.fillStyle = n.color; ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, 7); ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.font = `${(n.kind === 'review' ? 11 : 9.5) / scale}px ui-monospace, monospace`;
-      ctx.fillStyle = ink; ctx.textBaseline = 'middle';
-      ctx.globalAlpha = (n.kind === 'review' || n.kind === 'project' || n === rvGraphHover) ? 1 : 0.72;
-      ctx.fillText(n.label, n.x + r + 3 / scale, n.y);
-      ctx.globalAlpha = 1;
-    })
-    .linkColor(() => 'rgba(150,140,124,0.28)').linkWidth(0.6)
-    .linkDirectionalParticles(2).linkDirectionalParticleWidth(1.8)
-    .linkDirectionalParticleColor(() => cssv('--accent', '#ef9a5b'))
-    .onNodeHover((n) => { rvGraphHover = n; host.style.cursor = n && (n.kind === 'comment' || n.kind === 'file') ? 'pointer' : ''; })
-    .onNodeClick((n) => {
-      if (n.kind === 'file' || n.kind === 'comment') {
-        const f = rvFiles.find((x) => x.path === n.path);
-        if (f) openReviewFile(f).then(() => {
-          if (n.kind === 'comment' && n.locator) {
-            const line = document.querySelector(`#rv-code .fr-line[data-line="${n.locator}"]`);
-            if (line) { line.scrollIntoView({ block: 'center' }); line.classList.add('rv-flash'); setTimeout(() => line.classList.remove('rv-flash'), 1200); }
-          }
-        });
-      }
-    })
-    .warmupTicks(60).cooldownTime(6000);
-  // Same force feel as the main constellation (charge/link/decay).
-  rvGraph.d3Force('charge').strength(-90).distanceMax(400);
-  rvGraph.d3Force('link').distance(40).strength(0.5);
-  rvGraph.d3VelocityDecay(0.36);
-  setTimeout(() => rvGraph && rvGraph.zoomToFit(500, 26), 400);
-}
+  async function open(id) {
+    curId = id; pop.hidden = false; reset();
+    let ping;
+    try { ping = await fetch('/api/agent/ping').then((r) => r.json()); } catch { ping = { available: false }; }
+    if (stale(id)) return;
+    if (!ping.available) { dirEl.textContent = 'Slipway runtime not running'; msg.textContent = 'start it, then reopen'; return; }
+    let plan;
+    try { plan = await fetch('/api/agent/plan?id=' + encodeURIComponent(id)).then((r) => r.json()); } catch { plan = { ok: false, reason: 'plan failed' }; }
+    if (stale(id)) return;
+    if (!plan.ok) { dirEl.textContent = plan.reason || 'cannot open an agent here'; return; }
+    dirEl.innerHTML = '<span class="agent-dir-l">working dir</span> <code>' + esc(plan.cwd) + '</code>';
+    modelEl.hidden = false;
+    modelEl.textContent = plan.preset ? 'project preset (.slipway.json)' : 'hosted Claude Code';
+    briefWrap.hidden = false; briefPre.textContent = plan.brief || '';
+    goBtn.disabled = false;
+  }
 
-function renderReviewTree() {
-  const byFile = {};
-  rvComments.forEach((c) => { if (c.file_path) byFile[c.file_path] = (byFile[c.file_path] || 0) + 1; });
-  const showChanged = rvChangedOnly && rvChanges.size > 0;
-  const filesForTree = showChanged ? changedFileNodes() : rvFiles;
-  const changedRels = [...rvChanges.keys()];
-  document.getElementById('rv-meta').textContent = rvChanges.size
-    ? `${rvChanges.size} changed${showChanged ? '' : ' / ' + rvFiles.length} · ${rvComments.length} comments`
-    : `${rvFiles.length} files · ${rvComments.length} comments`;
-  const rows = flattenTree(buildFileTree(filesForTree), rvCollapsed);
-  document.getElementById('rv-tree').innerHTML = rows.map((r) => {
-    const pad = `style="padding-left:${10 + r.depth * 13}px"`;
-    if (r.type === 'dir') {
-      const hasCh = changedRels.some((rel) => rel.startsWith(r.path + '/'));
-      return `<div class="rv-dir${hasCh ? ' has-changes' : ''}" data-dir="${esc(r.path)}" ${pad}>` +
-        `<span class="rv-chev">${r.collapsed ? '▸' : '▾'}</span>` +
-        `<span class="rv-dn">${esc(r.name)}</span></div>`;
-    }
-    const n = byFile[r.path] || 0;
-    const st = rvChanges.get(r.rel);
-    return `<div class="rv-f${rvActive && rvActive.path === r.path ? ' on' : ''}${st ? ' changed' : ''}" data-path="${esc(r.path)}" ${pad} title="${esc(r.rel)}${st ? ' · ' + st : ''}">` +
-      (st ? `<span class="rv-chg rv-chg-${esc(st)}">${esc(st)}</span>` : '<span class="rv-dot" style="background:' + langColor(r.lang) + '"></span>') +
-      `<span class="rv-fn">${esc(r.name)}</span>` +
-      (n ? `<span class="rv-badge">${n}</span>` : '') + '</div>';
-  }).join('');
-  const tree = document.getElementById('rv-tree');
-  tree.querySelectorAll('.rv-dir').forEach((el) => {
-    el.onclick = () => { const p = el.dataset.dir; rvCollapsed.has(p) ? rvCollapsed.delete(p) : rvCollapsed.add(p); renderReviewTree(); };
-  });
-  tree.querySelectorAll('.rv-f').forEach((el) => {
-    el.onclick = () => openReviewFile(rvFiles.find((f) => f.path === el.dataset.path));
-  });
-}
-
-async function openReviewFile(f) {
-  if (!f || !rvReview) return;
-  rvActive = f;
-  renderReviewTree();
-  const head = document.getElementById('rv-view-head');
-  head.innerHTML = `<span class="rv-dot" style="background:${langColor(f.lang)}"></span> ${esc(f.rel)} <span style="color:var(--ink-faint)">· frozen @ ${esc(rvShortRef())}</span>`;
-  const code = document.getElementById('rv-code');
-  code.innerHTML = '<div class="rv-hint">loading…</div>';
-  let v;
-  try { v = await fetch(`/api/file/version?path=${encodeURIComponent(f.path)}&rev=${encodeURIComponent(rvReview.git_ref)}`).then((x) => x.json()); }
-  catch (e) { code.innerHTML = '<div class="rv-hint">failed to read file</div>'; return; }
-  if (v.error) { code.innerHTML = `<div class="rv-hint">${esc(v.error)}</div>`; return; }
-  rvFrozenLines = String(v.text || '').split('\n');
-  renderReviewCode();
-}
-
-// Render the ACTIVE file's frozen lines + its comments into #rv-code from the cached
-// `rvFrozenLines` — NO network. Used by openReviewFile (after the fetch) AND by the note-add
-// path, so adding a comment never re-fetches the whole file (the perf bug, #34).
-function renderReviewCode() {
-  const f = rvActive; if (!f) return;
-  const isJsonFile = /\.jsonc?5?$/i.test(f.path || f.rel || '');
-  const hlLang = isJsonFile ? 'json' : f.lang;
-  const text = rvFrozenLines.join('\n');
-  const depths = isJsonFile ? jsonDepths(text) : null;
-  const hl = (s, i) => highlightCode(s, hlLang, esc, depths ? depths[i] : 0);
-  document.getElementById('rv-code').innerHTML = rawLinesHtml(text, rvCommentsForFile(f.path), esc, hl);
-}
-
-// gutter click → inline comment input → POST a line Note PART_OF the review (author=you)
-document.getElementById('rv-code').addEventListener('click', (e) => {
-  const gut = e.target.closest('.fr-gut');
-  if (gut) openReviewLineInput(gut.closest('.fr-line'));
-});
-function openReviewLineInput(lineEl) {
-  if (!lineEl || !rvActive) return;
-  const next = lineEl.nextElementSibling;
-  if (next && next.classList.contains('fr-addrow')) { next.querySelector('textarea').focus(); return; }
-  const ln = Number(lineEl.dataset.line);
-  const snippet = rvFrozenLines[ln - 1] || '';
-  const row = document.createElement('div');
-  row.className = 'fr-addrow';
-  row.innerHTML = `<textarea class="fr-add-tx" rows="2" placeholder="comment on line ${ln}… (⌘/Ctrl+Enter to save)" aria-label="review comment"></textarea>` +
-    '<button class="fr-add-expand" title="open large editor" aria-label="open large editor">⤢</button>' +
-    '<button class="fr-add-go">comment</button>';
-  lineEl.after(row);
-  const ta = row.querySelector('.fr-add-tx'); ta.focus();
-  const submitText = async (text) => {
-    text = String(text || '').trim(); if (!text) { row.remove(); return; }
-    try {
-      const reviewId = await ensureReview();                 // materialize the Review on first comment
-      const res = await fetch('/api/note', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filePath: rvActive.path, anchor_kind: 'line', locator: ln, snippet, text, author: 'you', reviewId }) }).then((x) => x.json());
-      if (res.note) {
-        rvComments = [...rvComments, { ...res.note, file_path: rvActive.path }];
-        renderReviewCode();        // re-render the active file from CACHE (no /api/file/version refetch)
-        renderReviewTree(); renderReviewSummary();
-        requestAnimationFrame(() => renderReviewGraph());   // graph rebuild off the critical path
-      } else row.remove();
-    } catch (e) { row.remove(); }
+  goBtn.onclick = async () => {
+    if (!curId) return;
+    goBtn.disabled = true; msg.textContent = 'launching…';
+    let res;
+    try { res = await fetch('/api/agent/launch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: curId }) }).then((r) => r.json()); }
+    catch { res = { error: 'launch failed' }; }
+    if (res.error) { msg.textContent = res.error; goBtn.disabled = false; return; }
+    close();
+    // Deep-link the Agents overlay straight to the launched session (Slipway's #term:<sid>
+    // handler attaches/focuses it); no sid → plain open. Routed through nav (C2).
+    navigate({ type: 'open', lens: 'agents', payload: { hash: res.launch && res.launch.id ? 'term:' + res.launch.id : undefined } });
   };
-  row.querySelector('.fr-add-go').onclick = () => submitText(ta.value);
-  row.querySelector('.fr-add-expand').onclick = () => { const draft = ta.value; row.remove(); openNoteModal({ title: `comment on ${rvActive.rel}:${ln}`, text: draft, onSubmit: submitText }); };
-  ta.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitText(ta.value); }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); row.remove(); }   // contextual: cancel the comment, NOT the whole review
+
+  document.getElementById('agent-x').onclick = close;
+  // Handle Escape here AND stop it — otherwise it bubbles to the window handler, which would also
+  // close the inspector behind the popover (a double-unwind, since #agent-pop isn't nested in #insp).
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); e.preventDefault(); close(); } });
+  document.addEventListener('mousedown', (e) => {
+    if (pop.hidden || pop.contains(e.target)) return;
+    const trigger = document.getElementById('a-agent');
+    if (trigger && trigger.contains(e.target)) return;
+    close();
   });
-}
+  return { open };
+})();
 
-function renderReviewSummary() {
-  const counts = { raw: 0, cued: 0, addressed: 0, skipped: 0 };
-  rvComments.forEach((c) => { if (counts[c.state] != null) counts[c.state]++; });
-  const files = new Set(rvComments.map((c) => c.file_path)).size;
-  const el = document.getElementById('rv-summary');
-  el.innerHTML =
-    '<div class="rv-s-title">Review summary</div>' +
-    `<div style="font-size:11px;color:var(--ink-dim);margin-bottom:10px">${esc(rvReview ? rvReview.repo.split('/').pop() : '')} · ${esc(rvShortRef())}</div>` +
-    '<div class="rv-counts">' +
-      `<div class="rv-count new"><b>${counts.raw}</b><span>new</span></div>` +
-      `<div class="rv-count"><b>${counts.cued}</b><span>cued</span></div>` +
-      `<div class="rv-count done"><b>${counts.addressed}</b><span>done</span></div>` +
-    '</div>' +
-    `<div style="font-size:11px;color:var(--ink-faint);margin-bottom:12px">${rvComments.length} comments · ${files} files touched</div>` +
-    '<div class="rv-verdict-l">Verdict</div>' +
-    `<textarea class="rv-verdict" id="rv-verdict" placeholder="overall verdict…">${esc(rvReview && rvReview.verdict ? rvReview.verdict : '')}</textarea>` +
-    '<button class="rv-verdict-save" id="rv-verdict-save">Save verdict</button>';
-  document.getElementById('rv-verdict-save').onclick = async () => {
-    const btn = document.getElementById('rv-verdict-save'); btn.disabled = true; btn.textContent = 'saving…';
-    try {
-      const v = document.getElementById('rv-verdict').value;
-      const id = await ensureReview();                        // materialize the Review if saving a verdict first
-      const res = await fetch('/api/review/verdict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, verdict: v }) }).then((x) => x.json());
-      if (res.ok) { rvReview.verdict = res.review.verdict; btn.textContent = '✓ saved'; }
-      else btn.textContent = 'failed';
-    } catch (e) { btn.textContent = 'failed'; }
-    setTimeout(() => { btn.disabled = false; btn.textContent = 'Save verdict'; }, 1400);
-  };
-}
+// ── Code review surface (#34) → lib/review-ui.js (repos shared via getRepos, like the codebase map) ──
+const reviewUi = initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos });
 
-document.getElementById('set-review').onclick = openReview;
-document.getElementById('rv-x').onclick = closeReview;
-document.getElementById('rv-changed-toggle').onclick = () => {
-  rvChangedOnly = !rvChangedOnly;
-  document.getElementById('rv-changed-toggle').classList.toggle('on', rvChangedOnly);
-  renderReviewTree();
-};
-document.getElementById('rv-base').addEventListener('change', () => { if (rvReview) loadReviewChanges(); });
-document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || document.getElementById('review').hidden) return;
-  // contextual: don't close the whole review if a comment input is open
-  if (document.querySelector('#rv-code .fr-addrow')) return;
-  closeReview();
+// ── folder permissions pane → lib/perms-ui.js (grant/revoke resets the shared repo cache) ──
+const perms = initPerms({ esc, onRootsChanged: () => { cbRepos = null; } });
+
+
+const settingsUi = initSettings({
+  esc, THEMES, THEME_ORDER, applyTheme, applyAnim, applyUiScale, setCalm, openPerms: perms.open,
+  getTheme: () => ({ curTheme: themeState.name, curMode: themeState.mode, calm: themeState.calm, curAnim: themeState.anim, curUiScale: themeState.uiscale }),
 });
-
-// ── folder permissions: view/grant/revoke the read & map allowlist ───────────────
-const PERMS = document.getElementById('perms');
-function permsMsg(text, ok) { const m = document.getElementById('perms-msg'); m.textContent = text || ''; m.classList.toggle('ok', !!ok); }
-async function loadPerms() {
-  permsMsg('');
-  let data; try { data = await fetch('/api/roots').then((r) => r.json()); } catch (e) { return permsMsg(String(e)); }
-  const list = document.getElementById('perms-list');
-  list.innerHTML = (data.roots || []).map((r) => `
-    <div class="perms-row ${r.exists ? '' : 'gone'}">
-      <span class="pr-dot" title="${r.exists ? 'available' : 'folder missing'}"></span>
-      <span class="pr-main"><div class="pr-name">${esc(r.name)}</div><div class="pr-path">${esc(r.path)}</div>${(r.tags && r.tags.length) ? `<div class="pr-tags">${esc(r.tags.join(' · '))}</div>` : ''}</span>
-      <button class="pr-revoke" data-path="${esc(r.path)}">revoke</button>
-    </div>`).join('') || '<div class="dk-empty" style="padding:14px 0">no folders granted</div>';
-  list.querySelectorAll('.pr-revoke').forEach((b) => { b.onclick = () => mutatePerms('remove', b.dataset.path); });
-}
-async function mutatePerms(action, p, tags) {
-  permsMsg(action === 'add' ? 'granting…' : 'revoking…');
-  let res; try { res = await fetch('/api/roots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, path: p, tags }) }).then((r) => r.json()); }
-  catch (e) { return permsMsg(String(e)); }
-  if (res.error) return permsMsg(res.error);
-  permsMsg(action === 'add' ? 'granted ✓' : 'revoked ✓', true);
-  document.getElementById('perms-path').value = ''; document.getElementById('perms-tags').value = '';
-  cbRepos = null;                       // codebase repo list derives from roots — refresh next open
-  loadPerms();
-}
-function openPerms() { PERMS.hidden = false; loadPerms(); }
-function closePerms() { PERMS.hidden = true; }
-// set-folders moved into Settings (declutter); openPerms is still reached via the
-// Settings "manage" link. Guard in case the toolbar button is absent.
-{ const b = document.getElementById('set-folders'); if (b) b.onclick = openPerms; }
-
-// ── Settings pane (#27) — appearance prefs + READ-ONLY local system status ──
-const SETTINGS = document.getElementById('settings');
-function closeSettings() { SETTINGS.hidden = true; }
-async function openSettings() {
-  SETTINGS.hidden = false;
-  renderSettings(null);                                   // paint prefs immediately
-  try { renderSettings(await fetch('/api/status').then((r) => r.json())); } catch (e) { renderSettings({ error: true }); }
-}
-function fmtWhen(iso) {
-  if (!iso) return 'never';
-  const d = new Date(iso), s = (Date.now() - d.getTime()) / 1000;
-  if (s < 90) return 'just now';
-  if (s < 5400) return Math.round(s / 60) + ' min ago';
-  if (s < 172800) return Math.round(s / 3600) + ' h ago';
-  return d.toISOString().slice(0, 10);
-}
-function renderSettings(st) {
-  const themes = THEME_ORDER.map((name) => {
-    const sw = THEMES[name][curMode].accent;
-    return `<button class="set-theme${name === curTheme ? ' on' : ''}" data-theme="${esc(name)}"><span class="sw" style="background:${sw}"></span>${esc(THEMES[name].label)}</button>`;
-  }).join('');
-  const sys = !st ? '<div class="set-row"><span class="set-k">loading…</span></div>'
-    : st.error ? '<div class="set-row"><span class="set-k">status unavailable</span></div>'
-    : `<div class="set-row"><span class="set-k">Neo4j</span><span class="set-v"><span class="set-dot ${st.neo4j.ok ? 'ok' : 'bad'}"></span>${st.neo4j.ok ? 'connected' : 'unreachable'} · ${esc(st.neo4j.uri)}</span></div>` +
-      `<div class="set-row"><span class="set-k">Graph</span><span class="set-v">${st.counts.nodes} nodes · ${st.counts.edges} edges · ${st.counts.indexed} indexed</span></div>` +
-      `<div class="set-row"><span class="set-k">Last backup</span><span class="set-v">${esc(fmtWhen(st.backup.lastModified))}</span></div>` +
-      `<div class="set-row"><span class="set-k">Allowed folders</span><span class="set-v">${st.folders} · <a class="set-link" id="set-folders-link">manage</a></span></div>` +
-      `<div class="set-row"><span class="set-k">Neo4j browser</span><span class="set-v"><a class="set-link" href="${esc(st.neo4j.browser)}" target="_blank" rel="noopener">open ↗</a></span></div>`;
-  document.getElementById('set-body').innerHTML =
-    '<div class="set-section"><div class="set-section-t">Appearance</div>' +
-      `<div class="set-row"><span class="set-k">Theme</span></div><div class="set-themes">${themes}</div>` +
-      `<div class="set-row"><span class="set-k">Mode</span><button class="set-toggle" id="set-mode-t">${curMode === 'light' ? '☀ Light' : '☾ Dark'}</button></div>` +
-      `<div class="set-row"><span class="set-k">Calm mode <span style="color:var(--ink-faint)">· less motion</span></span><button class="set-toggle${calm ? ' on' : ''}" id="set-calm-t">${calm ? 'On' : 'Off'}</button></div>` +
-      `<div class="set-row"><span class="set-k">Loading animation</span><span class="set-seg" id="set-anim">${['off', 'light', 'full'].map((l) => `<button class="set-seg-b${curAnim === l ? ' on' : ''}" data-anim="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join('')}</span></div>` +
-    '</div>' +
-    '<div class="set-section"><div class="set-section-t">System · read-only</div>' + sys + '</div>';
-  // wire
-  document.querySelectorAll('#set-body .set-theme').forEach((b) => { b.onclick = () => { applyTheme(b.dataset.theme, curMode); renderSettings(st); }; });
-  document.getElementById('set-mode-t').onclick = () => { applyTheme(curTheme, curMode === 'light' ? 'dark' : 'light'); renderSettings(st); };
-  document.getElementById('set-calm-t').onclick = () => { setCalm(!calm); renderSettings(st); };
-  document.querySelectorAll('#set-anim .set-seg-b').forEach((b) => { b.onclick = () => { applyAnim(b.dataset.anim); renderSettings(st); }; });
-  const fl = document.getElementById('set-folders-link'); if (fl) fl.onclick = () => { closeSettings(); openPerms(); };
-}
-document.getElementById('set-settings').onclick = openSettings;
-document.getElementById('settings-x').onclick = closeSettings;
-SETTINGS.addEventListener('click', (e) => { if (e.target === SETTINGS) closeSettings(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !SETTINGS.hidden) closeSettings(); });
 
 // Add-link intake (#19): save a web/YouTube link as a Resource, fuzzy-attach to a
 // Project/Goal, refresh the constellation and focus the new node.
@@ -2160,9 +1346,9 @@ async function refreshGraphData(focusName) {
     }
   } catch (e) { /* ignore */ }
 }
-(function initAddLink() {
+const addLink = (function initAddLink() {
   const pop = document.getElementById('addlink-pop');
-  if (!pop) return;
+  if (!pop) return { open() {} };
   const urlIn = document.getElementById('al-url'), attachIn = document.getElementById('al-attach');
   const menu = document.getElementById('al-attach-menu'), chips = document.getElementById('al-attach-chips');
   const msg = document.getElementById('al-msg'), sug = document.getElementById('al-suggest'), btn = document.getElementById('al-add');
@@ -2186,14 +1372,15 @@ async function refreshGraphData(focusName) {
   function openAddLink() { pop.hidden = false; clearFeedback(); urlIn.focus(); }   // restores preserved state
   function softCloseAddLink() { pop.hidden = true; closeMenu(); clearFeedback(); }  // preserve url + chips
   function hardCloseAddLink() { pop.hidden = true; closeMenu(); urlIn.value = ''; resetAttach(); clearFeedback(); }  // discard
-  document.getElementById('set-addlink').onclick = () => { pop.hidden ? openAddLink() : softCloseAddLink(); };
+  document.getElementById('rail-capture').onclick = () => { pop.hidden ? openAddLink() : softCloseAddLink(); };
   document.getElementById('al-x').onclick = hardCloseAddLink;
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) softCloseAddLink(); });
+  // Consume the Esc (stopPropagation) so the global unwind never also steps a layer.
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); softCloseAddLink(); } });
   // Click outside the popover dismisses it (soft) — but ignore clicks on the toggle
   // (it owns its own open/close) and any click within the popover (incl. the dropdown).
   document.addEventListener('mousedown', (e) => {
     if (pop.hidden) return;
-    if (pop.contains(e.target) || document.getElementById('set-addlink').contains(e.target)) return;
+    if (pop.contains(e.target) || document.getElementById('rail-capture').contains(e.target)) return;
     softCloseAddLink();
   });
   const submit = async () => {
@@ -2234,6 +1421,7 @@ async function refreshGraphData(focusName) {
   };
   btn.onclick = submit;
   urlIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  return { open: openAddLink };
 })();
 
 // Reusable fuzzy multi-picker controller (#29): the typeahead+chips behavior shared
@@ -2264,7 +1452,8 @@ function createPicker({ input, menu, chips, onPick, getExclude, filterLabel }) {
       menu.innerHTML = options.map((o, i) => {
         const cls = 'al-opt' + (i === active ? ' active' : '') + (o.superseded ? ' al-opt-superseded' : '');
         const label = o.label ? `<span class="al-opt-label">${esc(o.label)}</span>` : '';
-        return `<div class="${cls}" role="option" data-i="${i}"><span class="al-opt-name">${esc(o.name)}</span>${label}</div>`;
+        const was = o.former ? `<span class="al-opt-was">was ${esc(o.former)}</span>` : '';
+        return `<div class="${cls}" role="option" data-i="${i}"><span class="al-opt-name">${esc(o.name)}</span>${label}${was}</div>`;
       }).join('');
       menu.querySelectorAll('.al-opt').forEach((el) => { el.onmousedown = (e) => { e.preventDefault(); pick(optionAt(options, +el.dataset.i)); }; });
     }
@@ -2348,167 +1537,280 @@ function createPicker({ input, menu, chips, onPick, getExclude, filterLabel }) {
   window.__onSelectNode = (id) => { if (!panel.hidden && id !== boundId) collapse(); };
 })();
 
-// ── Calendar lens (#25 P1): a read-only month view over the graph's record + intention
-// dates — created_at activity heatmap, dots for valid_until expiries + Goal target dates.
-// Click a day → its items; click an item → open it in the graph. A READ lens, no writes.
-(function initCalendar() {
-  const overlay = document.getElementById('calendar');
-  if (!overlay) return;
-  const gridEl = document.getElementById('cal-grid'), titleEl = document.getElementById('cal-title'), dayEl = document.getElementById('cal-day');
-  const KIND_RANK = { due: 0, review: 1, target: 2, expiry: 3, created: 4 };
-  const KIND_LABEL = { due: 'due', review: 'review', target: 'goal date', expiry: 'expires', created: 'created' };
-  let cur = null, bucket = {}, maxHeat = 0, selectedDay = null;
-  const pad = (n) => String(n).padStart(2, '0');
-  const thisMonth = () => { const d = new Date(); return { year: d.getFullYear(), month: d.getMonth() + 1 }; };
-  const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+// The Time lens (D1): Agenda | Quarters | Month in one overlay (lib/time-lenses.js).
+const timeUi = initTimeLens({ esc, rgba, colorOf, secCollapsed, secToggle, pauseMainGraph, resumeMainGraph, selectNode, refreshGraphData, requestClose: requestLensClose });
 
-  async function load() {
-    const { from, to } = gridRange(cur.year, cur.month);
-    let items = [];
-    try { items = (await fetch(`/api/calendar?from=${from}&to=${to}`).then((r) => r.json())).items || []; } catch (e) { /* ignore */ }
-    bucket = bucketByDay(items);
-    maxHeat = Math.max(0, ...Object.values(bucket).map((a) => a.filter((x) => x.kind === 'created').length));
-    render();
-  }
-  function render() {
-    titleEl.textContent = monthLabel(cur.year, cur.month);
-    const today = isoToday();
-    gridEl.innerHTML = monthGrid(cur.year, cur.month).flat().map((cell) => {
-      const items = bucket[cell.date] || [];
-      const heat = heatIntensity(items.filter((x) => x.kind === 'created').length, maxHeat);
-      const dots = ['due', 'review', 'target', 'expiry']
-        .filter((k) => items.some((x) => x.kind === k))
-        .map((k) => `<i class="cal-dot cal-dot-${k}"></i>`).join('');
-      const cls = ['cal-cell', cell.inMonth ? '' : 'out', `heat-${heat}`, cell.date === today ? 'today' : '', cell.date === selectedDay ? 'sel' : '']
-        .filter(Boolean).join(' ');
-      return `<button class="${cls}" data-date="${cell.date}"><span class="cal-d">${cell.day}</span><span class="cal-dots">${dots}</span></button>`;
-    }).join('');
-  }
-  function showDay(date) {
-    selectedDay = date; render();
-    const items = (bucket[date] || []).slice().sort((a, b) => (KIND_RANK[a.kind] - KIND_RANK[b.kind]) || String(a.name || '').localeCompare(b.name || ''));
-    if (!items.length) { dayEl.innerHTML = `<div class="cal-day-h">${esc(date)}</div><div class="cal-day-hint">nothing on this day</div>`; return; }
-    dayEl.innerHTML = `<div class="cal-day-h">${esc(date)} · ${items.length}</div>` +
-      items.map((it) => `<button class="cal-item" data-id="${esc(it.id)}" data-name="${esc(it.name || '')}" data-label="${esc(it.label || '')}">` +
-        `<i class="rel-dot" style="background:${rgba(colorOf(it.label), 1)}"></i>` +
-        `<span class="cal-item-n">${esc(it.name || '')}</span><span class="cal-item-k cal-k-${it.kind}">${KIND_LABEL[it.kind]}</span></button>`).join('');
-  }
-  function open() { pauseMainGraph(); overlay.hidden = false; cur = cur || thisMonth(); load(); }
-  function close() { overlay.hidden = true; resumeMainGraph(); }
-
-  gridEl.addEventListener('click', (e) => { const c = e.target.closest('[data-date]'); if (c) showDay(c.dataset.date); });
-  dayEl.addEventListener('click', (e) => {
-    const it = e.target.closest('.cal-item'); if (!it) return;
-    close();
-    // Open by id directly (selectNode fetches /api/node) — robust even for a low-degree
-    // node outside the loaded graph subset, then nudge the graph toward it.
-    selectNode({ id: it.dataset.id, name: it.dataset.name, label: it.dataset.label });
-    refreshGraphData(it.dataset.name);
-  });
-  document.getElementById('cal-prev').onclick = () => { selectedDay = null; cur = stepMonth(cur.year, cur.month, -1); load(); };
-  document.getElementById('cal-next').onclick = () => { selectedDay = null; cur = stepMonth(cur.year, cur.month, 1); load(); };
-  document.getElementById('cal-today').onclick = () => { cur = thisMonth(); selectedDay = isoToday(); load().then(() => showDay(selectedDay)); };
-  document.getElementById('cal-x').onclick = close;
-  document.getElementById('set-calendar').onclick = () => (overlay.hidden ? open() : close());
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) close(); });
-})();
-
-// ── Roadmap / timeline lens (#28): the quarters × goals zoom. Project swimlanes, goal cards
-// placed by target_date (exact) / timeframe (tentative) / unscheduled gutter, current-quarter
-// highlight, status colors, click → open in the graph. A READ lens; no writes. ─────────────
-(function initRoadmap() {
-  const overlay = document.getElementById('roadmap');
-  if (!overlay) return;
-  const grid = document.getElementById('rm-grid');
-  const pad = (n) => String(n).padStart(2, '0');
-  const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-  let loaded = false;
-
-  function goalCard(g, place) {
-    const st = classifyStatus(g.status);
-    const date = g.target_date || g.due_at;
-    const tag = place.precision === 'exact' && date ? dueLabel(date, Date.now())
-      : place.precision === 'tentative' ? '~ ' + (g.timeframe || 'someday') : '';
-    return `<button class="rm-card st-${st}${place.precision === 'tentative' ? ' tentative' : ''}" ` +
-      `data-id="${esc(g.id)}" data-name="${esc(g.name)}" title="${esc(g.name)}${g.status ? ' · ' + esc(g.status) : ''}">` +
-      `<span class="rm-card-n">${esc(g.name)}</span>${tag ? `<span class="rm-card-d">${esc(tag)}</span>` : ''}</button>`;
-  }
-
-  let data = [];
-  function render() {
-    const now = new Date(), nowISO = isoToday();
-    const axis = quarterAxis(now.getFullYear(), now.getMonth() + 1, { fwd: 4 });
-    const span = axis.length + 1;   // gutter + quarters (for the milestone sub-row)
-    grid.style.gridTemplateColumns = `184px 128px repeat(${axis.length}, minmax(116px, 1fr))`;
-    let html = '<div class="rm-corner"></div><div class="rm-colh">Unscheduled</div>' +
-      axis.map((c) => `<div class="rm-colh${c.isCurrent ? ' cur' : ''}">${esc(c.label)}</div>`).join('');
-    for (const p of data) {
-      const pst = classifyStatus(p.project.status);
-      const expanded = !secCollapsed('rmlane:' + p.project.id, true);
-      const nMile = (p.milestones || []).length;
-      html += `<div class="rm-lane" data-pid="${esc(p.project.id)}" role="button" title="${esc(p.project.name)} — click to ${expanded ? 'hide' : 'show'} milestones">` +
-        `<i class="rm-caret${expanded ? ' open' : ''}">${nMile ? '›' : ''}</i>` +
-        `<span class="rm-ldot st-${pst}"></span><span class="rm-ln">${esc(p.project.name)}</span>` +
-        (nMile ? `<span class="rm-mcount">${nMile}</span>` : '') + `</div>`;
-      const cells = { gutter: [] };
-      axis.forEach((c) => { cells[c.key] = []; });
-      for (const g of p.goals || []) {
-        const place = placeItem(g, axis, nowISO);
-        (place.colKey && cells[place.colKey] ? cells[place.colKey] : cells.gutter).push(goalCard(g, place));
-      }
-      html += `<div class="rm-cell rm-gut">${cells.gutter.join('')}</div>` +
-        axis.map((c) => `<div class="rm-cell${c.isCurrent ? ' cur' : ''}">${cells[c.key].join('')}</div>`).join('');
-      // expanded → a milestone sub-row spanning the data columns (ideas are mostly undated)
-      if (expanded && nMile) {
-        const pills = p.milestones.map((m) =>
-          `<button class="rm-pill st-${classifyStatus(m.status)}" data-id="${esc(m.id)}" data-name="${esc(m.name)}" title="${esc(m.name)}${m.status ? ' · ' + esc(m.status) : ''}">${esc(m.name)}</button>`).join('');
-        html += '<div class="rm-sublane">milestones</div>' +
-          `<div class="rm-subcells" style="grid-column: span ${span}">${pills}</div>`;
-      }
-    }
-    grid.innerHTML = data.length ? html : '<div class="cal-day-hint" style="padding:16px">No goals with a project yet.</div>';
-  }
-  async function load() {
-    try { data = (await fetch('/api/roadmap').then((r) => r.json())).projects || []; } catch (e) { data = []; }
-    render();
-  }
-  function open() { pauseMainGraph(); overlay.hidden = false; if (!loaded) { loaded = true; load(); } }
-  function close() { overlay.hidden = true; resumeMainGraph(); }
-
-  grid.addEventListener('click', (e) => {
-    const open2 = (id, name, label) => { close(); selectNode({ id, name, label }); refreshGraphData(name); };
-    const card = e.target.closest('.rm-card[data-id]');
-    if (card) return open2(card.dataset.id, card.dataset.name, 'Goal');
-    const pill = e.target.closest('.rm-pill[data-id]');
-    if (pill) return open2(pill.dataset.id, pill.dataset.name, 'Idea');
-    const lane = e.target.closest('.rm-lane[data-pid]');
-    if (lane) { secToggle('rmlane:' + lane.dataset.pid, true); render(); }
-  });
-  document.getElementById('rm-x').onclick = close;
-  document.getElementById('set-roadmap').onclick = () => (overlay.hidden ? open() : close());
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) close(); });
-})();
-document.getElementById('perms-x').onclick = closePerms;
-document.getElementById('perms-grant').onclick = () => {
-  const p = document.getElementById('perms-path').value.trim();
-  const tags = document.getElementById('perms-tags').value.split(',').map((t) => t.trim()).filter(Boolean);
-  if (p) mutatePerms('add', p, tags);
+// ── Nav state machine (Stage C2): lib/nav.js owns the states; this block owns the side
+// effects. One navState {lens, tab} mirrored into location.hash (#time/agenda, #code/review,
+// #agents — graph = no hash) so lens URLs are linkable and reload-safe. Lenses keep their
+// own open()/close() internals — nav just decides WHO is open.
+let navState = { ...navInitial };
+const LENS_IMPL = {
+  time: {
+    open: (tab) => timeUi.open(tab),
+    close: () => timeUi.close(),
+  },
+  code: {
+    // One overlay (#codelens), two tabs (C4). The overlay + head chrome are owned here;
+    // each tab's surface keeps its own open/close internals (its body div).
+    open: (tab, payload) => {
+      const review = tab === 'review';
+      document.getElementById('codelens').hidden = false;
+      document.querySelectorAll('#code-tabs .lh-tab').forEach((b) => b.classList.toggle('on', b.dataset.tab === (review ? 'review' : 'map')));
+      document.getElementById('cl-ctl-map').hidden = review;
+      document.getElementById('cl-ctl-review').hidden = !review;
+      if (review) reviewUi.openReview(payload); else cbUi.open();
+    },
+    close: (tab) => {
+      if (tab === 'review') reviewUi.close(); else cbUi.close();
+      document.getElementById('codelens').hidden = true;
+    },
+  },
+  agents: {
+    open: (tab, payload) => agentsUi.open(payload || {}),
+    close: () => agentsUi.close(),
+  },
 };
-document.getElementById('perms-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('perms-grant').click(); });
-PERMS.addEventListener('click', (e) => { if (e.target === PERMS) closePerms(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !PERMS.hidden) closePerms(); });
-window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.getElementById('codebase').hidden && FR.hidden) closeCodebase(); });
-window.addEventListener('resize', () => { if (cbGraph && !document.getElementById('codebase').hidden) { const h = document.getElementById('cb-graph'); cbGraph.width(h.clientWidth).height(h.clientHeight); } });
+function applyNav(next, payload) {
+  if (sameState(navState, next)) {
+    // already there — but a payload (deep-link: a Review node, a Slipway session) still re-targets
+    if (payload && next.lens !== 'graph') LENS_IMPL[next.lens].open(next.tab, payload);
+    return;
+  }
+  const prev = navState;
+  navState = next;
+  if (prev.lens !== 'graph') LENS_IMPL[prev.lens].close(prev.tab);
+  if (next.lens !== 'graph') LENS_IMPL[next.lens].open(next.tab, payload);
+  syncHash(next);
+  paintRail(next);
+}
+// Rail active state (C3): the current lens reads in accent with a left bar.
+function paintRail(state) {
+  const map = { graph: 'rail-graph', time: 'rail-time', code: 'rail-code', agents: 'rail-agents' };
+  for (const lens in map) {
+    const b = document.getElementById(map[lens]);
+    if (b) b.classList.toggle('on', state.lens === lens);
+  }
+}
+function navigate(action) { applyNav(navReduce(navState, action), action.payload); }
+function toggleLens(lens, tab) {
+  const isOpen = navState.lens === lens && (tab == null || navState.tab === tab);
+  navigate(isOpen ? { type: 'close' } : { type: 'open', lens, tab });
+}
+function syncHash(state) {
+  const h = serializeHash(state);
+  if ((location.hash || '') === h) return;
+  if (h) location.hash = h;
+  else history.replaceState(null, '', location.pathname + location.search);   // graph: strip the hash, no event
+}
+window.addEventListener('hashchange', () => {
+  const next = parseHash(location.hash);
+  applyNav(next);
+  // Normalize an aliased/retired hash (e.g. the retired #time/month → #time/agenda) even
+  // when it maps to the CURRENT state — applyNav short-circuits sameState without touching
+  // the URL, so canonicalize it here.
+  syncHash(next);
+});
+// The rail (C3) routes through nav so state/hash/Esc all agree. Roadmap + Code review keep
+// their deep links (#time/roadmap, #code/review) and palette commands until the C4 tab strips.
+document.getElementById('rail-graph').onclick = () => navigate({ type: 'close' });
+document.getElementById('rail-time').onclick = () => toggleLens('time', 'agenda');
+document.getElementById('rail-code').onclick = () => toggleLens('code', 'map');
+document.getElementById('rail-agents').onclick = () => toggleLens('agents');
+paintRail(navState);
+// The shared lens-head (C4): every ‹ Graph back-chevron returns home; every tab strip
+// drives nav (which updates the hash and swaps the surface).
+document.querySelectorAll('.lens-head .lh-back').forEach((b) => { b.onclick = () => navigate({ type: 'close' }); });
+document.querySelectorAll('.lens-head .lh-tab').forEach((b) => { b.onclick = () => navigate({ type: 'tab', tab: b.dataset.tab }); });
+
+// Help menu (C3): tour + shortcuts + docs, anchored to the rail.
+(function initHelp() {
+  const pop = document.getElementById('help-pop'), btn = document.getElementById('rail-help');
+  if (!pop || !btn) return;
+  const close = () => { pop.hidden = true; };
+  btn.onclick = () => { pop.hidden = !pop.hidden; };
+  document.getElementById('hp-tour').onclick = () => { close(); window.__toggleTour && window.__toggleTour(); };
+  document.getElementById('hp-keys').onclick = () => { const l = document.getElementById('hp-keys-list'); l.hidden = !l.hidden; };
+  document.addEventListener('mousedown', (e) => { if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close(); });
+  // popover-owned Esc, consumed so the global unwind doesn't also step a layer
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); close(); } });
+})();
+
+// The ONE Escape handler (C2) — replaces the six scattered ones. Contextual poppers
+// (agent-pop, note modal/popover, review comment row, pickers) consume Esc themselves via
+// stopPropagation; modal panes (settings, perms, add-link) do the same at document level.
+// What remains unwinds exactly one layer, in lib/nav.js's documented order.
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const t = e.target;
+  if (t === qEl) { hideIntentPanel(); qEl.blur(); return; }               // search: dismiss + blur, stop there
+  if (fr.isOpen()) { fr.esc(); return; }                                  // file reader sits above everything (edit → view → closed)
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;   // typing: contextual Esc only
+  const layer = escTarget({ lens: navState.lens !== 'graph', report: reportOpen, inspector: inspOpen, focus: !!focusId });
+  if (layer === 'lens') {
+    // the Time lens's mini-month day filter unwinds first — one visual layer at a time
+    if (navState.lens === 'time' && timeUi.escStep && timeUi.escStep()) return;
+    // kept from review-ui: an open (unfocused) comment row shouldn't take the whole lens with it
+    if (navState.lens === 'code' && navState.tab === 'review' && document.querySelector('#rv-code .fr-addrow')) return;
+    navigate({ type: 'close' });
+  } else if (layer === 'report') closeReport();
+  else if (layer === 'inspector') closeInsp();
+  else if (layer === 'focus') clearFocus();
+});
+// G/T/C/A switch lenses when not typing (and not under the file reader).
+window.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (fr.isOpen()) return;
+  const k = (e.key || '').toLowerCase();
+  if (k === 'g') navigate({ type: 'close' });
+  else if (k === 't') navigate({ type: 'open', lens: 'time' });
+  else if (k === 'c') navigate({ type: 'open', lens: 'code' });
+  else if (k === 'a') navigate({ type: 'open', lens: 'agents' });
+});
+
+// ── Command palette (Stage C1): the intent bar gains verbs. lib/commands.js owns the
+// closed registry + ranking; this dispatch() switch is the ONE place a command id turns
+// into an action (every entry calls an existing open()/toggle — no new behavior here).
+let cmdRegistry = null;   // rebuilt when the graph's type set changes (buildLenses)
+function commandRegistry() {
+  if (!cmdRegistry) cmdRegistry = buildRegistry({ themes: THEME_ORDER.map((n) => ({ name: n, label: THEMES[n].label })), types: domains });
+  return cmdRegistry;
+}
+function commandMatchesFor(q) {
+  // agentSession gate: some ended (archivable) session exists in the current payload.
+  const agentSession = ((agentSessions && agentSessions.sessions) || []).some((s) => s && !s.alive);
+  return matchCommands(q, commandRegistry(), { selection: !!current, focus: !!focusId, agentSession }).slice(0, 6);
+}
+function dispatch(id) {
+  if (id.startsWith('set-theme-')) return applyTheme(id.slice('set-theme-'.length), themeState.mode);
+  if (id.startsWith('ui-size-')) return applyUiScale(id.slice('ui-size-'.length).toUpperCase());
+  if (id.startsWith('filter-')) {
+    const t = id.slice('filter-'.length);
+    if (activeTypes.has(t)) activeTypes.delete(t); else activeTypes.add(t);
+    return applyFilter();
+  }
+  switch (id) {
+    case 'open-graph': navigate({ type: 'close' }); break;
+    case 'open-time-agenda': navigate({ type: 'open', lens: 'time', tab: 'agenda' }); break;
+    case 'open-roadmap': navigate({ type: 'open', lens: 'time', tab: 'roadmap' }); break;
+    case 'open-code-map': navigate({ type: 'open', lens: 'code', tab: 'map' }); break;
+    case 'open-code-review': navigate({ type: 'open', lens: 'code', tab: 'review' }); break;
+    case 'open-agents': navigate({ type: 'open', lens: 'agents' }); break;
+    case 'agent-archive-selected': navigate({ type: 'open', lens: 'agents' }); agentsUi.archiveSelected(); break;
+    case 'agent-archive-ended': navigate({ type: 'open', lens: 'agents' }); agentsUi.archiveAllEnded(); break;
+    case 'capture-link': addLink.open(); break;
+    case 'needs-review': staleOnly = true; applyFilter(); break;
+    case 'toggle-mode': applyTheme(themeState.name, themeState.mode === 'light' ? 'dark' : 'light'); break;
+    case 'toggle-calm': setCalm(!themeState.calm); break;
+    case 'focus-clear': clearFocus(); Graph && Graph.zoomToFit(600, 50); break;
+    case 'study-selected': openStudy(); break;
+    case 'export-report': exportBriefing(); break;
+    case 'start-tour': window.__toggleTour && window.__toggleTour(); break;
+    case 'open-settings': settingsUi.open(); break;
+    case 'manage-folders': perms.open(); break;
+  }
+}
+// The ONE delegated listener for empty-state actions (D2): any .es-action carrying a
+// data-cmd routes through the same dispatch() as the palette — no per-state wiring.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('.es-action[data-cmd]');
+  if (a) { e.preventDefault(); dispatch(a.dataset.cmd); }
+});
+// ⌘K / Ctrl+K focuses the palette from anywhere; '/' too, when not already typing.
+window.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); qEl.focus(); qEl.select(); return; }
+  if (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    const ae = document.activeElement;
+    if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || ae.isContentEditable)) return;
+    e.preventDefault(); qEl.focus(); qEl.select();
+  }
+});
 
 // ── UI: health, lenses, search, time, zoom, dock, settings ───────────────────
 function paintHealth(h) {
-  document.getElementById('s-total').textContent = h.total;
-  document.getElementById('s-index').textContent = h.indexed;
-  document.getElementById('s-review').textContent = (h.orphans || 0) + (h.superseded || 0);
-  if (h.newest) {
-    document.getElementById('dock-resume').hidden = false;
-    document.getElementById('dock-resume-v').innerHTML = `Newest insight: <b>${esc(trunc(h.newest.name, 44))}</b>${h.newest.created_at ? ' — ' + h.newest.created_at.slice(0, 10) : ''}`;
+  // The header stats trio is gone (C3): memories live in the brand subline (#conn, set in
+  // boot), the review count on the dock's Needs-review badge. Health feeds the resume brief.
+  healthData = h;
+  renderResumeBrief();
+}
+
+// The "where were we" re-entry brief: a one-glance summary at the top of the dock, composed from
+// data already on the client — /api/health (freshness + newest) + /api/pulse (live goals, due,
+// open notes). No /api/resume endpoint: that would re-run queries pulse already issues. Renders
+// progressively — health paints it on boot, pulse enriches the counts when it arrives.
+// D3 upgrade: on the FIRST open of a calendar day (lib/daybrief.js decides), the card leads
+// with the Daily Brief — since-counts + three jump-back-in actions — dismissible, not a modal.
+const LS_BRIEF_DAY = 'scatterbrained.lastBriefDay', LS_LAST_FOCUS = 'scatterbrained.lastFocus';
+const localISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+function dailyBriefHtml(p) {
+  const brief = buildBrief({
+    health: healthData, pulse: p,
+    lastFocusName: lsGet(LS_LAST_FOCUS), lastVisitISO: lsGet(LS_BRIEF_DAY), todayISO: localISO(),
+  });
+  if (!brief.show || !p) return '';   // wait for the pulse so the counts are real
+  const c = brief.counts;
+  const line = `Since ${esc(brief.sinceLabel)}: <b>${c.newInsights}</b> new insight${c.newInsights !== 1 ? 's' : ''}` +
+    ` · <b>${c.dueToday}</b> due today · <b>${c.blocked}</b> blocked`;
+  return `<div class="brief" id="dock-brief">` +
+    `<button class="brief-x" id="brief-x" title="dismiss until tomorrow" aria-label="dismiss the daily brief">×</button>` +
+    `<div class="brief-line">${line}</div>` +
+    `<div class="brief-actions">` +
+    (brief.lastFocusName ? `<button class="brief-act" id="brief-resume" title="reopen “${esc(brief.lastFocusName)}”">Pick up where you left off</button>` : '') +
+    `<button class="brief-act" id="brief-due">See what’s due</button>` +
+    `<button class="brief-act" id="brief-review">Review queue${c.needsReview ? ` (${c.needsReview})` : ''}</button>` +
+    `</div></div>`;
+}
+function wireDailyBrief() {
+  const x = document.getElementById('brief-x');
+  if (!x) return;
+  x.onclick = () => { try { localStorage.setItem(LS_BRIEF_DAY, localISO()); } catch (e) {} renderResumeBrief(); };
+  const res = document.getElementById('brief-resume');
+  if (res) res.onclick = () => focusByName(lsGet(LS_LAST_FOCUS) || '');
+  document.getElementById('brief-due').onclick = () => dispatch('open-time-agenda');
+  document.getElementById('brief-review').onclick = () => {
+    // expand the dock's Needs-review section, bring it into view, open its first item
+    const grp = document.querySelector('#dock-scroll .dk-grp.sec-review');
+    if (!grp) return;
+    if (grp.classList.contains('collapsed')) { grp.classList.remove('collapsed'); dockCollapsed.delete('review'); localStorage.setItem(DOCK_COLLAPSE_KEY, JSON.stringify([...dockCollapsed])); }
+    grp.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const first = grp.querySelector('.dk-item');
+    if (first) first.click();
+  };
+}
+function renderResumeBrief() {
+  const h = healthData; if (!h) return;
+  const el = document.getElementById('dock-resume-v'); if (!el) return;
+  document.getElementById('dock-resume').hidden = false;
+  const p = dockData;
+  // Actionable stat chips (only when pulse has loaded): goals + undated, due, open notes.
+  const stats = [];
+  if (p) {
+    const goals = p.goals || [];
+    const undated = goals.filter((g) => !g.target_date).length;
+    const due = (p.due || []).length;
+    const notes = (p.review && p.review.notes ? p.review.notes.length : 0);
+    if (goals.length) stats.push(`<span class="br-stat">🎯 ${goals.length} goal${goals.length !== 1 ? 's' : ''}${undated ? ` · ${undated} undated` : ''}</span>`);
+    if (due) stats.push(`<span class="br-stat warn">⏰ ${due} due</span>`);
+    if (notes) stats.push(`<span class="br-stat warn">🗒️ ${notes} note${notes !== 1 ? 's' : ''}</span>`);
   }
+  // The newest-memory line is a link into the graph (same inline __focus pattern as dock rows).
+  const newest = h.newest
+    ? `<div class="br-newest">Newest: <b class="br-go" role="button" tabindex="0" onclick="__focus(${JSON.stringify(h.newest.name || '').replace(/"/g, '&quot;')})">${esc(trunc(h.newest.name, 40))}</b>${h.newest.created_at ? ' · ' + h.newest.created_at.slice(0, 10) : ''}</div>`
+    : '';
+  // Stale-memory reminder (>24h since last full sync). A REMINDER, not a button — a full sync
+  // (re-ingest docs, capture insights, lint, back up) is agent work; surfacing it is the honest move.
+  let staleChip = '';
+  const since = h.last_sync ? Math.round((Date.now() - Date.parse(String(h.last_sync))) / 36e5) : null;
+  if (since != null && since > 24) {
+    const ago = since >= 48 ? `${Math.round(since / 24)}d` : `${since}h`;
+    staleChip = `<div class="dk-stale" title="Run the graph-sync skill to re-ingest docs, capture insights, lint, and back up">⚠️ Memory ${ago} stale — run <code>graph-sync</code></div>`;
+  }
+  // Daily Brief on top (when today's first open); the resume-card staples stay below it.
+  el.innerHTML = dailyBriefHtml(p) + (stats.length ? `<div class="br-stats">${stats.join('')}</div>` : '') + newest + staleChip;
+  wireDailyBrief();
 }
 const labelPlural = (d) => (d === 'Person' ? 'People' : d + 's');
 // Repaint + sync both filter surfaces (left shortcut chips, right HUD panel) to state.
@@ -2523,12 +1825,34 @@ function applyFilter() {
     else on = activeTypes.size === 1 && activeTypes.has(k);
     c.classList.toggle('on', on);
   });
-  // right panel checkboxes
-  document.querySelectorAll('#filter-panel .ft-type').forEach((b) => b.classList.toggle('on', activeTypes.has(b.dataset.type)));
-  const sb = document.getElementById('ft-stale'); if (sb) sb.classList.toggle('on', staleOnly);
+  // dock type-filter chips (C3: moved from the HUD popover into the Lenses section)
+  document.querySelectorAll('#lens-types .ft-type').forEach((b) => b.classList.toggle('on', activeTypes.has(b.dataset.type)));
+  renderLensList();
   poke();
 }
+// Lens results list (#32): the active lens's matching nodes as a flat clickable picker in the
+// dock — click a row to open it instead of hunting on the canvas. Reuses lensActive() so it
+// always matches exactly what the graph dims to. Hidden when no lens is active ("All").
+function renderLensList() {
+  const el = document.getElementById('lens-list');
+  if (!el) return;
+  if (!isFiltered()) { el.hidden = true; el.innerHTML = ''; return; }
+  const matches = NODES.filter((n) => lensActive(n) && n.name)
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  const single = activeTypes.size === 1 ? [...activeTypes][0] : null;
+  const title = single ? labelPlural(single) : (staleOnly && !activeTypes.size ? 'Needs review' : 'Filtered');
+  const cap = 50, shown = matches.slice(0, cap);
+  el.innerHTML = `<div class="ll-head">${esc(title)}<span class="ll-n">${matches.length}</span></div>` +
+    shown.map((n) => `<button class="ll-row" data-id="${esc(n.id)}" data-name="${esc(n.name)}" title="${esc(n.name)}">` +
+      `<span class="ll-dot" style="background:${rgba(colorOf(n.label), 1)}"></span>` +
+      `<span class="ll-name">${esc(trunc(n.name, 34))}</span>` +
+      (n.stale ? '<span class="ll-stale" title="needs review">⚠</span>' : '') + '</button>').join('') +
+    (matches.length > cap ? `<div class="ll-more">+${matches.length - cap} more on the graph</div>` : '');
+  el.querySelectorAll('.ll-row').forEach((b) => { b.onclick = () => selectByIdOrName(b.dataset.id, b.dataset.name); });
+  el.hidden = false;
+}
 function buildLenses() {
+  cmdRegistry = null;   // the graph's type set may have changed → rebuild the filter-* commands
   // Left dock = the two primary "what I work on" toggles + All + review. Everything else
   // (Sources, Insights, Ideas, …) lives in the HUD filter panel (the right menu).
   const present = ['Project', 'Goal'].filter((d) => domains.includes(d));
@@ -2550,17 +1874,18 @@ function buildLenses() {
   });
   buildFilterPanel();
   applyFilter();
+  syncDockOverflow();     // chips just changed height → re-check the scroll cue
 }
-// The HUD filter panel: full multi-select over every node type present in the graph.
+// The dock type filter (C3: was the HUD filter popover): full multi-select over every node
+// type present in the graph, rendered under the lens chips. Same activeTypes/applyFilter state;
+// the lens row's "All" chip clears it and "Needs review" carries the stale toggle.
 function buildFilterPanel() {
-  const wrap = document.getElementById('filter-types'); if (!wrap) return;
+  const wrap = document.getElementById('lens-types'); if (!wrap) return;
   wrap.innerHTML = domains.map((d) =>
     `<button class="ft-type chip" data-type="${esc(d)}"><i class="ft-dot" style="background:${rgba(colorOf(d), 1)}"></i>${esc(labelPlural(d))}</button>`).join('');
   wrap.querySelectorAll('.ft-type').forEach((b) => {
     b.onclick = () => { const t = b.dataset.type; if (activeTypes.has(t)) activeTypes.delete(t); else activeTypes.add(t); applyFilter(); };
   });
-  document.getElementById('ft-stale').onclick = () => { staleOnly = !staleOnly; applyFilter(); };
-  document.getElementById('ft-clear').onclick = () => { activeTypes.clear(); staleOnly = false; applyFilter(); };
 }
 const qEl = document.getElementById('q');
 const intentPanel = document.getElementById('intent-panel');
@@ -2569,7 +1894,7 @@ qEl.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(
 qEl.addEventListener('focus', () => { if (!qEl.value.trim()) showIntentHints(); });
 // command-palette keyboard UX: ↑/↓ move, Enter opens the highlighted result, Esc closes
 qEl.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { hideIntentPanel(); qEl.blur(); return; }
+  // Escape is handled by the one global unwind handler (search step: dismiss + blur).
   const rows = intentPanel.hidden ? [] : ipRows();
   if (!rows.length) return;
   if (e.key === 'ArrowDown') { e.preventDefault(); setActiveRow(ipActive + 1); }
@@ -2580,13 +1905,15 @@ document.addEventListener('click', (e) => { if (!e.target.closest('.search')) hi
 function hideIntentPanel() { intentPanel.hidden = true; intentPanel.innerHTML = ''; }
 
 // Intent-based navigation: a recognized intent ("what's blocked / changed / due")
-// resolves to a curated result set; anything else falls back to node search.
+// resolves to a curated result set; anything else falls back to node search. Either way
+// the panel leads with matching COMMANDS (the palette lane, C1).
 function handleQuery(raw) {
   const { kind } = parseIntent(raw);
   if (kind === 'search') { hideIntentPanel(); runSearch(raw); return; }
+  const cmds = commandMatchesFor(raw);
   searchHits = new Set(); document.getElementById('qcount').textContent = ''; poke();
   fetch('/api/intent?kind=' + encodeURIComponent(kind)).then((r) => r.json()).then(({ results }) => {
-    renderIntentResults(kind, results || []);
+    renderIntentResults(kind, results || [], cmds);
   }).catch(() => hideIntentPanel());
 }
 // One result surface for both intents and plain search — a clickable list so a
@@ -2599,25 +1926,40 @@ function setActiveRow(i) {
   rows.forEach((r, k) => r.classList.toggle('active', k === ipActive));
   rows[ipActive].scrollIntoView({ block: 'nearest' });
 }
-function renderResultsPanel(headText, results, subOf) {
+// Command rows (palette lane): title + hint, shortcut chip right-aligned. Enter/click
+// dispatches the command id and clears the bar.
+function commandRowsHtml(cmds) {
+  if (!cmds.length) return '';
+  return '<div class="ip-head">Commands</div>' + cmds.map((c) =>
+    `<button class="ip-row ip-cmd" data-cmd="${esc(c.id)}"><span class="ip-cmd-glyph" aria-hidden="true">›</span>` +
+    `<span class="ip-main"><span class="ip-name">${esc(c.title)}</span>` +
+    (c.hint ? `<span class="ip-sub">${esc(c.hint)}</span>` : '') + '</span>' +
+    (c.shortcut ? `<kbd class="ip-kbd">${esc(c.shortcut)}</kbd>` : '') + '</button>').join('');
+}
+function renderResultsPanel(headText, results, subOf, cmds = []) {
   const head = `<div class="ip-head">${esc(headText)}</div>`;
-  if (!results.length) { intentPanel.innerHTML = head + '<div class="ip-empty">nothing here right now</div>'; intentPanel.hidden = false; ipActive = -1; return; }
-  intentPanel.innerHTML = head + results.map((r) => {
+  const rows = results.map((r) => {
     const sub = subOf ? subOf(r) : (r.sub || '');
     return `<button class="ip-row" data-id="${esc(r.id)}" data-name="${esc(r.name || '')}">` +
       `<span class="ip-dot" style="background:${rgba(colorOf(r.label), 1)}"></span>` +
       `<span class="ip-main"><span class="ip-name">${esc(trunc(r.name || '—', 46))}</span>` +
       `<span class="ip-sub">${esc(r.label)}${sub ? ' · ' + esc(sub) : ''}</span></span></button>`;
   }).join('');
-  intentPanel.querySelectorAll('.ip-row').forEach((btn) => {
+  intentPanel.innerHTML = commandRowsHtml(cmds) + head +
+    (results.length ? rows : '<div class="ip-empty">nothing here right now</div>');
+  intentPanel.querySelectorAll('.ip-row[data-id]').forEach((btn) => {
     btn.onclick = () => { selectByIdOrName(btn.dataset.id, btn.dataset.name); hideIntentPanel(); };
   });
+  intentPanel.querySelectorAll('.ip-row[data-cmd]').forEach((btn) => {
+    btn.onclick = () => { hideIntentPanel(); qEl.value = ''; qEl.blur(); dispatch(btn.dataset.cmd); };
+  });
   intentPanel.hidden = false;
-  setActiveRow(0);                          // first result highlighted → Enter opens it
+  ipActive = -1;
+  if (results.length || cmds.length) setActiveRow(0);   // first row highlighted → Enter runs it
 }
-function renderIntentResults(kind, results) {
+function renderIntentResults(kind, results, cmds) {
   const meta = INTENTS.find((i) => i.kind === kind);
-  renderResultsPanel(`${meta ? meta.label : kind} · ${results.length}`, results, (r) => r.sub);
+  renderResultsPanel(`Answers · ${meta ? meta.label : kind} · ${results.length}`, results, (r) => r.sub, cmds);
 }
 function showIntentHints() {
   intentPanel.innerHTML = '<div class="ip-head">try asking</div>' +
@@ -2627,7 +1969,9 @@ function showIntentHints() {
 }
 function selectByIdOrName(id, name) {
   const n = (id && byId[id]) || NODES.find((x) => x.name === name);
-  if (n) { selectNode(n); focusNode(n); } else if (name) { focusByName(name); }
+  if (n) { selectNode(n); focusNode(n); }
+  else if (id) { selectNode({ id, name }); refreshGraphData(name); }   // off-canvas → fetch by id
+  else if (name) { focusByName(name); }
 }
 // Remove one association edge (#29) by its relationship id, then refresh the inspector
 // (re-select the same node so the relations list reflects the prune) + the graph.
@@ -2643,15 +1987,25 @@ async function removeEdge(edgeId, name) {
 function runSearch(q) {
   q = (q || '').trim(); qEl.value = q;
   if (!q) { searchHits = new Set(); document.getElementById('qcount').textContent = ''; hideIntentPanel(); poke(); return; }
+  const cmds = commandMatchesFor(q);
   fetch('/api/search?q=' + encodeURIComponent(q)).then((r) => r.json()).then(({ results }) => {
     results = results || [];
     searchHits = new Set(results.map((r) => r.id));              // graph highlight
     document.getElementById('qcount').textContent = results.length ? `${results.length} found` : 'no matches';
-    renderResultsPanel(`Matches for “${q}” · ${results.length}`, results, (r) => (r.superseded ? 'superseded' : ''));  // clickable list
+    renderResultsPanel(`Memories · “${q}” · ${results.length}`, results, (r) => {
+      // "was <old name>" when this result surfaced because the query matched its former_name
+      // (and not the current name) — explains an otherwise-puzzling alias match.
+      const ql = q.toLowerCase(), nm = (r.name || '').toLowerCase();
+      const sub = [];
+      if (r.former_name && r.former_name.toLowerCase().includes(ql) && !nm.includes(ql)) sub.push('was ' + r.former_name);
+      if (r.superseded) sub.push('superseded');
+      return sub.join(' · ');
+    }, cmds);  // clickable list, commands first
+
     poke();
   }).catch(() => {});
 }
-const timeEl = document.getElementById('time');
+const timeEl = document.getElementById('time-slider');
 timeEl.addEventListener('input', () => {
   tv = +timeEl.value;
   document.getElementById('time-date').textContent = tv >= 100 ? 'now' : new Date(selT()).toISOString().slice(0, 10);
@@ -2659,27 +2013,46 @@ timeEl.addEventListener('input', () => {
 });
 document.getElementById('tb-now').onclick = () => { timeEl.value = 100; tv = 100; document.getElementById('time-date').textContent = 'now'; poke(); };
 
-document.getElementById('z-in').onclick = () => { Graph.zoom(Graph.zoom() * 1.3, 250); poke(); };
-document.getElementById('z-out').onclick = () => { Graph.zoom(Graph.zoom() / 1.3, 250); poke(); };
-document.getElementById('z-fit').onclick = () => { Graph.zoomToFit(500, 50); poke(); };
+document.getElementById('z-in').onclick = () => { userCam = true; Graph.zoom(Graph.zoom() * 1.3, 250); poke(); };
+document.getElementById('z-out').onclick = () => { userCam = true; Graph.zoom(Graph.zoom() / 1.3, 250); poke(); };
+document.getElementById('z-fit').onclick = () => { userCam = false; Graph.zoomToFit(500, 50); poke(); };   // an explicit fit re-arms auto-refit
 
 const graphEl = document.getElementById('graph');
-graphEl.addEventListener('mousemove', (e) => { lastMx = e.clientX; lastMy = e.clientY; if (hover) positionTip(); if (calm) poke(); });
+// Wheel-zoom or drag-pan on the canvas = the user owns the camera; stop auto-refitting.
+graphEl.addEventListener('wheel', () => { userCam = true; }, { passive: true });
+graphEl.addEventListener('mousedown', () => { userCam = true; });
+graphEl.addEventListener('mousemove', (e) => { lastMx = e.clientX; lastMy = e.clientY; if (hover) positionTip(); if (themeState.calm) poke(); });
 
 const TF = { '30_days': '30 days', short_term: 'Short term', '90_days': '90 days', '1_year': '1 year', long_term: 'Long term' };
 document.getElementById('dock-toggle').onclick = () => { dockOpen = !dockOpen; layoutGraph(); poke(); };
+// Keyboard activation for the dock's role=button rows + section headers + the resume-card
+// newest link (delegated once; #dock persists across re-renders). Enter/Space fires click.
+document.getElementById('dock').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  if (e.target.closest('button')) return;   // let nested buttons (agent Capture/Summarize) self-activate
+  const el = e.target.closest('.dk-item, .dk-h, .br-go');
+  if (el) { e.preventDefault(); el.click(); }
+});
 function loadDock() {
   const el = document.getElementById('dock-scroll');
-  fetch('/api/pulse').then((r) => r.json()).then((p) => renderDock(p)).catch((e) => { el.innerHTML = '<div class="dk-empty">could not load: ' + esc(String(e)) + '</div>'; });
+  fetch('/api/pulse').then((r) => r.json()).then((p) => renderDock(p)).catch((e) => { el.innerHTML = emptyState({ title: 'Couldn’t load the pulse', body: String(e) }); });
+  refreshAgentSessions();   // parallel — /api/agent/sessions carries a Slipway probe timeout, never block the pulse
+}
+// Agent sessions lane (Act plane Phase 3) — fetched separately from the pulse (its Slipway
+// probe can eat a 2s timeout) and folded into the dock via a re-render when it lands.
+let agentSessions = null;
+function refreshAgentSessions() {
+  fetch('/api/agent/sessions').then((r) => r.json()).then((a) => { agentSessions = a; if (dockData) renderDock(dockData); }).catch(() => {});
 }
 // Dock sections collapse/expand (persisted) + show-all for capped lists.
 const DOCK_COLLAPSE_KEY = 'scatterbrained:dock:collapsed';
 let dockCollapsed = new Set((() => { try { return JSON.parse(localStorage.getItem(DOCK_COLLAPSE_KEY) || '[]'); } catch { return []; } })());
 const dockShowAll = new Set();
 let dockData = null;
-function dockSection(key, icon, title, count, bodyHtml) {
+let healthData = null;   // stashed /api/health for the resume brief (composed with pulse, no new endpoint)
+function dockSection(key, icon, title, count, bodyHtml, accent) {
   const collapsed = dockCollapsed.has(key) ? ' collapsed' : '';
-  const n = count != null ? ` <span class="dk-n">${count}</span>` : '';
+  const n = count != null ? ` <span class="dk-n${accent ? ' dk-n-accent' : ''}">${count}</span>` : '';
   return `<div class="dk-grp sec-${key}${collapsed}" data-sec="${key}">` +
     `<div class="dk-h" role="button" tabindex="0"><i class="ti ti-${icon}" aria-hidden="true"></i> ${title}${n}<span class="dk-caret">▾</span></div>` +
     `<div class="dk-body">${bodyHtml}</div></div>`;
@@ -2693,29 +2066,61 @@ function cappedItems(key, items, cap) {
 function renderDock(p) {
   dockData = p;
   const J = (name) => `onclick="__focus(${JSON.stringify(name || '').replace(/"/g, '&quot;')})"`;
-  const item = (name, meta, cls) => `<div class="dk-item ${cls || ''}" ${J(name)}>${esc(trunc(name || '(unnamed)', 48))}${meta || ''}</div>`;
-  const empty = (t) => `<div class="dk-empty">${t}</div>`;
+  const item = (name, meta, cls) => `<div class="dk-item ${cls || ''}" role="button" tabindex="0" ${J(name)}>${esc(trunc(name || '(unnamed)', 48))}${meta || ''}</div>`;
+  const empty = (t, body) => emptyState({ title: t, body });
   const groups = [];
   (p.goals || []).forEach((g) => { const k = TF[g.timeframe] || 'Ongoing'; let grp = groups.find((x) => x.k === k); if (!grp) { grp = { k, items: [] }; groups.push(grp); } grp.items.push(g); });
-  const goalItems = groups.flatMap((grp) => grp.items.map((g) => item(g.projects && g.projects[0] ? g.projects[0] : g.name, `<div class="dk-meta">${esc(grp.k)}${g.projects && g.projects[0] ? ' · ' + esc(g.name) : ''}</div>`)));
-  const nowBody = `<span class="dk-pill"><span class="dot-now">●</span> ${(p.projects || []).length} now</span><span class="dk-pill"><span class="dot-next">●</span> ${(p.next || []).length} next</span>` +
-    (p.blocked || []).map((b) => item(b.name, `<div class="dk-meta">blocked by ${esc(trunc(b.blocker, 22))}</div>`, 'warn')).join('');
+  // A goal row opens the GOAL (by id, off-canvas-safe) — not its project. Goal name is primary;
+  // timeframe · delivering project · due date are secondary meta.
+  const goalItems = groups.flatMap((grp) => grp.items.map((g) => {
+    const proj = g.projects && g.projects[0] ? ' · ' + esc(trunc(g.projects[0], 22)) : '';
+    // A goal with no target date never reaches the Due rail / digest — nudge to set one.
+    // Clicking the row opens the goal's inspector, where the Schedule control lives.
+    const due = g.target_date
+      ? ' · ' + esc(dueLabel(g.target_date, Date.now()) || g.target_date)
+      : ' · <span class="dk-nudge">⏳ set a date</span>';
+    const open = `onclick="__open(${JSON.stringify(g.id || '').replace(/"/g, '&quot;')},${JSON.stringify(g.name || '').replace(/"/g, '&quot;')},'Goal')"`;
+    return `<div class="dk-item" role="button" tabindex="0" ${open}>${esc(trunc(g.name || '(unnamed)', 48))}<div class="dk-meta">${esc(grp.k)}${proj}${due}</div></div>`;
+  }));
+  // Due / Overdue — the intention clock surfaced where the eye lands (QI_DUE: nodes whose
+  // soonest due_at/review_at/target_date is overdue or within ~14d). Overdue rows go warn.
+  const dueItems = (p.due || []).map((d) => {
+    const overdue = /^overdue/.test(d.sub || '');
+    const open = `onclick="__open(${JSON.stringify(d.id || '').replace(/"/g, '&quot;')},${JSON.stringify(d.name || '').replace(/"/g, '&quot;')},${JSON.stringify(d.label || '')})"`;
+    return `<div class="dk-item ${overdue ? 'warn' : ''}" role="button" tabindex="0" ${open}>${esc(trunc(d.name || '(unnamed)', 48))}<div class="dk-meta">${esc(d.sub || '')}${d.label ? ' · ' + esc(d.label) : ''}</div></div>`;
+  });
   const newItems = (p.whatsNew || []).map((w) => item(w.name, `<div class="dk-meta">${w.created_at ? w.created_at.slice(0, 10) : ''}${(w.tags && w.tags.length) ? ' · ' + esc(w.tags[0]) : ''}</div>`));
-  const rv = p.review || { superseded: [], lowConfidence: [], orphans: [], aliasDrift: [], protectedFacts: [] };
+  const rv = p.review || { superseded: [], lowConfidence: [], orphans: [], aliasDrift: [], protectedFacts: [], notes: [] };
+  // Open Notes (raw/cued) first — they're explicit asks left for the next agent/session, the
+  // most actionable thing in the queue. The row opens the note's anchor node (not the note).
+  const noteRows = (rv.notes || []).map((nt) => {
+    const open = `onclick="__open(${JSON.stringify(nt.anchor_id || '').replace(/"/g, '&quot;')},${JSON.stringify(nt.anchor_name || '').replace(/"/g, '&quot;')},${JSON.stringify(nt.anchor_label || '')})"`;
+    return `<div class="dk-item warn" role="button" tabindex="0" ${open}><span class="dk-badge">note · ${esc(nt.state)}</span> ${esc(trunc(nt.anchor_name || '(unnamed)', 40))}<div class="dk-meta">“${esc(trunc(nt.text || '', 46))}”</div></div>`;
+  });
   const reviewItems = [
+    ...noteRows,
     ...(rv.protectedFacts || []).map((k) => item(k.target_name, `<span class="dk-badge">fact ${esc(k.pending_status)}</span><div class="dk-meta">“${esc(trunc(k.value, 24))}”${k.pending_new ? ' → “' + esc(trunc(k.pending_new, 18)) + '”' : ''}</div>`, 'warn')),
     ...(rv.aliasDrift || []).map((d) => item(d.name, `<span class="dk-badge">renamed · ${esc(d.label)}</span>${d.former_name ? `<div class="dk-meta">was “${esc(trunc(d.former_name, 28))}”</div>` : ''}`, 'warn')),
     ...rv.lowConfidence.map((r) => item(r.name, `<div class="dk-meta">${esc(r.confidence)} confidence</div>`, 'warn')),
     ...rv.superseded.map((s) => item(s.name, `<span class="dk-badge">${esc(s.label)}</span>`, 'warn')),
     ...rv.orphans.map((o) => item(o.name, `<span class="dk-badge">orphan · ${esc(o.label)}</span>`, 'warn')),
   ];
+  // Agent sessions (D4) — the lane shrank to one compact count row; the sessions
+  // themselves (chips, Capture/Summarize, deep-links) live in the Agents lens rail now.
+  // Still rendered only when any exist, so machines without Slipway never see it.
+  const ag = (agentSessions && agentSessions.sessions) || [];
+  const agentItems = ag.length
+    ? [`<div class="dk-item" role="button" tabindex="0" onclick="__openAgents()">${esc(laneSummary(ag))}<div class="dk-meta">open the Agents lens →</div></div>`]
+    : [];
   document.getElementById('dock-scroll').innerHTML = [
-    dockSection('goals', 'target', 'Goals', (p.goals || []).length, goalItems.length ? cappedItems('goals', goalItems, 8) : empty('no goals')),
-    dockSection('now', 'flame', 'Now · Next · Blocked', null, nowBody),
-    dockSection('new', 'sparkles', "What's new", (p.whatsNew || []).length, newItems.length ? cappedItems('new', newItems, 6) : empty('no insights')),
-    dockSection('review', 'alert-triangle', 'Needs review', reviewItems.length, reviewItems.length ? cappedItems('review', reviewItems, 8) : empty('all clean')),
+    dockSection('goals', 'target', 'Goals', (p.goals || []).length, goalItems.length ? cappedItems('goals', goalItems, 8) : empty('No goals yet', 'Define one and it tracks here.')),
+    dockSection('due', 'calendar-clock', 'Due / Overdue', dueItems.length, dueItems.length ? cappedItems('due', dueItems, 8) : empty('Nothing due', 'Set target dates on goals to wind the clock.')),
+    ...(agentItems.length ? [dockSection('agents', 'terminal-2', 'Agent sessions', ag.length, agentItems.join(''))] : []),
+    dockSection('new', 'sparkles', "What's new", (p.whatsNew || []).length, newItems.length ? cappedItems('new', newItems, 6) : empty('No insights yet')),
+    dockSection('review', 'alert-triangle', 'Needs review', reviewItems.length, reviewItems.length ? cappedItems('review', reviewItems, 8) : empty('All clean'), reviewItems.length > 0),
   ].join('');
   wireDock();
+  renderResumeBrief();   // enrich the re-entry brief with pulse counts now that they've loaded
 }
 function wireDock() {
   document.querySelectorAll('#dock-scroll .dk-grp').forEach((grp) => {
@@ -2734,30 +2139,20 @@ function wireDock() {
       renderDock(dockData);
     });
   });
+  // (Capture/Summarize moved to the Agents lens session rail — lib/agents-ui.js, D4.)
 }
 
 function fail(e) {
   const d = document.createElement('div'); d.className = 'err';
-  d.innerHTML = `<div><b>Can't reach the graph.</b><br><br>${esc(e.message || String(e))}<br><br>Make sure your local Neo4j is running and the studio server is up:<br><code>docker compose up -d</code><br><code>npm run studio</code></div>`;
+  d.innerHTML = '<div>' + emptyState({
+    title: "Can't reach the graph.",
+    body: (e.message || String(e)) + ' — make sure your local Neo4j is running and the studio server is up: docker compose up -d, then npm run studio.',
+  }) + '</div>';
   document.body.appendChild(d);
   document.getElementById('boot').classList.add('gone');
 }
 
-// theme + calm moved into Settings (declutter); dark/light stays on the toolbar.
-{ const b = document.getElementById('set-theme'); if (b) b.onclick = () => { const i = THEME_ORDER.indexOf(curTheme); applyTheme(THEME_ORDER[(i + 1) % THEME_ORDER.length], curMode); }; }
-document.getElementById('set-mode').onclick = () => applyTheme(curTheme, curMode === 'light' ? 'dark' : 'light');
-{ const b = document.getElementById('set-calm'); if (b) b.onclick = () => setCalm(!calm); }
-(function initSettings() {
-  let st, sm, sc;
-  try { st = localStorage.getItem('scatterbrained.theme'); sm = localStorage.getItem('scatterbrained.mode'); sc = localStorage.getItem('scatterbrained.calm'); } catch (e) {}
-  const mq = (q) => window.matchMedia && window.matchMedia(q).matches;
-  applyTheme(st || 'observatory', sm || (mq('(prefers-color-scheme: light)') ? 'light' : 'dark'));
-  calm = sc != null ? sc === '1' : mq('(prefers-reduced-motion: reduce)');
-  document.body.classList.toggle('calm', calm);
-  const cb = document.getElementById('set-calm'); if (cb) cb.classList.toggle('on', calm);   // moved into Settings; may be absent
-  let sa; try { sa = localStorage.getItem('scatterbrained.anim'); } catch (e) {}
-  applyAnim(sa || (mq('(prefers-reduced-motion: reduce)') ? 'off' : 'full'));
-})();
+// Toolbar wiring + persisted-pref restore live in lib/theme-ui.js (initTheme, above).
 
 boot();
 
@@ -2770,69 +2165,11 @@ fetch('/api/ai/ping').then((r) => r.json()).then((p) => {
   if (caps.llm && current) rerenderActive();
 }).catch(() => {});
 
-// ── Guided tour (#14) — Northwind-style auto-play that drives the real Studio ──────
-// Declarative steps live in /lib/tour.js; here we interpret each over the live app
-// (every action try/caught so a missing demo node never breaks the walk). Stop button
-// + #tour deep-link. Best over the demo graph (examples/seed-demo.cypher).
-let _tourTimer = null, _tourOn = false;
-function _tourAction(s) {
-  try {
-    if (s.escape) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    if ('focus' in s) {
-      if (s.focus === null) { const fc = document.getElementById('focus-clear'); if (fc) fc.click(); }
-      else if (window.__focus) window.__focus(s.focus);
-    }
-    if (s.click) (Array.isArray(s.click) ? s.click : [s.click]).forEach((sel) => { const el = document.querySelector(sel); if (el) el.click(); });
-    if (s.type != null) { const q = document.getElementById('q'); if (q) { q.value = s.type; q.dispatchEvent(new Event('input', { bubbles: true })); } }
-    if (s.scrollTo) setTimeout(() => { const el = document.querySelector(s.scrollTo); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 400);
-  } catch (e) {}
-}
-function _tourCap(html, i) {
-  const c = document.getElementById('tour-cap'); if (!c) return;
-  c.classList.remove('show');
-  const dots = TOUR.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
-  setTimeout(() => { c.innerHTML = `<span class="tour-text">${html}</span><span class="tour-dots">${dots}</span>`; c.classList.add('show'); }, 160);
-}
-function _tourStep(i) {
-  if (!_tourOn) return;
-  if (i >= TOUR.length) { setTimeout(stopTour, 1200); return; }
-  _tourAction(TOUR[i]);
-  _tourCap(TOUR[i].caption, i);
-  _tourTimer = setTimeout(() => _tourStep(i + 1), TOUR[i].wait);
-}
-function startTour() {
-  if (_tourOn) return;
-  _tourOn = true;
-  const b = document.getElementById('tour-btn'); if (b) b.textContent = '■ Stop';
-  _tourStep(0);
-}
-function stopTour() {
-  _tourOn = false;
-  clearTimeout(_tourTimer);
-  const b = document.getElementById('tour-btn'); if (b) b.textContent = '▶ Tour';
-  const c = document.getElementById('tour-cap'); if (c) c.classList.remove('show');
-}
-window.__toggleTour = () => (_tourOn ? stopTour() : startTour());
-{ const b = document.getElementById('tour-btn'); if (b) b.onclick = window.__toggleTour; }
-if (location.hash === '#tour') setTimeout(startTour, 1400);   // deep-link auto-start (for the showcase)
+// ── Guided tour (#14) → lib/tour-ui.js (self-contained: reads window.__focus, drives the DOM) ──
+initTour();
 
-// ── SSE: graph-changed banner ────────────────────────────────────────────────
-(function initStaleBanner() {
-  const banner = document.getElementById('stale-banner');
-  const reloadBtn = document.getElementById('stale-reload');
-  const dismissBtn = document.getElementById('stale-dismiss');
-  if (!banner || !reloadBtn || !dismissBtn) return;
+// Deep-linked lens URLs are reload-safe: apply the hash on load ('#tour' etc. parse as graph).
+applyNav(parseHash(location.hash));
 
-  reloadBtn.onclick = async () => {
-    banner.hidden = true;
-    await refreshGraphData();
-  };
-  dismissBtn.onclick = () => { banner.hidden = true; };
-
-  function connect() {
-    const es = new EventSource('/api/events');
-    es.addEventListener('graph-changed', () => { banner.hidden = false; });
-    es.onerror = () => { es.close(); setTimeout(connect, 5000); };
-  }
-  connect();
-}());
+// ── SSE: graph-changed banner → lib/stale-banner-ui.js ──
+initStaleBanner({ refreshGraphData });

@@ -90,21 +90,22 @@ describe('rankEdges — actionable relations before generic references', () => {
 });
 
 describe('view-aware composition', () => {
-  const node = { label: 'Project', name: 'Northwind', edgeCount: 2 };
+  const node = { label: 'Project', name: 'Acme', edgeCount: 2 };
   const data = { edges: [
     { type: 'CONTAINS', dir: 'out', name: 'Governance', label: 'Idea' },
     { type: 'ACHIEVED_BY', dir: 'in', name: 'Ship MVP', label: 'Goal' },
   ] };
-  it('renders relations as a flat list in inspector, an SVG subgraph in report', () => {
+  it('renders relations as a flat list in inspector, a live force-graph mount in report', () => {
     const insp = composeView(node, data, {}, 'inspector').find((c) => c.id === 'relations');
     const rep = composeView(node, data, {}, 'report').find((c) => c.id === 'relations');
     expect(insp.html).not.toContain('<svg');
-    expect(rep.html).toContain('<svg');
-    expect(rep.html).toContain('CONTAINS');
+    expect(insp.html).toContain('CONTAINS');                 // inspector keeps the grouped-by-type list
+    expect(rep.html).toContain('id="rel-live"');             // report = a mount point app.js fills with ForceGraph
+    expect(rep.html).not.toContain('<svg');                  // no more static SVG subgraph
   });
   it('coerces an unknown view to inspector', () => {
     const rel = composeView(node, data, {}, 'bogus').find((c) => c.id === 'relations');
-    expect(rel.html).not.toContain('<svg');
+    expect(rel.html).not.toContain('rel-live');
   });
   it('composeInspector still works (back-compat)', () => {
     expect(composeInspector(node, data).find((c) => c.id === 'relations')).toBeTruthy();
@@ -127,12 +128,11 @@ describe('keyFacts — the above-the-fold metric row', () => {
     expect(facts.find((f) => f.label === 'sources').value).toBe(23);
     expect(facts.find((f) => f.label === 'connections').value).toBe(70);   // 93 − 23, not 1
   });
-  it('computes goal progress as a fact for a Goal', () => {
-    const facts = keyFacts({ label: 'Goal' }, { edges: [
-      { type: 'REQUIRES', dir: 'out', status: 'done' },
-      { type: 'REQUIRES', dir: 'out', status: 'active' },
+  it('computes goal progress as a fact from milestone-Ideas (matching the goal-progress panel)', () => {
+    const facts = keyFacts({ label: 'Goal' }, { goal_milestones: [
+      { status: 'validated' }, { status: 'exploring' }, { valid_until: '2026-01-01', status: '' }, { status: 'proposed' },
     ] });
-    expect(facts.find((f) => f.label === 'progress').value).toBe('50%');
+    expect(facts.find((f) => f.label === 'progress').value).toBe('50%');   // 2 done (validated + valid_until) of 4
   });
 });
 
@@ -285,6 +285,22 @@ describe('component renderers are pure and escape input', () => {
     expect(html).not.toContain('__provFilter');
   });
 
+  it('provenance refuses a javascript: source url — inert span, never an href (stored XSS)', () => {
+    const data = { sources: [{ name: 'evil', url: 'javascript:alert(document.cookie)' }, { name: 'ok', url: 'https://e.x' }] };
+    const html = REGISTRY.provenance.render({}, data, { esc, trunc: (s) => s });
+    expect(html).not.toContain('href="javascript');
+    expect(html).toContain('<span class="src">evil</span>');   // non-web scheme → inert
+    expect(html).toContain('href="https://e.x"');              // a real web url still links
+  });
+
+  it('miniMarkdown only links real http(s) urls — a javascript: link becomes plain text', () => {
+    expect(miniMarkdown('see [x](https://e.x)', esc)).toContain('<a href="https://e.x"');
+    const evil = miniMarkdown('[click](javascript:alert(1))', esc);
+    expect(evil).not.toContain('<a ');
+    expect(evil).not.toContain('javascript:alert');            // url never emitted
+    expect(evil).toContain('click');                           // link text preserved as text
+  });
+
   it('notes renders each note with a state pill + anchor, plus an add form wired to the target', () => {
     const data = { id: '4:x:1', notes: [
       { id: 'n1', text: 'research the competitor pricing', state: 'raw', created_at: '2026-06-17T00:00:00Z' },
@@ -360,8 +376,14 @@ describe('chart component', () => {
     expect(REGISTRY.chart.render({}, {}, { esc })).toBe('');
     expect(REGISTRY.chart.render({}, { chart: { bars: [] } }, { esc })).toBe('');
   });
-  it('is offered for a well-connected node', () => {
-    const ids = composeView({ label: 'Project', edgeCount: 8 }, { chart: { bars: [{ label: 'X', value: 8 }] } }, {}, 'inspector').map((c) => c.id);
+  it('a well-connected node uses `relations` (NOT a duplicate connections-by-type chart)', () => {
+    const data = { chart: { bars: [{ label: 'X', value: 8 }] }, edges: [{ type: 'ABOUT', dir: 'out', name: 'n', label: 'Project' }] };
+    const ids = composeView({ label: 'Project', edgeCount: 8 }, data, {}, 'inspector').map((c) => c.id);
+    expect(ids).not.toContain('chart');   // by-type info lives only in `relations` now (dedup)
+    expect(ids).toContain('relations');
+  });
+  it('chart is still offered for a node with its own tabular data', () => {
+    const ids = composeView({ label: 'Insight', isTabular: true }, { chart: { bars: [{ label: 'X', value: 8 }] } }, {}, 'inspector').map((c) => c.id);
     expect(ids).toContain('chart');
   });
 });
@@ -387,22 +409,47 @@ describe('confidence component', () => {
 });
 
 describe('goal-progress component', () => {
-  it('computes percent from met REQUIRES requirements', () => {
-    const data = { edges: [
-      { type: 'REQUIRES', dir: 'out', name: 'A', status: 'done' },
-      { type: 'REQUIRES', dir: 'out', name: 'B', valid_until: '2026-01-01' },
-      { type: 'REQUIRES', dir: 'out', name: 'C', status: 'active' },
-      { type: 'REQUIRES', dir: 'out', name: 'D' },
+  it('computes percent from the delivering project milestone-Ideas (NOT REQUIRES), with clickable chips', () => {
+    const data = { goal_milestones: [
+      { id: 'm1', name: 'A', status: 'validated' },   // done
+      { id: 'm2', name: 'B', status: 'exploring' },   // active
+      { id: 'm3', name: 'C', status: 'deferred' },    // blocked
+    ], edges: [{ type: 'ACHIEVED_BY', dir: 'out', id: 'p1', name: 'Acme' }] };
+    const html = REGISTRY['goal-progress'].render({ label: 'Goal' }, data, { esc, trunc: (s) => s });
+    expect(html).toContain('33%');                       // 1 of 3 done
+    expect(html).toContain('1/3 milestones');
+    expect(html).toContain('1 active');
+    expect(html).toContain('class="nav-node gp-ms');     // milestones are one-click into the work
+    expect(html).toContain('data-id="m2"');
+  });
+  it('counts a bi-temporally invalidated milestone (valid_until) as done', () => {
+    const data = { goal_milestones: [
+      { id: 'm1', name: 'A', status: '', valid_until: '2026-01-01' },  // done via valid_until
+      { id: 'm2', name: 'B', status: 'proposed' },                      // next
     ] };
     const html = REGISTRY['goal-progress'].render({ label: 'Goal' }, data, { esc, trunc: (s) => s });
-    expect(html).toContain('50%');                         // 2 of 4 met
-    expect(html).toContain('2/4 requirements met');
+    expect(html).toContain('50%');
   });
-  it('falls back to own status when there are no requirements, and shows the project', () => {
-    const data = { edges: [{ type: 'ACHIEVED_BY', dir: 'out', name: 'Northwind' }] };
+  it('shows the on-ramp (no % bar) when a project is linked but has no milestones', () => {
+    const data = { goal_milestones: [], edges: [{ type: 'ACHIEVED_BY', dir: 'out', id: 'p1', name: 'Acme' }] };
     const html = REGISTRY['goal-progress'].render({ label: 'Goal', status: 'active' }, data, { esc, trunc: (s) => s });
-    expect(html).toContain('0%');
-    expect(html).toContain('delivered by Northwind');
+    expect(html).not.toContain('gp-bar');                 // a 0% bar reads as failure for an unmodeled goal
+    expect(html).toContain('tracked via');
+    expect(html).toContain('Acme');
+    expect(html).toContain('no milestones yet');
+  });
+  it('nudges to link a project (with an inline on-ramp) when none delivers the goal', () => {
+    const html = REGISTRY['goal-progress'].render({ label: 'Goal', status: 'active' }, { goal_milestones: [], edges: [] }, { esc, trunc: (s) => s });
+    expect(html).toContain('not yet linked to a delivering project');
+    expect(html).toContain('gp-onramp');                          // actionable, not a dead-end status line
+    expect(html).toContain('data-gp-action="link-project"');
+  });
+  it('renders clickable blocker chips from goal_blockers', () => {
+    const data = { goal_milestones: [], goal_blockers: [{ id: 'b1', name: 'X' }] };
+    const html = REGISTRY['goal-progress'].render({ label: 'Goal' }, data, { esc, trunc: (s) => s });
+    expect(html).toContain('gp-blocker');
+    expect(html).toContain('data-id="b1"');
+    expect(html).toContain('>X<');
   });
   it('is dispatched for any Goal node', () => {
     expect(composeInspector({ label: 'Goal' }, {}).map((c) => c.id)).toContain('goal-progress');
@@ -515,7 +562,7 @@ describe('relations component (Phase 0 render)', () => {
     degree: 3, relTypes: ['ABOUT', 'INFORMS'],
     edges: [
       { type: 'ABOUT', dir: 'out', label: 'Person', name: 'Priya', id: 'p1', rel_id: 'r1' },
-      { type: 'INFORMS', dir: 'out', label: 'Project', name: 'Northwind', id: 'pr1', rel_id: 'r2' },
+      { type: 'INFORMS', dir: 'out', label: 'Project', name: 'Acme', id: 'pr1', rel_id: 'r2' },
       { type: 'ABOUT', dir: 'out', label: 'Idea', name: 'NoId', id: 'n9' },   // no rel_id → no ×
     ],
   };

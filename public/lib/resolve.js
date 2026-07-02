@@ -40,8 +40,10 @@ export function resolveLayout(node = {}, caps = {}) {
   // 2. content-type body
   if (['markdown', 'text'].includes(node.sourceKind) && node.hasText) add('markdown');
   else if (node.sourceKind === 'csv' || node.isTabular) add('chart');
-  // a well-connected node also gets a relation-distribution chart (data app-computed)
-  if ((node.edgeCount || 0) >= 5) add('chart');
+  // NOTE: a relation-distribution "connections by type" chart was previously added here for any
+  // node with >=5 edges, but it duplicated the `relations` component (which already groups edges
+  // by type). `relations` is now the single source of by-type connection info; `chart` is reserved
+  // for a node's own tabular/numeric data (the csv/isTabular case above). [dedup, 2026-06-25]
   if (node.hasText && !out.includes('markdown')) add('text');
   // web links: a video URL embeds a player inline; any other web URL gets a rich
   // link card. Both sit above `excerpt` so the link is the headline, not a footnote.

@@ -29,9 +29,15 @@ export const SOURCE_KINDS = {
   // — Spreadsheet/tabular lane — VALID kinds the Scatterbrained Studio sheet/chart viewers
   //   render (public/lib/csv.js + lib/xlsx.js, both shipped), but NOT auto-ingested by
   //   document-index.js. They reach the graph by hand or via the Studio (test fixtures use
-  //   them today); auto-ingestion is queued, see scatterbrained ROADMAP Open #10.
+  //   them today); auto-ingestion is queued (not yet automated).
   csv: 'A comma/tab-separated spreadsheet (.csv/.tsv) — rendered as a table + chart by the Studio.',
   xlsx: 'An Excel spreadsheet (.xlsx) — rendered as a table by the Studio.',
+
+  // — Agent lane (set by the Studio's POST /api/agent/capture) —
+  // An agent-terminal session captured back into the graph: the Source holds metadata +
+  // file_path to the transcript .log; the transcript text itself stays on disk, never in
+  // the graph.
+  agent_session: 'A captured agent-terminal session (transcript .log on disk).',
 
   // — Curated / manually-added artifacts (set by hand during a session) —
   claude_memory: 'A Claude memory file (~/.claude/.../memory/*.md).',
@@ -48,7 +54,7 @@ export const SOURCE_KIND_LIST = Object.keys(SOURCE_KINDS);
 
 // Kinds that originate from a file on disk, so they MUST carry a file_path.
 // (Used by lint to flag document-lane Sources that lost their absolute path.)
-export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'csv', 'xlsx', 'claude_memory'];
+export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'csv', 'xlsx', 'claude_memory', 'agent_session'];
 
 export function isValidSourceKind(k) {
   return typeof k === 'string' && Object.prototype.hasOwnProperty.call(SOURCE_KINDS, k);

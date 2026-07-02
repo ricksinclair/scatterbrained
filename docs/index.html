@@ -3,22 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Scatterbrained — a local-first knowledge observatory</title>
-<meta name="description" content="Point Scatterbrained at your Neo4j graph and see your knowledge — a living constellation you can explore, interrogate, and act on. Local-first, no cloud." />
-<!-- Gated marketing page (#20). Deploy only when the alpha is called. Screenshots are the
-     demo graph (examples/seed-demo.cypher) — never real data. No build, no dependencies. -->
+<title>Scatterbrained — a second brain you can see</title>
+<meta name="description" content="Scatterbrained turns everything you know — notes, decisions, files, projects — into a living star map on your own computer. Local-first memory for people who work with AI: provenance, history, and a graph you can rewind." />
+<!-- Alpha site, rewritten around the five failure-mode stories (2026-07-02). Screenshots are
+     the bundled demo graph — never real data. No build, no dependencies. -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Spectral:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --bg: #131318; --panel: #1e1e26; --line: rgba(255,255,255,.10);
+    --bg: #131318; --panel: #1e1e26; --line: rgba(255,255,255,.10); --line-2: rgba(255,255,255,.16);
     --ink: #ece6d8; --ink-dim: #b9b3a6; --ink-faint: #7c776c;
-    --ember: #ef9a5b; --ember-dk: #c97b3e; --teal: #79b4ab; --teal-dk: #3f7a72; --accent: #ef9a5b;
-    /* aliases so the ported editorial sections read against the draft palette */
-    --paper: var(--ink); --paper-dim: var(--ink-dim); --muted: var(--ink-faint);
-    --ink-2: #17171f; --ink-3: #1b1b24; --line-2: rgba(255,255,255,.16);
-    --maxw: 1080px; --measure: 64ch;
+    --ink-2: #17171f; --ink-3: #1b1b24;
+    --ember: #ef9a5b; --ember-dk: #c97b3e; --teal: #79b4ab; --teal-dk: #3f7a72;
+    --maxw: 1040px; --measure: 64ch;
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -26,15 +24,15 @@
     font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   h1, h2, h3 { font-family: "Fraunces", Georgia, serif; font-weight: 500; }
   a { color: var(--ember); text-decoration: none; } a:hover { text-decoration: underline; }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 24px; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
   header.nav { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; position: relative; z-index: 3; }
   .brand { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
   .brand .b1 { color: var(--ember); } .brand .b2 { color: var(--ink); }
   .brand .studio { color: var(--ink-faint); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; margin-left: 2px; }
   nav a { color: var(--ink-dim); margin-left: 22px; font-size: 14px; }
 
-  /* ── Branded hero ─────────────────────────────────────────────────────────── */
-  .hero { position: relative; overflow: hidden; text-align: center; padding: 52px 24px 40px; }
+  /* ── Hero ────────────────────────────────────────────────────────────────── */
+  .hero { position: relative; overflow: hidden; text-align: center; padding: 52px 24px 46px; }
   .hero-graph { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; opacity: 0.5; pointer-events: none; }
   .hero-graph .edges line { stroke: var(--ember); stroke-width: 1; opacity: 0.28; stroke-dasharray: 320; stroke-dashoffset: 320; animation: draw 2.4s ease-out 0.3s forwards; }
   .hero-graph .nodes circle { fill: var(--ember); opacity: 0; animation: pop 0.6s ease 1.6s forwards; transform-box: fill-box; transform-origin: center; }
@@ -42,11 +40,12 @@
   @keyframes draw { to { stroke-dashoffset: 0; } }
   @keyframes pop { from { opacity: 0; transform: scale(0); } to { opacity: 0.8; transform: scale(1); } }
 
-  .hero-inner { position: relative; z-index: 2; max-width: 760px; margin: 0 auto; }
+  .hero-inner { position: relative; z-index: 2; max-width: 780px; margin: 0 auto; }
   .hero-inner > * { opacity: 0; transform: translateY(14px); animation: rise 0.9s cubic-bezier(.2,.7,.2,1) forwards; }
   .hero-inner > *:nth-child(1){animation-delay:.05s} .hero-inner > *:nth-child(2){animation-delay:.18s}
   .hero-inner > *:nth-child(3){animation-delay:.34s} .hero-inner > *:nth-child(4){animation-delay:.5s}
   .hero-inner > *:nth-child(5){animation-delay:.66s} .hero-inner > *:nth-child(6){animation-delay:.82s}
+  .hero-inner > *:nth-child(7){animation-delay:.94s}
   @keyframes rise { to { opacity: 1; transform: translateY(0); } }
 
   .brand-mark { display: inline-block; margin-bottom: 14px; }
@@ -68,171 +67,70 @@
   @keyframes bm-drift-c { 0%,100% { transform: translate(0,0); } 40% { transform: translate(8px,6px); } 75% { transform: translate(-5px,-5px); } }
   @keyframes bm-pulse { 0%,100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.42); opacity: 1; } }
 
-  .kicker { color: var(--ember); text-transform: uppercase; letter-spacing: 0.24em; font-size: 12px; margin: 0 0 18px; }
+  .kicker { color: var(--ember); text-transform: uppercase; letter-spacing: 0.24em; font-size: 12px; margin: 0 0 18px; font-family: "JetBrains Mono", ui-monospace, monospace; }
   .wordmark { font-size: clamp(40px, 8vw, 76px); line-height: 1; letter-spacing: -.02em; margin: 0; font-weight: 700; }
   .wordmark .wm-1 { color: var(--ember); } .wordmark .wm-2 { color: var(--ink); }
   .wordmark .wm-dot { display: inline-block; width: 0.14em; height: 0.14em; border-radius: 50%; background: var(--teal); margin: 0 0.06em; vertical-align: middle; }
   .define { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13.5px; color: var(--ink-dim); margin: 16px auto 0; }
   .define .ipa { color: var(--ink); } .define .pos { color: var(--teal); font-style: normal; }
-  .lede { font-size: clamp(16px, 2.2vw, 20px); color: var(--ink-dim); max-width: 620px; margin: 22px auto 26px; }
+  .lede { font-size: clamp(16px, 2.1vw, 19px); color: var(--ink-dim); max-width: 66ch; margin: 24px auto 0; font-family: "Spectral", Georgia, serif; font-weight: 300; line-height: 1.6; }
   .lede em { color: var(--ink); font-style: italic; }
-  .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
-  .btn { display: inline-block; padding: 12px 22px; border-radius: 999px; font-weight: 600; font-size: 15px; cursor: pointer; }
-  .btn-primary { background: var(--ember); color: #1a1208; } .btn-primary:hover { text-decoration: none; filter: brightness(1.07); }
-  .btn-ghost { border: 1px solid var(--line); color: var(--ink); } .btn-ghost:hover { text-decoration: none; border-color: var(--ember); }
-
-  .shot { margin: 30px auto 0; max-width: 940px; border-radius: 14px; border: 1px solid var(--line); box-shadow: 0 30px 80px -30px rgba(0,0,0,.7); display: block; width: 100%; position: relative; z-index: 2; }
-  .alpha { text-align: center; color: var(--ink-faint); font-size: 13px; margin-top: 14px; }
-
-  section { padding: 56px 0; } .feat { padding-top: 30px; }
-  h2 { font-size: clamp(24px, 3.6vw, 34px); letter-spacing: -.02em; margin: 0 0 8px; text-align: center; }
-  .sub { color: var(--ink-dim); text-align: center; max-width: 620px; margin: 0 auto 38px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 18px; }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; }
-  .card h3 { margin: 0 0 6px; font-size: 16px; }
-  .card h3 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; vertical-align: middle; }
-  .card p { margin: 0; color: var(--ink-dim); font-size: 14px; }
-  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  .shots figure { margin: 0; } .shots img { width: 100%; border-radius: 10px; border: 1px solid var(--line); display: block; }
-  .shots figcaption { color: var(--ink-faint); font-size: 12.5px; margin-top: 7px; text-align: center; }
-  @media (max-width: 620px) { .shots { grid-template-columns: 1fr; } }
-  pre { background: #0e0e13; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; overflow-x: auto; color: var(--ink); font-size: 13.5px; line-height: 1.7; }
-  pre .c { color: var(--ink-faint); } .run { max-width: 720px; margin: 0 auto; }
-  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; color: var(--ink-faint); font-size: 13px; text-align: center; }
-  .site-foot { padding: 32px 24px 56px; font-size: 13.5px; }
-  .site-foot p { max-width: 640px; margin: 0 auto; line-height: 1.75; }
-  .site-foot strong { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-weight: 500; }
-  .site-foot a { color: var(--ember); }
+  .hero-cta { margin: 26px auto 0; max-width: 480px; }
+  pre.cmd { background: #0e0e13; border: 1px solid var(--line-2); border-radius: 12px; padding: 16px 20px; overflow-x: auto;
+    color: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 15px; line-height: 1.6; margin: 0; text-align: left; }
+  pre.cmd .p { color: var(--teal); user-select: none; } pre.cmd .c { color: var(--ink-faint); }
+  .cta-note { color: var(--ink-faint); font-size: 13px; margin-top: 10px; }
+  .cta-note a { color: var(--ink-dim); text-decoration: underline; }
   .scroll-cue { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 2; }
   .scroll-cue span { display: block; width: 1px; height: 40px; background: linear-gradient(var(--ember), transparent); animation: cue 2.2s ease-in-out infinite; }
   @keyframes cue { 0%,100% { opacity: .15; } 50% { opacity: .85; } }
 
-  /* ── Ported editorial sections (from the original monograph, recolored) ──── */
-  .band { position: relative; z-index: 2; padding: 76px 0; border-top: 1px solid var(--line); }
+  /* ── Bands & stories ─────────────────────────────────────────────────────── */
+  .band { position: relative; z-index: 2; padding: 72px 0; border-top: 1px solid var(--line); }
   .band-alt { background: linear-gradient(180deg, var(--ink-2), var(--bg)); }
   .section-tag { color: var(--ember); text-transform: uppercase; letter-spacing: .2em; font-size: 12px; margin: 0 0 12px; font-family: "JetBrains Mono", ui-monospace, monospace; }
-  .band h2 { text-align: left; max-width: 18ch; margin: 0 0 18px; }
-  .prose { max-width: var(--measure); color: var(--paper-dim); font-size: 17px; font-family: "Spectral", Georgia, serif; font-weight: 300; line-height: 1.65; }
+  .band h2 { font-size: clamp(24px, 3.6vw, 34px); letter-spacing: -.02em; margin: 0 0 18px; max-width: 26ch; }
+  .band h2 em { font-style: italic; }
+  .prose { max-width: var(--measure); color: var(--ink-dim); font-size: 17px; font-family: "Spectral", Georgia, serif; font-weight: 300; line-height: 1.65; }
   .prose em { color: var(--ink); font-style: italic; }
-  .prose code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .82em; color: var(--teal); background: rgba(121,180,171,.08); padding: .1em .4em; border-radius: 4px; }
-  .problem-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 38px; margin-top: 40px; }
-  .problem-grid article { border-top: 2px solid var(--line-2); padding-top: 18px; }
-  .problem-grid h3 { font-size: 22px; margin: 0 0 10px; color: var(--ink); }
-  .problem-grid p { margin: 0; color: var(--paper-dim); font-size: 15px; }
-  @media (max-width: 700px) { .problem-grid { grid-template-columns: 1fr; gap: 26px; } }
+  .prose strong { color: var(--ink); font-weight: 500; }
+  .prose code, .under code, .caveats code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .82em; color: var(--teal); background: rgba(121,180,171,.08); padding: .1em .4em; border-radius: 4px; }
 
+  .story .moment { font-size: clamp(22px, 3.2vw, 30px); }
+  .story .moment .q { color: var(--ember); }
   .studio-demo { margin: 30px 0 0; }
-  .studio-demo img { width: 100%; display: block; border-radius: 14px; border: 1px solid var(--line-2); background: var(--ink-2); box-shadow: 0 40px 90px -45px rgba(0,0,0,.95), 0 0 60px -30px rgba(239,154,91,.18); }
-  .studio-demo figcaption { margin-top: 12px; text-align: center; color: var(--muted); font-size: 12.5px; letter-spacing: .02em; }
-  .studio-feats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 38px; margin-top: 36px; max-width: 880px; }
-  .studio-feats > div { color: var(--paper-dim); font-size: 15px; line-height: 1.5; border-top: 1px solid var(--line); padding-top: 12px; font-family: "Spectral", Georgia, serif; }
-  .studio-feats b { display: block; margin-bottom: 2px; color: var(--ink); font-weight: 600; }
-  @media (max-width: 640px) { .studio-feats { grid-template-columns: 1fr; } }
+  .studio-demo img { width: 100%; display: block; border-radius: 14px; border: 1px solid var(--line-2); background: var(--ink-2);
+    box-shadow: 0 40px 90px -45px rgba(0,0,0,.95), 0 0 60px -30px rgba(239,154,91,.18); }
+  .studio-demo figcaption { margin-top: 12px; text-align: center; color: var(--ink-faint); font-size: 12.5px; letter-spacing: .02em; }
+  .studio-demo figcaption em { font-style: italic; }
+  .shots-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 30px; }
+  .shots-2 figure { margin: 0; }
+  .shots-2 img { width: 100%; border-radius: 10px; border: 1px solid var(--line-2); background: var(--ink-2); display: block; }
+  .shots-2 figcaption { color: var(--ink-faint); font-size: 12.5px; margin-top: 8px; text-align: center; }
+  @media (max-width: 640px) { .shots-2 { grid-template-columns: 1fr; } }
+  .feat-note { margin-top: 16px; color: var(--ink-faint); font-size: 13px; font-family: "JetBrains Mono", ui-monospace, monospace; max-width: 72ch; }
 
-  /* "How it all fits" — numbered system pieces */
-  .system-list { list-style: none; margin: 40px 0 0; padding: 0; }
-  .system-list li { display: grid; grid-template-columns: 56px 1fr; gap: 22px; padding: 26px 0; border-top: 1px solid var(--line); align-items: start; }
-  .system-list .n { font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 28px; color: var(--ember); line-height: 1; }
-  .system-list h3 { font-size: 21px; margin: 0 0 6px; color: var(--ink); }
-  .system-list p { margin: 0; color: var(--paper-dim); font-size: 16px; font-family: "Spectral", Georgia, serif; font-weight: 300; max-width: 62ch; line-height: 1.62; }
-  .system-list code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .8em; color: var(--teal); background: rgba(121,180,171,.08); padding: .1em .4em; border-radius: 4px; }
-  .system-close { margin-top: 36px; }
-  @media (max-width: 700px) { .system-list li { grid-template-columns: 32px 1fr; gap: 14px; } .system-list .n { font-size: 22px; } }
+  /* "What's underneath" credibility band */
+  .under { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 38px; margin-top: 34px; }
+  .under > div { border-top: 1px solid var(--line); padding-top: 14px; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 15px; line-height: 1.55; }
+  .under b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 3px; }
+  @media (max-width: 700px) { .under { grid-template-columns: 1fr; } }
 
-  /* Headline feature bands */
-  .feature-split { display: grid; grid-template-columns: 320px 1fr; gap: 44px; align-items: center; margin-top: 32px; }
-  .feature-split img { width: 100%; display: block; border-radius: 12px; border: 1px solid var(--line-2); background: var(--ink-2); box-shadow: 0 30px 70px -40px rgba(0,0,0,.9); max-height: 560px; object-fit: cover; object-position: bottom; }
-  .feature-split .fs-text p { margin: 0 0 14px; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.62; }
-  .feature-split .fs-text p:last-child { margin-bottom: 0; }
-  .feature-split .fs-text em { color: var(--ink); font-style: italic; }
-  .feature-split code, .feat-note code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .8em; color: var(--teal); }
-  .feat-note { margin-top: 18px; color: var(--muted); font-size: 13px; font-family: "JetBrains Mono", ui-monospace, monospace; }
-  @media (max-width: 760px) { .feature-split { grid-template-columns: 1fr; gap: 24px; } }
-
-  /* Code-review schematic (hand-built SVG — no real repo data) */
-  .crdiag { margin: 32px 0 0; }
-  .crdiag svg { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 14px; background: var(--ink-2); display: block; }
-  .cr-panel { fill: var(--ink-3); stroke: var(--line-2); }
-  .cr-h { fill: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; }
-  .cr-s { fill: var(--paper-dim); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; }
-  .cr-dim { fill: var(--muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; }
-  .cr-num { fill: var(--muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10px; text-anchor: end; }
-  .cr-code { fill: var(--paper-dim); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; }
-  .cr-kw { fill: var(--ember); }
-  .cr-str { fill: var(--teal); }
-  .cr-changed { fill: var(--ember); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 9.5px; }
-  .cr-edge { stroke: var(--muted); stroke-width: 1.2; opacity: .55; fill: none; }
-  .cr-rev rect { fill: var(--ember); stroke: var(--ember); }
-  .cr-rev text { fill: #1a1206; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-anchor: middle; }
-  .cr-note rect { fill: var(--ink-2); stroke: var(--line-2); }
-  .cr-note text { fill: var(--paper-dim); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 9.5px; }
-  .cr-bubble { fill: rgba(239,154,91,.12); stroke: var(--ember-dk); }
-  .cr-bubble2 { fill: rgba(121,180,171,.12); stroke: var(--teal-dk); }
-
-  /* Document viewers + markdown editor */
-  .cr-save rect { fill: var(--ember); stroke: var(--ember); }
-  .cr-save text { fill: #1a1206; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-anchor: middle; }
-  .cr-btn rect { fill: var(--ink-2); stroke: var(--line-2); }
-  .cr-btn text { fill: var(--paper-dim); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-anchor: middle; }
-  .cr-mdh { fill: var(--ink); font-family: "Fraunces", Georgia, serif; font-size: 15px; }
-  .cr-cursor { fill: var(--ember); }
-  .fmt-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
-  .fmt-chips span { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; color: var(--paper-dim); border: 1px solid var(--line-2); border-radius: 999px; padding: 5px 13px; }
-  .fmt-chips span.edit { border-color: var(--ember); color: var(--ink); background: rgba(239,154,91,.07); }
-
-  /* "Inside the graph" — subgraph SVG + legend + edge vocab */
-  .graphviz { margin: 32px 0 0; }
-  .graphviz svg { width: 100%; height: auto; }
-  .gv-edges line { stroke: var(--muted); stroke-width: 1.2; opacity: .55; }
-  .gv-el { fill: var(--muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 9.5px; text-anchor: middle; letter-spacing: .02em; }
-  .gv-n rect { fill: var(--ink-3); stroke: var(--line-2); }
-  .gv-n text { fill: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; text-anchor: middle; }
-  .gv-project rect { stroke: var(--ember); stroke-width: 1.5; }
-  .gv-project text { font-size: 14px; }
-  .gv-source rect { stroke: var(--teal); }
-  .gv-insight rect { fill: var(--ember); stroke: var(--ember); }
-  .gv-insight text { fill: #1a1206; }
-  .legend-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px 26px; margin-top: 32px; }
-  .legend-grid div { display: flex; align-items: baseline; gap: 9px; color: var(--paper-dim); font-size: 14px; font-family: "Spectral", Georgia, serif; }
-  .legend-grid b { color: var(--ink); font-weight: 500; font-family: "Spectral", Georgia, serif; }
-  .lg-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; border: 1px solid var(--muted); align-self: center; }
-  .lg-dot.d-ember { background: var(--ember); border-color: var(--ember); }
-  .lg-dot.d-teal { background: var(--teal); border-color: var(--teal); }
-  .lg-dot.d-bright { background: var(--ink); border-color: var(--ink); }
-  .edge-vocab { margin-top: 28px; color: var(--muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 1.9; max-width: var(--measure); }
-  .edge-vocab span { color: var(--ember); }
-  .edge-vocab code { color: var(--teal); }
-  @media (max-width: 700px) { .legend-grid { grid-template-columns: 1fr 1fr; } }
-
-  /* "Before you adopt" — honest caveats */
-  .note { margin-top: 34px; border: 1px solid var(--line-2); border-left: 3px solid var(--ember); border-radius: 8px; padding: 22px 24px; background: var(--ink-3); }
-  .note p { margin: 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.6; }
+  /* honest bands */
+  .note { margin-top: 30px; border: 1px solid var(--line-2); border-left: 3px solid var(--ember); border-radius: 8px; padding: 22px 24px; background: var(--ink-3); }
+  .note p { margin: 0; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.6; }
   .note strong { color: var(--ink); font-weight: 500; }
-  .note code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .8em; color: var(--teal); background: rgba(121,180,171,.08); padding: .1em .4em; border-radius: 4px; }
   .note-tag { display: block; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: var(--ember); margin-bottom: 10px; }
   .caveats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px 38px; margin-top: 30px; }
-  .caveats > div { border-top: 1px solid var(--line); padding-top: 14px; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 15px; line-height: 1.55; }
+  .caveats > div { border-top: 1px solid var(--line); padding-top: 14px; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 15px; line-height: 1.55; }
   .caveats b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 3px; }
-  .caveats code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .8em; color: var(--teal); }
   @media (max-width: 700px) { .caveats { grid-template-columns: 1fr; } }
+  .cta-again { margin-top: 38px; max-width: 480px; }
 
-  /* "Get set up" — numbered steps + platform notes */
-  .steps { list-style: none; counter-reset: step; margin: 38px 0 0; padding: 0; }
-  .steps > li { counter-increment: step; display: grid; grid-template-columns: 52px 1fr; gap: 22px; padding: 26px 0; border-top: 1px solid var(--line); align-items: start; }
-  .steps > li::before { content: counter(step); font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 30px; color: var(--ember); line-height: 1; }
-  .step-b h3 { font-size: 20px; margin: 0 0 8px; color: var(--ink); }
-  .step-b p { margin: 0 0 12px; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.55; max-width: 62ch; }
-  .step-b p:last-child { margin-bottom: 0; }
-  .step-b pre { margin: 0 0 8px; }
-  .step-b code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .8em; color: var(--teal); }
-  .step-tip { font-size: 14px !important; color: var(--muted) !important; border-left: 2px solid var(--ember-dk); padding-left: 14px; }
-  .step-tip span { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--ember); margin-right: .5em; }
-  .platforms { display: grid; grid-template-columns: 1fr 1fr; gap: 20px 38px; margin-top: 30px; }
-  .platforms > div { border-top: 1px solid var(--line); padding-top: 14px; }
-  .platforms b { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-weight: 500; font-size: 17px; }
-  .platforms p { margin: 6px 0 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 14px; line-height: 1.5; }
-  .platforms code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .78em; color: var(--teal); }
-  @media (max-width: 700px) { .steps > li { grid-template-columns: 34px 1fr; gap: 14px; } .platforms { grid-template-columns: 1fr; } }
+  footer { border-top: 1px solid var(--line); padding: 32px 24px 56px; color: var(--ink-faint); font-size: 13.5px; text-align: center; }
+  footer p { max-width: 640px; margin: 0 auto; line-height: 1.75; }
+  footer strong { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-weight: 500; }
+  footer a { color: var(--ember); }
 
   /* Lightbox — click any screenshot to zoom */
   img.zoomable { cursor: zoom-in; }
@@ -240,7 +138,7 @@
   .lightbox[hidden] { display: none !important; }
   .lightbox { position: fixed; inset: 0; z-index: 9000; background: rgba(6,7,11,.94); display: flex; align-items: center; justify-content: center; padding: 3vh 3vw; cursor: zoom-out; }
   .lightbox img { max-width: 96vw; max-height: 94vh; border-radius: 8px; border: 1px solid var(--line-2); box-shadow: 0 30px 90px -20px rgba(0,0,0,.95); }
-  .lb-close { position: fixed; top: 12px; right: 22px; font-size: 2rem; line-height: 1; color: var(--paper-dim); background: none; border: 0; cursor: pointer; }
+  .lb-close { position: fixed; top: 12px; right: 22px; font-size: 2rem; line-height: 1; color: var(--ink-dim); background: none; border: 0; cursor: pointer; }
   .lb-close:hover { color: var(--ink); }
 
   @media (prefers-reduced-motion: reduce) {
@@ -254,7 +152,7 @@
 <div class="wrap">
   <header class="nav">
     <div class="brand"><span class="b1">scatter</span><span class="b2">brained</span> <span class="studio">studio</span></div>
-    <nav><a href="#see">Studio</a><a href="#protected">Features</a><a href="#system">System</a><a href="getting-started.html">Get started</a></nav>
+    <nav><a href="#stories">Stories</a><a href="tour.html">Tour</a><a href="getting-started.html">Get started</a><a href="https://github.com/ricksinclair/scatterbrained">GitHub</a></nav>
   </header>
 </div>
 
@@ -287,458 +185,164 @@
         <circle class="bm bm-e" cx="44" cy="92" r="5"/><circle class="bm bm-hub" cx="60" cy="64" r="7"/>
       </svg>
     </span>
-    <p class="kicker">local-first knowledge observatory</p>
+    <p class="kicker">a second brain you can see</p>
     <h1 class="wordmark"><span class="wm-1">scatter</span><span class="wm-dot"></span><span class="wm-2">brained</span></h1>
     <p class="define"><span class="ipa">/ˈskadərˌbreɪnd/</span> &nbsp;·&nbsp; <span class="pos">adjective</span> &nbsp;— a mind full of scattered thoughts; wired together, they remember everything.</p>
-    <p class="lede">Point it at your Neo4j graph and <em>see</em> your knowledge — a living constellation
-       you can explore, interrogate, and act on. No cloud, no telemetry.</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="#run">Run it locally</a>
-      <a class="btn btn-ghost" href="#see">See what it does</a>
+    <p class="lede">Scatterbrained turns everything you know — notes, decisions, files, projects — into a
+      living star map on your own computer: open it each morning to see what needs you, capture any
+      thought or link in one keystroke and watch it land as a glowing dot, and rewind to see exactly
+      what you believed six months ago and why, with every claim tracing back to its source.
+      <em>No cloud, no subscription — it's yours.</em></p>
+    <div class="hero-cta">
+<pre class="cmd"><span class="p">$</span> npx scatterbrained@alpha studio</pre>
+      <p class="cta-note">Node 18+ · Docker, for the bundled database · opens with a demo graph · <a href="getting-started.html">the two-minute walkthrough</a></p>
     </div>
   </div>
   <div class="scroll-cue" aria-hidden="true"><span></span></div>
 </header>
 
-<section class="band band-alt">
+<section class="band band-alt" id="stories">
   <div class="wrap">
-    <p class="section-tag">01 — the problem</p>
-    <h2>Your knowledge is scattered — and you can't <em>see</em> it.</h2>
-    <div class="problem-grid">
-      <article>
-        <h3>It outgrows your head</h3>
-        <p>Notes, docs, decisions, and links pile up across a dozen tools. The connections that matter live only in memory — until they don't.</p>
-      </article>
-      <article>
-        <h3>Search finds words, not threads</h3>
-        <p>You remember there was a reason, a number, a trade-off — just not where. Keyword search returns everything except the thread you're chasing.</p>
-      </article>
-      <article>
-        <h3>Nothing keeps the <em>why</em></h3>
-        <p>Decisions get reversed and the reasoning evaporates. Six months later, “why didn't we just…” has no answer left to find.</p>
-      </article>
-    </div>
+    <p class="section-tag">why it exists</p>
+    <h2>Claude is the brain. Scatterbrained is the memory it deserves.</h2>
+    <p class="prose">AI tools win every <em>do-the-task</em> comparison — that's what they're for, and
+      Scatterbrained doesn't compete with them. It answers the other question, the one that gets worse
+      the more you use them: <strong>what happens to what was learned?</strong> Five moments any
+      heavy AI-tool user will recognize.</p>
   </div>
 </section>
 
-<section class="band" id="see">
+<section class="band story" id="story-rewind">
   <div class="wrap">
-    <p class="section-tag">02 — the studio</p>
-    <h2>A graph you can actually <em>see</em>.</h2>
-    <p class="prose">Point Scatterbrained at your Neo4j graph and it renders the whole thing as a living
-      constellation you explore on your own machine. Click any node and the inspector
-      <em>composes itself</em> from what that node is — a goal shows its progress, a source its file,
-      a decision its history. Focus to fade the noise, ask in plain language, and follow a fact to
-      the moment it changed.</p>
-
+    <p class="section-tag">01</p>
+    <h2 class="moment"><span class="q">You asked the same question in March and June and got different answers.</span> Which was right?</h2>
+    <p class="prose">In Scatterbrained an answer doesn't get overwritten — it gets <em>superseded</em>,
+      with a date and a reason, and the old one stays walkable. Scrub a decision's history and see what
+      you believed in March, what replaced it in May, and why. Both clocks are kept: when things were
+      recorded, and when you learned better.</p>
     <figure class="studio-demo">
-      <img class="zoomable" src="screenshots/01-overview.png" alt="The Scatterbrained constellation — an engineering team's graph rendered as a living map" />
-      <figcaption>The constellation, on the bundled demo graph — a small engineering team's work. Alpha: it runs and demos today, and your data never leaves your machine.</figcaption>
+      <img class="zoomable" loading="lazy" src="screenshots/04-timeline.png" alt="A superseded decision's history: created, valid-until, superseded-by, and the reason — with the successor one click away" />
+      <figcaption>A superseded decision, kept with its reason — <em>created → valid until → superseded by</em>, the successor one click away. (Demo graph.)</figcaption>
     </figure>
+  </div>
+</section>
 
+<section class="band band-alt story" id="story-provenance">
+  <div class="wrap">
+    <p class="section-tag">02</p>
+    <h2 class="moment"><span class="q">Your assistant "remembered" something wrong</span> — and you can't tell where it came from.</h2>
+    <p class="prose">Here, every claim points back at the source that informs it — the page, the file,
+      the talk it came from — so "where did that come from?" is a click, not an archaeology dig. And the
+      numbers that matter can be <em>pinned</em>: when any rewrite — an AI polish, a sync, a careless
+      edit — would alter a protected fact, the change is held for your approval instead of slipping through.</p>
     <figure class="studio-demo">
-      <img class="zoomable" src="screenshots/02-inspector.png" alt="The composable inspector — a node's panel built from its sources, relations, body and history" />
-      <figcaption>Click any node and the inspector builds itself from what the node <em>is</em> — sources, relations, body, history.</figcaption>
+      <img class="zoomable" loading="lazy" src="screenshots/03-protected-facts.png" alt="A node's protected facts: a pinned $2,400/mo value with a rewrite's altered $3,100/mo change held for approve or reject" />
+      <figcaption>$2,400/mo, pinned. A rewrite tried to make it $3,100 — held for <em>approve / reject</em>, history kept either way.</figcaption>
     </figure>
-
-    <div class="studio-feats">
-      <div><b>Constellation</b> the whole graph as a force-directed map, with focus that fades everything unrelated.</div>
-      <div><b>Composable inspector</b> the panel is built <em>from the node</em> — provenance, relations, timeline, progress.</div>
-      <div><b>See any source in place</b> Markdown, PDFs, sheets, slides, a saved article or an embedded talk — opened inline, never a detour.</div>
-      <div><b>Local &amp; private</b> it reads your local graph; optional local LLM, nothing phoned home.</div>
-    </div>
   </div>
 </section>
 
-<section class="band band-alt" id="protected">
+<section class="band story" id="story-review">
   <div class="wrap">
-    <p class="section-tag">03 — protected facts</p>
-    <h2>The number you verified can't be quietly rewritten.</h2>
-    <p class="prose">Pin a fact that matters — an amount, a date, a threshold, a statutory citation — to any node,
-      with an optional plain-language <em>detail</em> saying what it is (“Confluent Cloud uptime SLA”).
-      When a later rewrite (an AI polish, a sync, a careless edit) would drop or change it, Scatterbrained
-      catches it and <em>holds the change for your approval</em> instead of letting it slip. Approve and it
-      supersedes the old value with its history kept; reject and the fact stands. Pinning is reversible.</p>
+    <p class="section-tag">03</p>
+    <h2 class="moment"><span class="q">That great code review from six weeks ago</span> — where is it now?</h2>
+    <p class="prose">Not buried in a closed PR tab. A review here is a graph node pinned to a repo at a
+      commit, and every line comment is a note that stays connected — to the decision it questioned, the
+      project it belongs to, the person or agent who wrote it. Six weeks later it's still one hop from
+      everything it touched, and whatever's unresolved waits in the review queue with everything else
+      that needs a human.</p>
     <figure class="studio-demo">
-      <img class="zoomable" src="screenshots/03-protected-facts.png" alt="A node's protected-facts section with a rewrite change queued for approval" />
-      <figcaption>A protected fact on a decision — a rewrite that altered it, queued for approve / reject. Everything pending collects in the needs-review dock.</figcaption>
+      <img class="zoomable" loading="lazy" src="screenshots/05-needs-review-dock.png" alt="The needs-review queue: an open review note, a protected-fact change, and a superseded decision, each linked to its anchor" />
+      <figcaption>The attention queue — open notes, altered facts, superseded decisions — each row opens the thing it's about. (Demo graph.)</figcaption>
     </figure>
   </div>
 </section>
 
-<section class="band" id="codereview">
+<section class="band band-alt story" id="story-agent">
   <div class="wrap">
-    <p class="section-tag">04 — graph-native code review</p>
-    <h2>Review a repo frozen at a commit — comments live in the graph.</h2>
-    <p class="prose">Open any repo at a chosen commit, read it with editor-grade highlighting, and leave line
-      comments — but each comment is a graph <code>Note</code>, author-stamped (you or the agent),
-      <code>PART_OF</code> a <code>Review</code> node pinned to that repo@ref. The review becomes a living,
-      click-through subgraph with a verdict, connected to the rest of your knowledge instead of stranded in a
-      pull request.</p>
-    <figure class="crdiag">
-      <svg viewBox="0 0 760 372" role="img" aria-label="Graph-native code review: a file tree marks changed files; a code pane shows a line comment stored as a graph Note; a review graph links each comment to a Review node with a verdict.">
-        <!-- header -->
-        <text x="16" y="26" class="cr-h">shiptrack-api</text>
-        <text x="132" y="26" class="cr-dim">main @ 9f3a1c2 — frozen</text>
-        <rect x="610" y="13" width="134" height="19" rx="9" class="cr-panel"/>
-        <text x="677" y="26" class="cr-dim" text-anchor="middle">● changed only</text>
-
-        <!-- file tree -->
-        <rect x="16" y="44" width="168" height="312" rx="8" class="cr-panel"/>
-        <text x="32" y="70" class="cr-s">▾ src</text>
-        <rect x="24" y="92" width="152" height="20" rx="4" fill="rgba(239,154,91,.08)"/>
-        <text x="46" y="106" class="cr-code">pipeline.ts</text>
-        <text x="166" y="106" class="cr-changed" text-anchor="end">M</text>
-        <text x="46" y="130" class="cr-code">consumer.ts</text>
-        <text x="166" y="130" class="cr-changed" text-anchor="end">M</text>
-        <text x="46" y="152" class="cr-code">autoscale.ts</text>
-        <text x="32" y="180" class="cr-s">▾ test</text>
-        <text x="46" y="202" class="cr-code">pipeline.test.ts</text>
-        <text x="166" y="202" class="cr-changed" text-anchor="end">M</text>
-        <text x="32" y="340" class="cr-dim">3 changed · vs main~1</text>
-
-        <!-- code pane -->
-        <rect x="200" y="44" width="356" height="312" rx="8" class="cr-panel"/>
-        <text x="216" y="68" class="cr-dim">src/pipeline.ts</text>
-        <g class="cr-code">
-          <text x="244" y="100" class="cr-num">139</text><text x="256" y="100"><tspan class="cr-kw">const</tspan> part = byKey(events);</text>
-          <text x="244" y="118" class="cr-num">140</text><text x="256" y="118"><tspan class="cr-kw">for</tspan> (<tspan class="cr-kw">const</tspan> k <tspan class="cr-kw">of</tspan> keys(part)) {</text>
-          <text x="244" y="136" class="cr-num">141</text><text x="256" y="136"><tspan class="cr-str">// backpressure: bound the queue</tspan></text>
-          <rect x="206" y="142" width="344" height="18" rx="3" fill="rgba(239,154,91,.10)"/>
-          <rect x="206" y="142" width="3" height="18" fill="var(--ember)"/>
-          <text x="244" y="155" class="cr-num">142</text><text x="256" y="155"><tspan class="cr-kw">await</tspan> sink.push(k, part[k]);</text>
-          <text x="244" y="173" class="cr-num">143</text><text x="256" y="173">}</text>
-        </g>
-        <!-- line comment bubble -->
-        <rect x="256" y="186" width="284" height="48" rx="8" class="cr-bubble"/>
-        <text x="270" y="206" class="cr-s">agent:claude  ·  line 142</text>
-        <text x="270" y="223" class="cr-dim">unbounded at peak — needs a per-key cap.</text>
-
-        <!-- review graph -->
-        <rect x="572" y="44" width="172" height="312" rx="8" class="cr-panel"/>
-        <text x="588" y="68" class="cr-dim">review graph</text>
-        <line x1="658" y1="118" x2="620" y2="196" class="cr-edge"/>
-        <line x1="658" y1="118" x2="700" y2="196" class="cr-edge"/>
-        <text x="600" y="160" class="cr-dim" transform="rotate(-58 600 160)">PART_OF</text>
-        <g class="cr-rev"><rect x="624" y="92" width="72" height="32" rx="16"/><text x="660" y="112">Review</text></g>
-        <g class="cr-note"><rect x="582" y="196" width="76" height="30" rx="6"/><text x="592" y="215">142 · agent</text></g>
-        <g class="cr-note"><rect x="666" y="196" width="70" height="30" rx="6"/><text x="676" y="215">88 · you ✓</text></g>
-        <rect x="588" y="300" width="140" height="26" rx="6" class="cr-bubble2"/>
-        <text x="658" y="317" class="cr-s" text-anchor="middle">verdict — open</text>
-      </svg>
-      <figcaption>Schematic: a comment on line 142 is a graph <code>Note</code> by the agent, <code>PART_OF</code> the <code>Review</code> for shiptrack-api @ 9f3a1c2 — one of two, the other resolved by you.</figcaption>
-    </figure>
-  </div>
-</section>
-
-<section class="band band-alt" id="time">
-  <div class="wrap">
-    <p class="section-tag">05 — a sense of time</p>
-    <h2>What's due, and what's worth coming back to.</h2>
-    <p class="prose">Knowledge has two clocks. <em>Record time</em> — when a fact was written or superseded — is
-      kept automatically. <em>Intention time</em> is yours to set: give any node a deadline or a revisit date,
-      and a goal a target. The calendar and agenda read them back, so the graph reminds you of the deadline you
-      set and nudges you to revisit the idea you meant to return to.</p>
+    <p class="section-tag">04</p>
+    <h2 class="moment"><span class="q">What exactly did the agent know when it did that?</span></h2>
+    <p class="prose">With a graph underneath, that's a question with an answer. Ask what's due, what
+      changed, what's blocked — the same questions an agent's brief is built from — and you get dated
+      items back, not vibes. When a session captures something, it lands as a source node with a visible
+      receipt, so "what it knew" and "what it learned" are things you can open later, not a context
+      window that evaporated.</p>
     <figure class="studio-demo">
-      <img class="zoomable" src="screenshots/06-calendar.png" alt="The calendar and intention clock — due dates and revisit dates drawn from the graph" />
-      <figcaption>The intention clock — due dates, revisit dates, and goal targets, drawn straight from the graph.</figcaption>
+      <img class="zoomable" loading="lazy" src="screenshots/10-palette.png" alt="The command palette answering 'what's due' with a dated answer list drawn from the graph" />
+      <figcaption>⌘K — "what's due", answered from the graph with dates. The same answers a session brief starts from.</figcaption>
     </figure>
+    <p class="feat-note">honest: the Agents lens tracks a Brief → Session → Capture → Insight loop around
+      a local agent terminal when one is running — it's feature-detected and optional. Capture and the
+      receipts work without it.</p>
   </div>
 </section>
 
-<section class="band" id="edit">
+<section class="band story" id="story-resume">
   <div class="wrap">
-    <p class="section-tag">06 — inline graph editing</p>
-    <h2>The graph is writable — wire two nodes by typing.</h2>
-    <div class="feature-split">
-      <img class="zoomable" src="screenshots/09-inline-edit.png" alt="The composable inspector's associate control — a typeahead linking one node to another by a validated relationship" />
-      <div class="fs-text">
-        <p>Reading the graph is half of it. From any node's inspector, <em>relate it to another</em>: type a few
-          letters, pick from a fuzzy typeahead, choose the relationship and its direction, and the edge is written.</p>
-        <p>Every link is checked against a <em>closed vocabulary</em> of relationship types and valid shapes, so the
-          graph stays traversable — you can't invent an off-vocab edge or point one backwards. Edit attributes the
-          same way. The Studio isn't a read-only viewer; it's how you tend the graph by hand.</p>
-        <p class="feat-note">demo: linking “Shipment Tracking Platform” → <code>ABOUT</code> a Kafka-related node</p>
-      </div>
+    <p class="section-tag">05</p>
+    <h2 class="moment"><span class="q">New machine, a month later</span> — where was I?</h2>
+    <p class="prose">The Studio opens on a daily brief: what's new, what's due, what's blocked since your
+      last visit — with <em>pick up where you left off</em> pointing at the last thing you touched. The
+      Time lens turns the graph's dates into an agenda: overdue, today, upcoming, worth revisiting. And
+      because all of it is files and a local database on your own disk, "new machine" is a restore, not
+      an act of remembering.</p>
+    <div class="shots-2">
+      <figure><img class="zoomable" loading="lazy" src="screenshots/01-overview.png" alt="The constellation with the daily brief: since your last visit — 2 new insights, 5 due today, 0 blocked" /><figcaption>First open of the day: the brief, then the map.</figcaption></figure>
+      <figure><img class="zoomable" loading="lazy" src="screenshots/11-agenda.png" alt="The Time lens agenda: overdue, today, and upcoming buckets with a clickable mini-month and activity sparkline" /><figcaption>The agenda the graph keeps — from dates you set on nodes.</figcaption></figure>
     </div>
   </div>
 </section>
 
-<section class="band band-alt" id="docs">
+<section class="band band-alt" id="under">
   <div class="wrap">
-    <p class="section-tag">07 — documents, read and written</p>
-    <h2>Open a source in place — and edit your Markdown without leaving.</h2>
-    <p class="prose">A source isn't a dead link. Open it right on the node: Markdown, PDF, Excel and CSV,
-      Word, PowerPoint, and plain text all render inline — no detour to another app. And Markdown you can
-      <em>change</em>: edit it in the Studio, and every save writes the file and commits it to git, with a
-      version history you can scrub. While you're editing, the file is <em>locked</em> so you and the agent
-      never overwrite each other.</p>
-
-    <figure class="crdiag">
-      <svg viewBox="0 0 760 312" role="img" aria-label="A Markdown file open in the Studio in edit mode: a lock badge, Save and History buttons, the editable source, and a note that every save is committed to git.">
-        <text x="16" y="26" class="cr-h">ADR-007-event-pipeline.md</text>
-        <text x="262" y="26" class="cr-dim">markdown · editing</text>
-        <g class="cr-bubble2"><rect x="406" y="13" width="174" height="20" rx="10"/></g>
-        <text x="493" y="27" class="cr-s" text-anchor="middle">🔒 locked while you edit</text>
-        <g class="cr-save"><rect x="590" y="12" width="60" height="22" rx="6"/><text x="620" y="27">Save</text></g>
-        <g class="cr-btn"><rect x="658" y="12" width="86" height="22" rx="6"/><text x="701" y="27">History ↩</text></g>
-
-        <rect x="16" y="46" width="728" height="226" rx="8" class="cr-panel"/>
-        <text x="34" y="78" class="cr-mdh"># ADR-007: Event pipeline</text>
-        <g class="cr-code">
-          <text x="34" y="108">**Decision:** adopt Confluent Cloud over self-managed Kafka.</text>
-          <text x="34" y="136">- cuts on-call toil ~30% at our volume</text>
-          <text x="34" y="154">- uptime SLA: 99.95%</text>
-          <text x="34" y="172">- projected cost: $2,400/mo</text>
-          <text x="34" y="200">Status: Accepted · 2026-05-20<tspan class="cr-cursor"> ▏</tspan></text>
-        </g>
-        <text x="16" y="296" class="cr-dim">every save writes the file and commits it to git — the protected facts above survive any rewrite.</text>
-      </svg>
-      <figcaption>Schematic: a Markdown source open in edit mode — locked while you type, saved straight to the file and git-versioned.</figcaption>
-    </figure>
-
-    <div class="fmt-chips">
-      <span class="edit">Markdown — read + edit</span>
-      <span>PDF</span>
-      <span>Excel &amp; CSV</span>
-      <span>Word</span>
-      <span>PowerPoint</span>
-      <span>plain text</span>
+    <p class="section-tag">what's underneath</p>
+    <h2>Boring on purpose, where it counts.</h2>
+    <div class="under">
+      <div><b>A real vocabulary</b> Thirteen node types and a <em>closed</em> set of relationship types, with a linter that rejects drift — so traversals stay predictable years in.</div>
+      <div><b>Bi-temporal by default</b> Record time (created / superseded) is kept automatically; intention time (due, revisit, target) is yours to set. Nothing is deleted — it's invalidated, with a reason.</div>
+      <div><b>Local-first, exportable</b> The graph lives in a local Neo4j — a Docker container the one command starts for you — and exports to plain JSON in git. No cloud, no telemetry, no account.</div>
+      <div><b>LLM-optional</b> Summaries and Q&amp;A light up only if a local model is running. Every screen — and everything on this page — works without one.</div>
     </div>
+    <p class="feat-note">documents — PDF, Word, Excel, Markdown — open in place on their nodes, so a cited
+      claim traces to the page it came from without a detour.</p>
   </div>
 </section>
 
-<section class="band" id="notes">
+<section class="band" id="need">
   <div class="wrap">
-    <p class="section-tag">08 — notes that get acted on</p>
-    <h2>Leave a note; the next sync acts on it.</h2>
-    <p class="prose">On any node — or a line of a document, or a spot in a code review — jot a note in plain
-      language: <em>“reconcile this with the Q3 figures,”</em> <em>“research whether we still need this.”</em>
-      It's saved in a raw state. The next graph-sync hands your notes to the agent, which reads each one,
-      does the work, and marks it <em>addressed</em> — a lightweight queue you and the agent share, attached
-      right to the thing it's about.</p>
-    <div class="note">
-      <span class="note-tag">notes vs. details — two different things</span>
-      <p>A <strong>note</strong> is a task you leave for the agent to act on (raw → addressed). A protected
-        fact's <strong>details</strong> is just a static label describing a pinned value — what it is, not
-        something to do. One gets worked; one only describes.</p>
-    </div>
+    <p class="section-tag">do you need this?</p>
+    <h2>Honestly — maybe not yet.</h2>
+    <p class="prose">If you run one project and chat with an AI, you don't. Native memory and a well-kept
+      project doc are genuinely fine at that scale. Scatterbrained earns its keep when that stops
+      scaling — several projects, months of decisions, more than one agent touching the same knowledge —
+      when "which file was that in?" becomes the question you ask most. Come back then; the graph will
+      still be yours to start.</p>
   </div>
 </section>
 
-<section class="band band-alt" id="graph">
+<section class="band band-alt" id="alpha">
   <div class="wrap">
-    <p class="section-tag">09 — inside the graph</p>
-    <h2>What the graph is actually made of.</h2>
-    <p class="prose">Thirteen node types, joined by a small <em>closed</em> vocabulary of edges. Every insight
-      points at what it's <em>about</em>; every fact points back at the <em>source</em> that informs it. A slice:</p>
-
-    <figure class="graphviz">
-      <svg viewBox="0 0 760 440" role="img" aria-label="Sample subgraph: a Goal is ACHIEVED_BY a Project; the Project REQUIRES a Skill and CONTAINS an Idea; a Rule CONSTRAINS the Idea; a Source INFORMS the Project; an Insight is ABOUT the Project and DERIVED_FROM the Source.">
-        <g class="gv-edges">
-          <line x1="110" y1="80" x2="380" y2="150"/><text class="gv-el" x="232" y="106">ACHIEVED_BY</text>
-          <line x1="380" y1="150" x2="650" y2="90"/><text class="gv-el" x="520" y="112">REQUIRES</text>
-          <line x1="120" y1="250" x2="380" y2="150"/><text class="gv-el" x="246" y="192">INFORMS</text>
-          <line x1="300" y1="370" x2="380" y2="150"/><text class="gv-el" x="356" y="266">ABOUT</text>
-          <line x1="300" y1="370" x2="120" y2="250"/><text class="gv-el" x="196" y="300">DERIVED_FROM</text>
-          <line x1="380" y1="150" x2="560" y2="330"/><text class="gv-el" x="486" y="232">CONTAINS</text>
-          <line x1="700" y1="410" x2="560" y2="330"/><text class="gv-el" x="640" y="364">CONSTRAINS</text>
-        </g>
-        <g class="gv-nodes">
-          <g class="gv-n"><rect x="58" y="61" width="104" height="38" rx="19"/><text x="110" y="85">Goal</text></g>
-          <g class="gv-n gv-source"><rect x="68" y="231" width="104" height="38" rx="19"/><text x="120" y="255">Source</text></g>
-          <g class="gv-n gv-insight"><rect x="248" y="351" width="104" height="38" rx="19"/><text x="300" y="375">Insight</text></g>
-          <g class="gv-n gv-project"><rect x="324" y="129" width="112" height="42" rx="21"/><text x="380" y="155">Project</text></g>
-          <g class="gv-n"><rect x="598" y="71" width="104" height="38" rx="19"/><text x="650" y="95">Skill</text></g>
-          <g class="gv-n"><rect x="508" y="311" width="104" height="38" rx="19"/><text x="560" y="335">Idea</text></g>
-          <g class="gv-n"><rect x="648" y="391" width="104" height="38" rx="19"/><text x="700" y="415">Rule</text></g>
-        </g>
-      </svg>
-    </figure>
-
-    <div class="legend-grid">
-      <div><span class="lg-dot d-ember"></span><b>Insight</b> a synthesized takeaway</div>
-      <div><span class="lg-dot d-teal"></span><b>Source</b> a page, file, or repo — with provenance</div>
-      <div><span class="lg-dot d-bright"></span><b>Project</b> a thing you're building</div>
-      <div><span class="lg-dot"></span><b>Idea</b> a possibility or open question</div>
-      <div><span class="lg-dot"></span><b>Goal</b> an outcome with a timeframe</div>
-      <div><span class="lg-dot"></span><b>Rule</b> a constraint (law, policy)</div>
-      <div><span class="lg-dot"></span><b>Skill</b> a capability</div>
-      <div><span class="lg-dot"></span><b>Resource</b> something to learn from</div>
-      <div><span class="lg-dot"></span><b>Person</b> · <b>Organization</b></div>
-      <div><span class="lg-dot"></span><b>Note</b> a task for the agent</div>
-      <div><span class="lg-dot"></span><b>Review</b> a code review at a commit</div>
-      <div><span class="lg-dot"></span><b>Protected fact</b> a pinned value</div>
+    <p class="section-tag">before you adopt — it's an alpha</p>
+    <h2>Plainly stated.</h2>
+    <div class="caveats">
+      <div><b>Alpha software</b> Surfaces, scripts, and the CLI can change between versions. Pin what you depend on.</div>
+      <div><b>It expects local infrastructure</b> Node 18+, and Docker for the bundled database — or point it at a graph database you already run.</div>
+      <div><b>The published CLI is deliberately small</b> Exactly three commands: <code>studio</code>, <code>capture</code>, <code>status</code>. The full toolkit ships with the repo — clone it and use <code>npm run &lt;command&gt;</code>.</div>
+      <div><b>Search is literal, for now</b> The palette's fallback search is substring matching, not semantic. A miss feels like a dumb search box — that's honest, and it's on the roadmap.</div>
     </div>
-    <p class="edge-vocab"><span>the edge vocabulary is closed:</span> ABOUT · INFORMS · DERIVED_FROM · CONTAINS · PART_OF · REQUIRES · DEPENDS_ON · CONSTRAINS · APPLIES_TO · ACHIEVED_BY · SUPPORTS · TEACHES · USED_IN · INSPIRED · WORKS_AT · PUBLISHED · RECOMMENDED · COLLABORATES_ON · ADVISED_ON · FLAGGED_RISK · BLOCKED_BY · INFORMED_BY · ROUTES_TO — no inventing new ones, and <code>lint:graph</code> rejects anything off-list, so traversals stay predictable.</p>
-  </div>
-</section>
-
-<section class="band" id="screens">
-  <div class="wrap">
-    <h2 style="text-align:left;max-width:18ch">More inside.</h2>
-    <p class="prose">A few more surfaces from the bundled demo graph — history, the review dock, captured media, and one-click briefings.</p>
-    <div class="shots">
-      <figure><img src="screenshots/04-timeline.png" alt="Bi-temporal history of a superseded decision" /><figcaption>A superseded decision, kept with its reason — scrub the history</figcaption></figure>
-      <figure><img src="screenshots/05-needs-review-dock.png" alt="The needs-review dock" /><figcaption>Everything needing you — in one dock</figcaption></figure>
-      <figure><img src="screenshots/07-link-video.png" alt="A link or video captured as a connected card" /><figcaption>Drop a link or talk — it becomes a connected card</figcaption></figure>
-      <figure><img src="screenshots/08-report.png" alt="Any node expanded into an exportable briefing" /><figcaption>Expand any node into an exportable briefing</figcaption></figure>
+    <div class="cta-again">
+<pre class="cmd"><span class="p">$</span> npx scatterbrained@alpha studio <span class="c"># → http://localhost:4317</span></pre>
+      <p class="cta-note">Opens with the demo graph from these screenshots. <a href="tour.html">See the tour</a> · <a href="getting-started.html">get started</a>.</p>
     </div>
   </div>
 </section>
 
-  <section class="band band-alt" id="system">
-    <div class="wrap">
-      <p class="section-tag">the system — how it all fits</p>
-      <h2>Not one app. A small system that keeps itself honest.</h2>
-      <p class="prose">The Studio is what you <em>see</em>, but it's the visible face of a few pieces
-        that cover each other's blind spots — a graph that stays trustworthy, an agent that's kept
-        using it, and a discipline that keeps what gets written lean. All of it runs on your machine.</p>
-
-      <ol class="system-list">
-        <li>
-          <span class="n">i</span>
-          <div><h3>The Studio</h3>
-          <p>The observatory: a browser app, served locally, that renders your graph as a constellation and lets you read, interrogate, and edit it. The surface you actually live in.</p></div>
-        </li>
-        <li>
-          <span class="n">ii</span>
-          <div><h3>A bi-temporal engine</h3>
-          <p>Neo4j as canonical truth, kept honest by the methodology: provenance on every fact (<code>Source ─INFORMS→</code>), invalidate-don't-delete history, <code>lint:graph</code> integrity checks, and <code>export → git</code> backups. An internal capability, not a second brand.</p></div>
-        </li>
-        <li>
-          <span class="n">iii</span>
-          <div><h3>One-command setup — <code>new-project</code></h3>
-          <p>Stands up a project as a coherent whole: registers it in the graph (project, goal, and a wired source), scaffolds optional plain-language Notion digests for non-technical stakeholders, and drops a ready-to-use <code>CLAUDE.md</code> in the repo.</p></div>
-        </li>
-        <li>
-          <span class="n">iv</span>
-          <div><h3>A wired <code>CLAUDE.md</code></h3>
-          <p>The agent's operating manual for that project: query the graph <em>first</em>, dual-write every decision to a place a human reads (not just a Cypher query), and what a “sync” actually means. Setup that would otherwise live in your head, written down where the agent reads it.</p></div>
-        </li>
-        <li>
-          <span class="n">v</span>
-          <div><h3>Graph-first hooks — enforcement, not hope</h3>
-          <p>A rule in a file gets read once and forgotten. So <code>.claude/</code> ships two Claude Code hooks that re-inject it deterministically: a <code>SessionStart</code> hook (the full rule, once) and a terse <code>UserPromptSubmit</code> nudge (~40 tokens a turn). The agent can't quietly skip consulting the graph. Toggle either via <code>/hooks</code>.</p></div>
-        </li>
-        <li>
-          <span class="n">vi</span>
-          <div><h3>Ponytail coding discipline</h3>
-          <p>The same <code>CLAUDE.md</code> tells the agent to write the minimum that works — a six-step decision ladder (skip it · stdlib · platform · existing dependency · one line · only then build) so it reuses and deletes before it adds. Security, input validation, data-loss handling, error handling, and accessibility are never minimized away. Adapted from <a href="https://github.com/DietrichGebert/ponytail">Ponytail</a>.</p></div>
-        </li>
-        <li>
-          <span class="n">vii</span>
-          <div><h3>The CLI &amp; recipes — two ways in</h3>
-          <p>Prefer the keyboard? <code>scatterbrained</code> (<code>sb</code>) wraps the toolkit — <code>resume</code>, <code>search</code>, <code>lint:graph</code>, <code>export</code>, and more. Prefer plain language? Agent recipes (<code>graph-sync</code>, <code>new-project</code>) give the same results by just asking Claude. Same system; pick your lane.</p></div>
-        </li>
-      </ol>
-
-      <p class="prose system-close">Each piece covers another's blind spot: the Studio makes the graph
-        legible, the engine keeps it trustworthy, the hooks and <code>CLAUDE.md</code> keep the agent
-        using it, and Ponytail keeps what the agent writes lean. One system — on your machine, yours to change.</p>
-    </div>
-  </section>
-
-  <section class="band" id="adopt">
-    <div class="wrap">
-      <p class="section-tag">before you adopt — honest caveats</p>
-      <h2>What it changes on your machine.</h2>
-      <p class="prose">It's local-first and reversible, but it's not zero-touch — here's exactly what
-        the scaffolding does to your files and what to know before you wire it into a real project.</p>
-
-      <div class="note">
-        <span class="note-tag">it writes to your repo</span>
-        <p><code>new-project</code> drops a <code>CLAUDE.md</code> and a <code>.claude/</code> folder
-          (the graph-first hooks plus a <code>settings.json</code>) into your project. An existing
-          <code>CLAUDE.md</code> is <strong>left untouched</strong> unless you pass <code>--force</code>,
-          and your <code>settings.json</code> is <strong>merged, never clobbered</strong>. Everything it
-          writes lands in your repo — review it in the diff before you commit; edit or delete any of it.</p>
-      </div>
-
-      <div class="caveats">
-        <div><b>The hooks cost a little context</b>The graph-first rule is re-injected each turn (~40 tokens) plus the full rule once per session. Negligible, but real — and <code>/hooks</code> turns it off anytime.</div>
-        <div><b>The hooks are Claude Code–specific</b>The <code>.claude/</code> hooks fire in Claude Code; other agents won't run them. The <code>CLAUDE.md</code> itself still works everywhere as plain guidance.</div>
-        <div><b>It expects local infrastructure</b>A reachable Neo4j (Docker, or your own). The optional Notion scaffolding needs a Notion token and a shared parent page — or skip all writes with <code>--dry-run</code>.</div>
-        <div><b>It's alpha</b>Surfaces, scripts, and the generated scaffold can still change between versions. Pin what you depend on, and re-read the generated <code>CLAUDE.md</code> after an upgrade.</div>
-      </div>
-
-      <p class="prose system-close">Nothing phones home, and nothing here is one-way: the files are in
-        your repo, the hooks are in <code>/hooks</code>, and the graph is plain Neo4j you can export to
-        git. Adopt it a piece at a time.</p>
-    </div>
-  </section>
-
-  <section class="band band-alt" id="run">
-    <div class="wrap">
-      <p class="section-tag">get set up — macOS</p>
-      <h2>Two things to install once. Then one command.</h2>
-      <p class="prose">New to Node or Docker? That's all this needs — and Homebrew installs both in a couple of
-        lines. <code>npm start</code> does the rest: it finds or spins up the graph database, loads a demo graph,
-        and opens the Studio. No build step, nothing in the cloud.</p>
-
-      <ol class="steps">
-        <li>
-          <div class="step-b">
-            <h3>Install Homebrew</h3>
-            <p>The macOS package manager. Already have <code>brew</code>? Skip ahead. Otherwise paste this into Terminal:</p>
-<pre>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</pre>
-          </div>
-        </li>
-        <li>
-          <div class="step-b">
-            <h3>Install Node and Docker</h3>
-            <p>Node runs the Studio; Docker quietly hosts the graph database in the background.</p>
-<pre>brew install node
-brew install --cask docker</pre>
-            <p class="step-tip"><span>then</span> open Docker once from Applications so it's running — the only click-not-type step. Prefer no app? <code>brew install colima docker</code> then <code>colima start</code> is a CLI-only alternative.</p>
-          </div>
-        </li>
-        <li>
-          <div class="step-b">
-            <h3>Get Scatterbrained and run it</h3>
-<pre>git clone https://github.com/ricksinclair/scatterbrained.git
-cd scatterbrained
-npm install
-npm start          <span class="c"># → http://localhost:4317</span></pre>
-            <p>That opens the Studio with a demo graph already loaded — explore it before you point Scatterbrained at anything of your own.</p>
-            <p class="step-tip"><span>or</span> already have Node + Docker? Skip the clone — one command downloads it, starts the database, seeds the demo, and opens the Studio:</p>
-<pre>npx scatterbrained@alpha studio          <span class="c"># → http://localhost:4317</span></pre>
-            <p class="step-tip"><span>tip</span> install it once with <code>npm i -g scatterbrained@alpha</code>, then <code>scatterbrained studio</code> (or <code>scatterbrained help</code> for the graph toolkit) from anywhere.</p>
-          </div>
-        </li>
-      </ol>
-
-      <div class="platforms">
-        <div><b>Windows</b><p><code>winget install OpenJS.NodeJS Docker.DockerDesktop</code>, launch Docker Desktop, then <code>npm install &amp;&amp; npm start</code> in the project folder.</p></div>
-        <div><b>Linux</b><p>Install Node 18+ (your distro or nvm) and Docker Engine, then <code>npm install &amp;&amp; npm start</code>. Already running a Neo4j 5? Set <code>NEO4J_PASSWORD</code> and it'll use that instead of spinning its own.</p></div>
-      </div>
-
-      <p class="feat-note">New to Node, Docker, or graphs? The <a href="getting-started.html">full getting-started guide</a> walks through it with a plain-language primer.</p>
-      <p class="feat-note">AI summary / Q&amp;A are optional (a local <a href="https://ollama.com">Ollama</a>). Everything else works without it — and nothing leaves your machine.</p>
-    </div>
-  </section>
-
-  <section class="band" id="cta">
-    <div class="wrap">
-      <p class="section-tag">take it and make it yours</p>
-      <h2>It's yours — fork the ideas, the schema, the discipline.</h2>
-      <p class="prose">Scatterbrained is MIT-licensed and local-first: plain Neo4j, vanilla JS, a handful of
-        small scripts, and your data on your own machine. Clone it, run it, and bend it to how you
-        actually think. No account, no lock-in, nothing to outgrow.</p>
-      <div class="cta" style="margin-top:26px">
-        <a class="btn btn-primary" href="https://github.com/ricksinclair/scatterbrained">View on GitHub</a>
-        <a class="btn btn-ghost" href="#run">Get set up</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer. Alpha shipped 2026-06-23: repo public, npm 'scatterbrained@alpha' published, Pages live. -->
-  <footer class="site-foot">
-    <p><strong>Scatterbrained</strong> — a local-first knowledge observatory. Built by
-      <a href="https://ulrictodman.com">Ulric Todman</a>. MIT-licensed ·
-      <a href="https://github.com/ricksinclair/scatterbrained">GitHub</a> ·
-      <a href="https://www.npmjs.com/package/scatterbrained">npm</a>. Your graph stays yours.</p>
-  </footer>
+<footer>
+  <p><strong>Scatterbrained</strong> — a second brain you can see. Built by
+    <a href="https://ulrictodman.com">Ulric Todman</a>. MIT-licensed ·
+    <a href="https://github.com/ricksinclair/scatterbrained">GitHub</a> ·
+    <a href="https://www.npmjs.com/package/scatterbrained">npm</a>. Your graph stays yours.</p>
+</footer>
 
 <!-- Lightbox — click any screenshot to expand it in place. -->
 <div id="lightbox" class="lightbox" hidden>
@@ -750,7 +354,6 @@ npm start          <span class="c"># → http://localhost:4317</span></pre>
   var lb = document.getElementById('lightbox'), img = document.getElementById('lightbox-img');
   function close() { lb.hidden = true; img.removeAttribute('src'); document.documentElement.classList.remove('lb-open'); }
   function open(el) { img.src = el.currentSrc || el.src; img.alt = el.alt || ''; lb.hidden = false; document.documentElement.classList.add('lb-open'); }
-  document.querySelectorAll('.shots img').forEach(function (el) { el.classList.add('zoomable'); });
   document.querySelectorAll('img.zoomable').forEach(function (el) { el.addEventListener('click', function () { open(el); }); });
   lb.addEventListener('click', close);
   document.querySelector('.lb-close').addEventListener('click', function (e) { e.stopPropagation(); close(); });

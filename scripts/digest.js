@@ -16,7 +16,7 @@
 import { getDriver, parseArgs } from './lib/db.js';
 import { fetchDigestRows } from './lib/digest-query.js';
 import { groupDigest, relativeLabel, isEmptyDigest, BUCKET_ORDER, BUCKET_META }
-  from '../scatterbrained/public/lib/digest.js';
+  from '../public/lib/digest.js';
 
 function isoToday() {
   const x = new Date();

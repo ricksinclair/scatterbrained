@@ -28,7 +28,13 @@ export function buildOptions(results, query, opts = {}) {
     const name = (r.name || '').trim();
     if (!id || !name || seen.has(id) || skip.has(id)) continue;
     seen.add(id);
-    picks.push({ kind: 'pick', id, name, label: r.label || '', superseded: !!r.superseded });
+    // Alias hint: surface "was <former_name>" only when the OLD name is WHY this result
+    // matched (query is in former_name but not the current name) — so a search for a
+    // renamed node's old name explains itself instead of looking like a fuzzy mismatch.
+    const former = (r.former_name || '').trim();
+    const ql = q.toLowerCase();
+    const alias = !!former && !!ql && former.toLowerCase().includes(ql) && !name.toLowerCase().includes(ql);
+    picks.push({ kind: 'pick', id, name, label: r.label || '', superseded: !!r.superseded, ...(alias ? { former } : {}) });
     if (picks.length >= max) break;
   }
   const options = picks;

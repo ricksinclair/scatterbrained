@@ -4,8 +4,8 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Getting started — Scatterbrained</title>
-<meta name="description" content="From zero to your own local-first knowledge observatory: a plain-language primer, a five-minute install (macOS/Windows/Linux), and your first steps in the Studio." />
-<!-- Gated companion to index.html (#20). Deploy only when the alpha is called. No build, no deps. -->
+<meta name="description" content="One command to a living star map of your own knowledge: npx scatterbrained@alpha studio. The demo graph loads by default; bring your own graph when you're ready." />
+<!-- Companion to index.html. Rewritten npx-first for the alpha (2026-07-02). No build, no deps. -->
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Spectral:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -13,7 +13,6 @@
   :root {
     --bg: #131318; --panel: #1e1e26; --line: rgba(255,255,255,.10); --line-2: rgba(255,255,255,.16);
     --ink: #ece6d8; --ink-dim: #b9b3a6; --ink-faint: #7c776c;
-    --paper: var(--ink); --paper-dim: var(--ink-dim); --muted: var(--ink-faint);
     --ink-2: #17171f; --ink-3: #1b1b24;
     --ember: #ef9a5b; --ember-dk: #c97b3e; --teal: #79b4ab; --teal-dk: #3f7a72;
     --maxw: 920px; --measure: 64ch;
@@ -28,66 +27,63 @@
   .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
   em { font-style: italic; color: var(--ink); }
 
-  /* top bar */
   .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--line); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
   .tb-home { color: var(--ink); } .tb-home .b1 { color: var(--ember); } .tb-home:hover { text-decoration: none; color: var(--ember); }
-  .tb-here { color: var(--muted); text-transform: uppercase; letter-spacing: .2em; font-size: 11px; }
+  .tb-links a { color: var(--ink-dim); margin-left: 18px; }
+  .tb-here { color: var(--ink-faint); text-transform: uppercase; letter-spacing: .2em; font-size: 11px; margin-left: 18px; }
 
-  /* hero */
   .gs-hero { padding: 64px 24px 28px; }
   .gs-hero .wrap { max-width: var(--maxw); }
   .kicker { color: var(--ember); text-transform: uppercase; letter-spacing: .24em; font-size: 12px; margin: 0 0 16px; font-family: "JetBrains Mono", ui-monospace, monospace; }
   .gs-title { font-size: clamp(34px, 6vw, 60px); line-height: 1.04; margin: 0 0 18px; max-width: 16ch;
     background: linear-gradient(180deg, #fbf4e6, #cbb89c 92%); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .lede { font-size: clamp(17px, 2.2vw, 21px); color: var(--ink-dim); max-width: 54ch; margin: 0 0 8px; font-family: "Spectral", Georgia, serif; font-weight: 300; }
-  .need { margin-top: 14px; color: var(--muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+  .need { margin-top: 14px; color: var(--ink-faint); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
 
-  /* sections */
   .band { padding: 48px 24px; border-top: 1px solid var(--line); }
   .band:nth-of-type(even) { background: linear-gradient(180deg, var(--ink-2), var(--bg)); }
   .section-tag { color: var(--ember); text-transform: uppercase; letter-spacing: .2em; font-size: 12px; margin: 0 0 10px; font-family: "JetBrains Mono", ui-monospace, monospace; }
-  .band h2 { font-size: clamp(24px, 3.6vw, 32px); margin: 0 0 14px; max-width: 20ch; }
-  .prose { max-width: var(--measure); color: var(--paper-dim); font-size: 17px; font-family: "Spectral", Georgia, serif; font-weight: 300; line-height: 1.62; }
+  .band h2 { font-size: clamp(24px, 3.6vw, 32px); margin: 0 0 14px; max-width: 22ch; }
+  .prose { max-width: var(--measure); color: var(--ink-dim); font-size: 17px; font-family: "Spectral", Georgia, serif; font-weight: 300; line-height: 1.62; }
   .prose em { color: var(--ink); }
 
-  /* glossary */
-  .gloss { margin: 26px 0 0; }
-  .gloss > div { display: grid; grid-template-columns: 210px 1fr; gap: 28px; padding: 18px 0; border-top: 1px solid var(--line); }
-  .gloss dt { font-family: "Fraunces", Georgia, serif; font-size: 19px; color: var(--ember); margin: 0; }
-  .gloss dd { margin: 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.55; max-width: 58ch; }
-  .gloss dd code { font-size: .8em; }
-  @media (max-width: 680px) { .gloss > div { grid-template-columns: 1fr; gap: 6px; } }
+  pre { background: #0e0e13; border: 1px solid var(--line); border-radius: 10px; padding: 15px 17px; overflow-x: auto; color: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13.5px; line-height: 1.7; margin: 0 0 8px; }
+  pre .c { color: var(--ink-faint); } pre .p { color: var(--teal); user-select: none; }
+  pre.big { font-size: 15px; border-color: var(--line-2); margin-top: 22px; max-width: 560px; }
+  .tip { font-size: 14px; color: var(--ink-faint); border-left: 2px solid var(--ember-dk); padding-left: 12px; }
+  .tip span { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--ember); margin-right: .5em; }
 
-  /* numbered steps */
   .steps { list-style: none; counter-reset: step; margin: 26px 0 0; padding: 0; }
   .steps > li { counter-increment: step; display: grid; grid-template-columns: 48px 1fr; gap: 20px; padding: 22px 0; border-top: 1px solid var(--line); align-items: start; }
   .steps > li::before { content: counter(step); font-family: "Fraunces", Georgia, serif; font-style: italic; font-size: 28px; color: var(--ember); line-height: 1; }
   .step-b h3 { font-size: 19px; margin: 0 0 8px; }
-  .step-b p { margin: 0 0 10px; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.55; max-width: 60ch; }
+  .step-b p { margin: 0 0 10px; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.55; max-width: 60ch; }
   .step-b p:last-child { margin-bottom: 0; }
-  pre { background: #0e0e13; border: 1px solid var(--line); border-radius: 10px; padding: 15px 17px; overflow-x: auto; color: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.7; margin: 0 0 8px; }
-  pre .c { color: var(--ink-faint); }
-  .tip { font-size: 14px; color: var(--muted); border-left: 2px solid var(--ember-dk); padding-left: 12px; }
-  .tip span { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--ember); margin-right: .5em; }
 
-  /* two ways in */
+  .gloss { margin: 26px 0 0; }
+  .gloss > div { display: grid; grid-template-columns: 210px 1fr; gap: 28px; padding: 18px 0; border-top: 1px solid var(--line); }
+  .gloss dt { font-family: "Fraunces", Georgia, serif; font-size: 19px; color: var(--ember); margin: 0; }
+  .gloss dd { margin: 0; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 16px; line-height: 1.55; max-width: 58ch; }
+  @media (max-width: 680px) { .gloss > div { grid-template-columns: 1fr; gap: 6px; } }
+
   .tracks { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0 0; }
   .track { border: 1px solid var(--line-2); border-radius: 12px; padding: 22px; background: rgba(255,255,255,.015); }
   .track.primary { border-color: var(--ember-dk); background: rgba(239,154,91,.05); }
   .track h3 { font-size: 19px; margin: 0 0 8px; }
-  .track p { margin: 0 0 12px; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 15.5px; line-height: 1.55; }
-  .ask { font-family: "Fraunces", Georgia, serif; font-style: italic; color: var(--ink); border-left: 2px solid var(--ember); padding: 2px 0 2px 12px; margin: 0 0 8px; font-size: 16px; }
-  .cli { margin: 0; }
+  .track p { margin: 0 0 12px; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 15.5px; line-height: 1.55; }
+  .track p:last-child { margin-bottom: 0; }
+  .cli { margin: 0 0 10px; }
   @media (max-width: 680px) { .tracks { grid-template-columns: 1fr; } }
 
   .platforms { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 32px; margin-top: 22px; }
   .platforms > div { border-top: 1px solid var(--line); padding-top: 12px; }
   .platforms b { color: var(--ink); font-family: "Fraunces", Georgia, serif; font-weight: 500; }
-  .platforms p { margin: 6px 0 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 14px; line-height: 1.5; }
+  .platforms p { margin: 6px 0 0; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 14px; line-height: 1.5; }
   @media (max-width: 680px) { .platforms { grid-template-columns: 1fr; } }
 
   .note { margin-top: 26px; border: 1px solid var(--line-2); border-left: 3px solid var(--ember); border-radius: 8px; padding: 18px 20px; background: var(--ink-3); }
-  .note p { margin: 0; color: var(--paper-dim); font-family: "Spectral", Georgia, serif; font-size: 15.5px; line-height: 1.6; }
+  .note p { margin: 0; color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-size: 15.5px; line-height: 1.6; }
+  .note strong { color: var(--ink); font-weight: 500; }
   .note-tag { display: block; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: var(--ember); margin-bottom: 8px; }
 
   footer { border-top: 1px solid var(--line); padding: 30px 24px 52px; color: var(--ink-faint); font-size: 13.5px; text-align: center; }
@@ -101,68 +97,47 @@
 
 <header class="topbar">
   <a class="tb-home" href="index.html"><span class="b1">scatter</span>brained</a>
-  <span class="tb-here">getting started</span>
+  <span class="tb-links"><a href="tour.html">Tour</a><a href="https://github.com/ricksinclair/scatterbrained">GitHub</a><span class="tb-here">getting started</span></span>
 </header>
 
 <section class="gs-hero">
   <div class="wrap">
     <p class="kicker">getting started</p>
-    <h1 class="gs-title">From zero to your own observatory.</h1>
-    <p class="lede">No prior graph-database knowledge needed. Here's the plain-language version of what
-      Scatterbrained is, how to install it in about five minutes, and what to do once it's open.</p>
-    <p class="need">you'll need: a Mac, Windows, or Linux machine · ~5 minutes · no account, nothing in the cloud</p>
-  </div>
-</section>
-
-<section class="band">
-  <div class="wrap">
-    <p class="section-tag">first — the words</p>
-    <h2>A 60-second glossary.</h2>
-    <p class="prose">A few terms you'll see. None of them require you to be a database person.</p>
-    <div class="gloss">
-      <div><dt>Knowledge graph</dt><dd>Your notes, decisions, files, and the people and projects they touch — stored as <em>things</em> and the <em>links between them</em>, so you can follow a thread instead of searching for a file.</dd></div>
-      <div><dt>Neo4j</dt><dd>The local database that holds the graph. Scatterbrained starts one for you in Docker; you never have to touch it. It runs on your machine — your data never leaves.</dd></div>
-      <div><dt>The Studio</dt><dd>The app you actually use: a browser window that draws your graph as a living constellation you can explore, read, and edit.</dd></div>
-      <div><dt>The agent</dt><dd>Claude, working in your projects. Scatterbrained gives it a <code>CLAUDE.md</code> and a couple of hooks so it consults the graph first and keeps it tidy — see <a href="index.html#system">the system</a>.</dd></div>
-      <div><dt>Protected facts &amp; notes</dt><dd>Pin a number or citation so a rewrite can't quietly change it (with an optional <em>detail</em> label); jot a <em>note</em> on anything and the next sync has the agent act on it. Two different things — <a href="index.html#notes">explained here</a>.</dd></div>
-    </div>
-  </div>
-</section>
-
-<section class="band">
-  <div class="wrap">
-    <p class="section-tag">install — macOS</p>
-    <h2>Two things to install once. Then one command.</h2>
-    <p class="prose">Homebrew installs Node and Docker; <code>npm start</code> does the rest — it starts the
+    <h1 class="gs-title">One command. Then explore.</h1>
+    <p class="lede">No graph-database knowledge needed. One command downloads Scatterbrained, starts the
       database, loads a demo graph, and opens the Studio.</p>
+<pre class="big"><span class="p">$</span> npx scatterbrained@alpha studio <span class="c"># → http://localhost:4317</span></pre>
+    <p class="need">you'll need: Node 18+ · Docker (one thing, honestly: it hosts the bundled database) · ~2 minutes · no account, nothing in the cloud</p>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <p class="section-tag">what that command does</p>
+    <h2>Run it — the demo graph loads by default.</h2>
+    <p class="prose">On first run it finds a database or quietly starts one in Docker, applies the schema,
+      and seeds a small fictional engineering team's graph so there's something to see — it <em>never</em>
+      touches an existing graph's data. Then the Studio opens in your browser.</p>
     <ol class="steps">
       <li><div class="step-b">
-        <h3>Install Homebrew</h3>
-        <p>Skip if you already have <code>brew</code>. Otherwise paste into Terminal:</p>
-<pre>/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"</pre>
-      </div></li>
-      <li><div class="step-b">
-        <h3>Install Node and Docker</h3>
+        <h3>Don't have Node or Docker?</h3>
+        <p>macOS, in Terminal (skip lines you already have):</p>
 <pre>brew install node
-brew install --cask docker</pre>
-        <p class="tip"><span>then</span> open Docker once from Applications so it's running. No-GUI alternative: <code>brew install colima docker</code> then <code>colima start</code>.</p>
+brew install --cask docker   <span class="c"># then open Docker once so it's running</span></pre>
+        <p class="tip"><span>no-GUI</span> <code>brew install colima docker</code> then <code>colima start</code> works too. Windows &amp; Linux notes are <a href="#byo">below</a>.</p>
       </div></li>
       <li><div class="step-b">
-        <h3>Get Scatterbrained and run it</h3>
-<pre>git clone https://github.com/ricksinclair/scatterbrained.git
-cd scatterbrained
-npm install
-npm start          <span class="c"># → http://localhost:4317</span></pre>
-        <p>The Studio opens with a demo graph loaded. If anything's missing, <code>npm start</code> tells you exactly what to install.</p>
-        <p class="tip"><span>or</span> already have Node + Docker? Skip the clone — one command does everything (download, database, demo, launch):</p>
+        <h3>Run the one command</h3>
 <pre>npx scatterbrained@alpha studio          <span class="c"># → http://localhost:4317</span></pre>
-        <p class="tip"><span>tip</span> or install it once — <code>npm i -g scatterbrained@alpha</code> — then run <code>scatterbrained studio</code> (and <code>scatterbrained help</code> for the toolkit) from anywhere.</p>
+        <p class="tip"><span>tip</span> install it once with <code>npm i -g scatterbrained@alpha</code>, then it's just <code>scatterbrained studio</code>. Don't want the demo seed? <code>SB_NO_DEMO=1</code>.</p>
+      </div></li>
+      <li><div class="step-b">
+        <h3>Take the in-app tour</h3>
+        <p>Click <strong>Help</strong> (the <code>?</code> at the bottom of the left rail) → <em>Start the
+          tour</em> — a narrated auto-play through the headline surfaces. It's also a command in the
+          <code>⌘K</code> palette. Prefer to read first? <a href="tour.html">The same beats, as a page.</a></p>
       </div></li>
     </ol>
-    <div class="platforms">
-      <div><b>Windows</b><p><code>winget install OpenJS.NodeJS Docker.DockerDesktop</code>, launch Docker Desktop, then <code>npm install &amp;&amp; npm start</code>.</p></div>
-      <div><b>Linux</b><p>Install Node 18+ and Docker Engine, then <code>npm install &amp;&amp; npm start</code>. Already run a Neo4j 5? Set <code>NEO4J_PASSWORD</code> and it'll use that.</p></div>
-    </div>
   </div>
 </section>
 
@@ -171,11 +146,32 @@ npm start          <span class="c"># → http://localhost:4317</span></pre>
     <p class="section-tag">your first five minutes</p>
     <h2>Now that it's open.</h2>
     <ol class="steps">
-      <li><div class="step-b"><h3>Explore the demo constellation</h3><p>It opens on a small fictional engineering team's graph. Drag to pan, scroll to zoom, and click any node — the inspector on the right builds itself from what that node is.</p></div></li>
-      <li><div class="step-b"><h3>Take the guided tour</h3><p>Open <code>http://localhost:4317/#tour</code> for a narrated auto-play through the headline features. Stop it anytime.</p></div></li>
-      <li><div class="step-b"><h3>Point it at your own graph</h3><p>When you're ready, run <code>NEO4J_PASSWORD=… npm start</code> against your own Neo4j (or keep using the local one). A fresh graph starts empty — that's expected; you fill it as you work.</p></div></li>
-      <li><div class="step-b"><h3>Stand up a project</h3><p>One command sets up a project in the graph and drops a wired <code>CLAUDE.md</code> in your repo (<code>npm run new-project -- --name "My Project"</code>) — or just ask Claude. See the <a href="index.html#adopt">honest caveats</a> on what it writes first.</p></div></li>
+      <li><div class="step-b"><h3>Read the brief, then the map</h3><p>The dock leads with what's new, due, and blocked. Drag to pan, scroll to zoom, click any node — the inspector on the right builds itself from what that node is.</p></div></li>
+      <li><div class="step-b"><h3>Ask the graph something</h3><p>Press <code>⌘K</code> (or <code>/</code>) and type <em>"what's due"</em> — you get dated answers, not search hits. The left rail's lenses are one key each: <code>G</code> graph, <code>T</code> time, <code>C</code> code, <code>A</code> agents.</p></div></li>
+      <li><div class="step-b"><h3>Capture something</h3><p>Hit <strong>Capture (+)</strong> on the rail and paste any URL — it lands as a connected source and the camera flies to it. From a terminal: <code>scatterbrained capture "a thought"</code>.</p></div></li>
+      <li><div class="step-b"><h3>Walk a decision's history</h3><p>In the demo graph, focus <em>“Run self-managed Kafka for ingestion”</em> — it's superseded, with the reason kept and the successor one click away. That's the rewind the whole thing is built around.</p></div></li>
     </ol>
+  </div>
+</section>
+
+<section class="band" id="byo">
+  <div class="wrap">
+    <p class="section-tag">when you're ready — your own graph</p>
+    <h2>Bring your own graph.</h2>
+    <p class="prose">The demo is a loaner. Point the same command at a graph you already run by setting
+      the connection env vars — Scatterbrained applies its schema idempotently and never deletes data.
+      A fresh graph starts empty; you fill it as you work.</p>
+<pre style="margin-top:18px">NEO4J_PASSWORD=… npx scatterbrained@alpha studio     <span class="c"># your own database (NEO4J_URI if it isn't local)</span></pre>
+    <p class="prose" style="margin-top:26px">Prefer a clone? The repo is the same app plus the full
+      graph toolkit:</p>
+<pre style="margin-top:14px">git clone https://github.com/ricksinclair/scatterbrained.git
+cd scatterbrained
+npm install
+npm start          <span class="c"># same dance: database, schema, demo, Studio</span></pre>
+    <div class="platforms">
+      <div><b>Windows</b><p><code>winget install OpenJS.NodeJS Docker.DockerDesktop</code>, launch Docker Desktop, then the <code>npx</code> command (or <code>npm install &amp;&amp; npm start</code> in a clone).</p></div>
+      <div><b>Linux</b><p>Node 18+ (distro or nvm) and Docker Engine, then the <code>npx</code> command. Already running a graph database? Set <code>NEO4J_PASSWORD</code> and skip Docker entirely.</p></div>
+    </div>
   </div>
 </section>
 
@@ -183,35 +179,52 @@ npm start          <span class="c"># → http://localhost:4317</span></pre>
   <div class="wrap">
     <p class="section-tag">two ways in</p>
     <h2>Type a command, or just ask.</h2>
-    <p class="prose">Everything Scatterbrained does is reachable both ways. Same result — pick your lane.</p>
+    <p class="prose">The published CLI is deliberately small — the three commands a new user needs.
+      Everything else ships with the repo clone, and if you use Claude with the graph connected, plain
+      language works too.</p>
     <div class="tracks">
+      <div class="track">
+        <h3>The CLI — exactly three commands</h3>
+        <p class="cli"><code>scatterbrained studio</code> — launch (auto-starts the database + demo)</p>
+        <p class="cli"><code>scatterbrained capture "a thought or a URL"</code> — into the graph, with a receipt</p>
+        <p class="cli"><code>scatterbrained status</code> — is it up, and what's in the graph</p>
+        <p>The full toolkit (<code>lint:graph</code>, <code>resume</code>, <code>search</code>, <code>export</code>, <code>new:project</code>, …) ships with the repo — clone it and run <code>npm run &lt;command&gt;</code>.</p>
+      </div>
       <div class="track primary">
         <h3>Ask Claude</h3>
-        <p>If you use Claude with the Neo4j (and optional Notion) connection, just say what you want in plain language. No terminal, no token.</p>
-        <p class="ask">"Where were we on the shipment project?"</p>
-        <p class="ask">"Set up a new Scatterbrained project called Acme."</p>
-      </div>
-      <div class="track">
-        <h3>The CLI</h3>
-        <p>Prefer the keyboard? The <code>scatterbrained</code> (<code>sb</code>) command wraps the toolkit.</p>
-        <p class="cli"><code>sb resume</code> · <code>sb search "how this makes money"</code></p>
-        <p class="cli"><code>sb new-project --name "Acme"</code> · <code>sb lint:graph</code></p>
+        <p>If you use Claude with the graph connection, say what you want in plain language — no terminal.</p>
+        <p class="cli" style="font-family:Fraunces,Georgia,serif;font-style:italic;color:var(--ink)">"Where were we on the shipment project?"</p>
+        <p class="cli" style="font-family:Fraunces,Georgia,serif;font-style:italic;color:var(--ink)">"Capture this link and wire it to the pipeline decision."</p>
       </div>
     </div>
     <div class="note">
       <span class="note-tag">honest, up front</span>
-      <p>Scatterbrained is <strong>alpha</strong>. AI summaries / Q&amp;A are optional and run on a local
-        <a href="https://ollama.com">Ollama</a> — everything else works without it, and nothing leaves your
-        machine. Before you wire it into a real project, skim <a href="index.html#adopt">what it changes on your machine</a>.</p>
+      <p>Scatterbrained is <strong>alpha</strong> — surfaces and scripts can change between versions.
+        AI summaries / Q&amp;A are optional and run on a local <a href="https://ollama.com">Ollama</a>;
+        everything else works without a model, and nothing leaves your machine.</p>
+    </div>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <p class="section-tag">the words, in 60 seconds</p>
+    <h2>A tiny glossary.</h2>
+    <div class="gloss">
+      <div><dt>Knowledge graph</dt><dd>Your notes, decisions, files, and the people and projects they touch — stored as <em>things</em> and the <em>links between them</em>, so you follow a thread instead of hunting for a file.</dd></div>
+      <div><dt>The Studio</dt><dd>The app you actually use: a browser window that draws the graph as a living constellation, with a left rail of lenses — <em>Graph · Time · Code · Agents</em> — and a <code>⌘K</code> palette that answers questions.</dd></div>
+      <div><dt>The database</dt><dd>A local graph database holds it all — started for you in Docker; you never have to touch it, and it exports to plain JSON in git. Your data never leaves your machine.</dd></div>
+      <div><dt>Protected facts &amp; notes</dt><dd>Pin a number or citation and a rewrite can't quietly change it — alterations are held for your approval. Jot a <em>note</em> on anything and the next agent sync acts on it.</dd></div>
+      <div><dt>Record vs. intention time</dt><dd>When a fact was written or superseded is kept automatically; deadlines, revisit dates, and targets are yours to set — the Time lens reads them back as an agenda.</dd></div>
     </div>
   </div>
 </section>
 
 <footer>
-  <p><strong>Scatterbrained</strong> — a local-first knowledge observatory. Built by
+  <p><strong>Scatterbrained</strong> — a second brain you can see. Built by
     <a href="https://ulrictodman.com">Ulric Todman</a>. MIT-licensed ·
     <a href="https://github.com/ricksinclair/scatterbrained">GitHub</a> ·
-    <a href="index.html">back to the overview</a>.</p>
+    <a href="index.html">back to the overview</a> · <a href="tour.html">the tour</a>.</p>
 </footer>
 
 </body>

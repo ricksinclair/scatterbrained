@@ -12,8 +12,9 @@
 
 import { resolveLayout } from './resolve.js';
 import { coerceView } from './views.js';
-import { neighborhoodLayout } from './graph.js';
-import { parseVideoUrl, domainOf } from './links.js';
+import { parseVideoUrl, domainOf, isWebUrl } from './links.js';
+import { classifyStatus } from './roadmap.js';
+import { emptyState } from './empty-state.js';
 
 // Color per node label (mirrors app.js PAL) for inline subgraph dots — kept here so
 // the pure renderer needs no DOM/theme. Falls back to a neutral gray.
@@ -39,8 +40,10 @@ export function keyFacts(node = {}, data = {}) {
   const edges = data.edges || [];
   const facts = [];
   if (node.label === 'Goal') {
-    const reqs = edges.filter((e) => e.type === 'REQUIRES' && e.dir === 'out');
-    if (reqs.length) facts.push({ label: 'progress', value: Math.round(reqs.filter((r) => r.valid_until || /\b(done|complete|achieved|shipped|closed|live|published)\b/i.test(String(r.status || ''))).length / reqs.length * 100) + '%' });
+    // progress from the delivering project's milestone-Ideas (same signal as the goal-progress
+    // component) — NOT REQUIRES (Goal>Skill, null status → always 0%, and it contradicted the panel).
+    const ms = data.goal_milestones || [];
+    if (ms.length) facts.push({ label: 'progress', value: Math.round(ms.filter((m) => m.valid_until || classifyStatus(m.status) === 'done').length / ms.length * 100) + '%' });
   }
   if (node.confidence) facts.push({ label: 'confidence', value: String(node.confidence) });
   const sourceCount = node.source_count != null ? node.source_count
@@ -94,7 +97,11 @@ function miniMarkdown(src, esc) {
   let inList = false;
   const inline = (t) => esc(t)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    // Only emit an anchor for real http(s) URLs — never a javascript:/data: scheme. `url`
+    // is already HTML-escaped (esc ran first); isWebUrl rejects non-web schemes, so a
+    // [x](javascript:…) note/AI-summary renders as plain text, not a live link (stored XSS).
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_m, text, url) =>
+      isWebUrl(url) ? `<a href="${url}" target="_blank" rel="noopener">${text}</a>` : text)
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
   const closeList = () => { if (inList) { out.push('</ul>'); inList = false; } };
@@ -179,30 +186,6 @@ export function relationGroups(edges = [], relTypes = null) {
   })).sort((a, b) => b.rank - a.rank || b.total - a.total);
 }
 
-// Inline 1-hop subgraph (relations in report view): a radial SVG of the node + its
-// neighbors, grouped visually by edge. Up to 12 neighbors; the rest summarized.
-function relationsSubgraph(node, edges, { esc, trunc }) {
-  const shown = edges.slice(0, 12);
-  const W = 360, H = 300, cx = W / 2, cy = H / 2;
-  const placed = neighborhoodLayout(shown, { cx, cy, radius: 108 });
-  const spokes = placed.map((e) =>
-    `<line x1="${cx}" y1="${cy}" x2="${e.x.toFixed(1)}" y2="${e.y.toFixed(1)}" stroke="rgba(140,150,200,.28)" stroke-width="1"/>`).join('');
-  const nbs = placed.map((e) => {
-    const tx = e.x, ty = e.y;
-    const anchor = tx < cx - 20 ? 'end' : tx > cx + 20 ? 'start' : 'middle';
-    return `<circle cx="${tx.toFixed(1)}" cy="${ty.toFixed(1)}" r="7" fill="${hueOf(e.label)}"/>` +
-      `<text x="${tx.toFixed(1)}" y="${(ty - 11).toFixed(1)}" text-anchor="${anchor}" class="sg-rel">${esc(e.type)}</text>` +
-      `<text x="${tx.toFixed(1)}" y="${(ty + 18).toFixed(1)}" text-anchor="${anchor}" class="sg-name">${esc(trunc(e.name, 16))}</text>`;
-  }).join('');
-  const more = edges.length > shown.length ? `<text x="${cx}" y="${H - 6}" text-anchor="middle" class="sg-more">+${edges.length - shown.length} more relations</text>` : '';
-  return `<div class="c-relations c-relations--graph"><svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Relationship neighborhood">` +
-    spokes + nbs +
-    `<circle cx="${cx}" cy="${cy}" r="13" fill="${hueOf(node.label)}"/>` +
-    `<circle cx="${cx}" cy="${cy}" r="17" fill="none" stroke="var(--accent)" stroke-width="1.5"/>` +
-    `<text x="${cx}" y="${(cy - 22).toFixed(1)}" text-anchor="middle" class="sg-center">${esc(trunc(node.name || '', 20))}</text>` +
-    more + `</svg></div>`;
-}
-
 // ── component renderers (id → render) ────────────────────────────────────────
 export const REGISTRY = {
   text: {
@@ -233,8 +216,14 @@ export const REGISTRY = {
       if (!s) return '';
       const cap = (txt) => `<div class="ex-cap">${txt}</div>`;
       const file = esc(trunc(s.title || s.sourcePath || 'source', 34));
-      if (s.blocked) return `<div class="c-excerpt">${cap('source outside the read sandbox')}</div>`;
-      if (s.missing) return `<div class="c-excerpt">${cap('source file not found')}</div>`;
+      // D2: dead-end source states render the designed empty state (with the fix inline)
+      // instead of a bare caption string.
+      if (s.blocked) return `<div class="c-excerpt">${emptyState({
+        title: 'Source outside the read sandbox.', body: 'The file exists but its folder isn’t in the allowlist.',
+        action: { label: 'Manage folders', cmd: 'manage-folders' } })}</div>`;
+      if (s.missing) return `<div class="c-excerpt">${emptyState({
+        title: 'Source file not found.', body: 'The file this memory points at isn’t on disk — moved, renamed, or outside the granted folders.',
+        action: { label: 'Manage folders', cmd: 'manage-folders' } })}</div>`;
       if (s.tooLarge) return `<div class="c-excerpt">${cap(file + ' — too large to preview')}</div>`;
       if (s.unsupported) return `<div class="c-excerpt">${cap(file + ' · ' + esc(s.kind) + ' — open to view')}</div>`;
       if (!s.text) return '';
@@ -261,7 +250,7 @@ export const REGISTRY = {
         let link;
         // File-backed sources load in-app (sandboxed); web sources open externally.
         if (s.file_path) link = `<a class="src-file" href="#" title="${esc(s.name)}" onclick="return __openFile(${esc(JSON.stringify(s.file_path)).replace(/"/g, '&quot;')}),false">${label}</a>`;
-        else if (s.url) link = `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.name)}">${label}</a>`;
+        else if (s.url && isWebUrl(s.url)) link = `<a href="${esc(s.url)}" target="_blank" rel="noopener" title="${esc(s.name)}">${label}</a>`;
         else link = `<span class="src">${label}</span>`;
         return `<div class="prov-row" data-f="${f}">${link}${kind}</div>`;
       }).join('');
@@ -286,7 +275,9 @@ export const REGISTRY = {
       const sh = relationShape(relDegree, rest);
       const shapeLine = `<div class="rel-shape"><b>${sh.role}</b> · ${sh.degree} connection${sh.degree === 1 ? '' : 's'}${sh.role !== 'leaf' ? ` · ${sh.skew}` : ''}</div>`;
 
-      if (view === 'report') return `<div class="c-relations-report">${shapeLine}${relationsSubgraph(node, rest, { esc, trunc })}</div>`;
+      // Report view: a LIVE force-graph (same vendored library as the main constellation), mounted
+      // and seeded by app.js renderReportGraph() into #rel-live — clickable + prunable, not a dead SVG.
+      if (view === 'report') return `<div class="c-relations-report">${shapeLine}<div class="rel-live" id="rel-live" role="img" aria-label="Relationship neighborhood (interactive)"></div></div>`;
 
       // Inspector: grouped-by-type digest, split into actions vs references, clickable.
       const groups = relationGroups(rest, data.relTypes);
@@ -340,7 +331,7 @@ export const REGISTRY = {
   video: {
     id: 'video',
     render(node, data, { esc }) {
-      const url = node.url || data.url;
+      const url = node.url;
       const v = parseVideoUrl(url);
       if (!v) return '';
       const body = v.direct
@@ -355,7 +346,7 @@ export const REGISTRY = {
   link: {
     id: 'link',
     render(node, data, { esc, trunc }) {
-      const url = node.url || data.url;
+      const url = node.url;
       if (!url) return '';
       const dom = domainOf(url);
       const title = esc(trunc(node.name || data.name || dom || url, 90));
@@ -536,29 +527,52 @@ export const REGISTRY = {
   'goal-progress': {
     id: 'goal-progress',
     render(node, data, { esc, trunc }) {
-      const reqs = (data.edges || []).filter((e) => e.type === 'REQUIRES' && e.dir === 'out');
-      const project = (data.edges || []).find((e) => e.type === 'ACHIEVED_BY');
-      let pct, sub;
-      if (reqs.length) {
-        const met = reqs.filter(isDone).length;
-        pct = Math.round((met / reqs.length) * 100);
-        sub = `${met}/${reqs.length} requirements met`;
+      // Honest progress from the delivering Project's milestone-Ideas (CONTAINS/PART_OF), classified
+      // by the shared classifyStatus(). REQUIRES on a Goal is Goal>Skill (null status) so it can't
+      // drive a %; goal_milestones is the real signal (server Q_NODE). Bi-temporal valid_until = done.
+      const ms = data.goal_milestones || [];
+      const project = (data.edges || []).find((e) => e.type === 'ACHIEVED_BY' && e.dir === 'out')
+        || (data.edges || []).find((e) => e.type === 'ACHIEVED_BY');
+      const projChip = project
+        ? `<a href="#" class="nav-node gp-proj" data-id="${esc(project.id || '')}" data-name="${esc(project.name || '')}">${esc(trunc(project.name, 26))}</a>`
+        : '';
+      let head = '', bar = '', sub = '', milestones = '';
+      if (ms.length) {
+        const cls = ms.map((m) => (m.valid_until ? 'done' : classifyStatus(m.status)));
+        const done = cls.filter((c) => c === 'done').length;
+        const pct = Math.round((done / ms.length) * 100);
+        const active = cls.filter((c) => c === 'active').length;
+        const next = cls.filter((c) => c === 'next').length;
+        head = `<div class="gp-row"><span class="gp-label">progress</span><span class="gp-pct">${pct}%</span></div>`;
+        bar = `<div class="gp-bar"><div class="gp-fill" style="width:${pct}%"></div></div>`;
+        const parts = [`${done}/${ms.length} milestones`];
+        if (active) parts.push(`${active} active`);
+        if (next) parts.push(`${next} next`);
+        sub = `<div class="gp-sub">${esc(parts.join(' · '))}${projChip ? ' · via ' + projChip : ''}</div>`;
+        // each milestone is a clickable nav-node so "what's next" is one click into the work
+        milestones = `<div class="gp-milestones">` + ms.map((m, i) =>
+          `<a href="#" class="nav-node gp-ms st-${cls[i]}" data-id="${esc(m.id || '')}" data-name="${esc(m.name || '')}" title="${esc(m.name || '')}${m.status ? ' · ' + esc(m.status) : ''}">${esc(trunc(m.name || '(unnamed)', 28))}</a>`).join('') + `</div>`;
+      } else if (project) {
+        // a 0% bar reads as failure for a goal with no modeled milestones — show the on-ramp instead.
+        // Milestones are the delivering project's CONTAINS Ideas; projChip routes there to add them.
+        sub = `<div class="gp-sub gp-degraded">tracked via ${projChip} · ${esc(node.status || 'active')} — no milestones yet; open the project to add milestone Ideas</div>`;
       } else {
-        pct = isDone(node) ? 100 : 0;
-        sub = esc(node.status || 'active');
+        // no delivering project → the bar can never fill. Offer the fix inline (jump to the
+        // existing "Achieved by" relate picker) instead of a dead-end status line.
+        sub = `<div class="gp-sub gp-degraded">${esc(node.status || 'active')} — not yet linked to a delivering project ` +
+          `<button type="button" class="gp-onramp" data-gp-action="link-project">+ link one</button></div>`;
       }
-      const proj = project ? `<div class="gp-proj">delivered by ${esc(trunc(project.name, 28))}</div>` : '';
-      // target_date (#25 P1): an editable intention-date with a relative due label. The
-      // input commits via a delegated change handler → POST /api/goal/target-date.
+      // target_date (#25 P1): an editable intention-date with a relative due label. The input
+      // commits via a delegated change handler → POST /api/goal/target-date. Empty = a call to action.
       const td = node.target_date || '';
       const dl = dueLabel(td, Date.now());
       const dueRow = `<div class="gp-due"><span class="gp-label">target date</span>` +
         `<input type="date" class="gp-date" data-goaldate="${esc(node.id || '')}" value="${esc(td)}" aria-label="goal target date">` +
         (dl ? `<span class="gp-duelabel${td && Date.parse(td + 'T00:00:00') < Date.now() ? ' overdue' : ''}">${esc(dl)}</span>` : '') + `</div>`;
-      return `<div class="c-goal-progress"><div class="gp-row"><span class="gp-label">progress</span>` +
-        `<span class="gp-pct">${pct}%</span></div>` +
-        `<div class="gp-bar"><div class="gp-fill" style="width:${pct}%"></div></div>` +
-        `<div class="gp-sub">${sub}</div>${proj}${dueRow}</div>`;
+      const blk = data.goal_blockers || [];
+      const blockers = blk.length ? `<div class="gp-blockers"><span class="gp-label">blocked by</span>` +
+        blk.map((b) => `<a href="#" class="nav-node gp-blocker" data-id="${esc(b.id || '')}" data-name="${esc(b.name || '')}">${esc(trunc(b.name || '(unnamed)', 24))}</a>`).join('') + `</div>` : '';
+      return `<div class="c-goal-progress">${head}${bar}${sub}${milestones}${blockers}${dueRow}</div>`;
     },
   },
 

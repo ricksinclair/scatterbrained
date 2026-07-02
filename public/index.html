@@ -4,15 +4,61 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Scatterbrained Studio</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/vendor/fonts/fonts.css" />
   <link rel="stylesheet" href="/vendor/tabler-subset.css" />
+  <link rel="stylesheet" href="/styles/tokens.css" />
   <link rel="stylesheet" href="/styles.css" />
   <script src="/vendor/force-graph.min.js"></script>
 </head>
 <body>
   <div id="graph"></div>
+
+  <!-- The mode rail (C3): labeled left-edge navigation — lenses on top, utilities below.
+       Replaces the unlabeled icon strip; stays visible under every lens. -->
+  <nav id="rail" aria-label="primary">
+    <button class="rail-btn" id="rail-graph" title="Graph — the constellation (G)">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="15" r="2.4"/><circle cx="16" cy="5" r="2.4"/><circle cx="15" cy="18" r="2.4"/><path d="M7.8 13.2l6.4-6.4"/><path d="M8.2 15.7l4.6 1.6"/><path d="M15.6 7.4l-.4 8.2"/></svg>
+      <span class="rail-l">Graph</span>
+    </button>
+    <button class="rail-btn" id="rail-time" title="Time — activity &amp; agenda (T)">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M4 11h16"/><path d="M11 15h1"/><path d="M12 15v3"/></svg>
+      <span class="rail-l">Time</span>
+    </button>
+    <button class="rail-btn" id="rail-code" title="Code — map &amp; review (C)">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8l-4 4l4 4"/><path d="M17 8l4 4l-4 4"/><path d="M14 4l-4 16"/></svg>
+      <span class="rail-l">Code</span>
+    </button>
+    <button class="rail-btn" id="rail-agents" title="Agents — Slipway runtime (A)">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M8 9l3 3l-3 3"/><path d="M14 15l3 0"/></svg>
+      <span class="rail-l">Agents</span>
+    </button>
+    <span class="rail-spacer"></span>
+    <button class="rail-btn rail-util" id="rail-capture" title="Capture — save a link">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+      <span class="rail-l">Capture</span>
+    </button>
+    <button class="rail-btn rail-util" id="rail-help" title="Help — tour, shortcuts, docs">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 17v.01"/><path d="M12 13.5a1.5 1.5 0 0 1 1 -1.5a2.6 2.6 0 1 0 -3 -4"/></svg>
+      <span class="rail-l">Help</span>
+    </button>
+    <button class="rail-btn rail-util" id="rail-settings" title="Settings">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z"/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg>
+      <span class="rail-l">Settings</span>
+    </button>
+  </nav>
+
+  <!-- Help menu (C3): tour + shortcuts + docs, anchored to the rail's Help button. -->
+  <div id="help-pop" class="help-pop" hidden>
+    <button class="hp-item" id="hp-tour">▶ Start the tour</button>
+    <button class="hp-item" id="hp-keys">Keyboard shortcuts</button>
+    <div class="hp-keys" id="hp-keys-list" hidden>
+      <div class="hp-k"><kbd>⌘K</kbd> / <kbd>/</kbd><span>command palette</span></div>
+      <div class="hp-k"><kbd>G</kbd> <kbd>T</kbd> <kbd>C</kbd> <kbd>A</kbd><span>switch lens</span></div>
+      <div class="hp-k"><kbd>Esc</kbd><span>step back one layer</span></div>
+    </div>
+    <a class="hp-item" href="https://ulrictodman.com/scatterbrained/" target="_blank" rel="noopener">Docs ↗</a>
+  </div>
 
   <header class="hud">
     <button class="dock-toggle" id="dock-toggle" aria-label="toggle status dock"><i class="ti ti-layout-sidebar" aria-hidden="true"></i></button>
@@ -39,39 +85,21 @@
       <span id="qcount" class="qcount"></span>
       <div class="intent-panel" id="intent-panel" hidden></div>
     </div>
-    <div class="stats">
-      <div class="stat"><span id="s-total">·</span><label>memories</label></div>
-      <div class="stat"><span id="s-index" class="v-index">·</span><label>indexed</label></div>
-      <div class="stat"><span id="s-review" class="v-review">·</span><label>review</label></div>
-    </div>
-    <div class="settings">
-      <button id="set-addlink" title="Add a link" aria-label="add a link"><svg class="ti-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 15l6 -6"/><path d="M11 6l.463 -.536a5 5 0 0 1 7.071 7.072l-.534 .464"/><path d="M13 18l-.397 .534a5.068 5.068 0 0 1 -7.127 0a4.972 4.972 0 0 1 0 -7.071l.524 -.463"/></svg></button>
-      <button id="set-mode" title="Light / dark" aria-label="toggle light/dark"><i class="ti ti-moon" aria-hidden="true"></i></button>
-      <button id="set-filter" title="Filter by node type" aria-label="filter by node type"><i class="ti ti-filter" aria-hidden="true"></i></button>
-      <button id="set-code" title="Codebase map (dev lens)" aria-label="open codebase map"><i class="ti ti-code" aria-hidden="true"></i></button>
-      <button id="set-review" title="Code review" aria-label="open code review"><svg class="ti-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M11.143 17.957c-3.236 -.554 -5.943 -2.65 -8.143 -5.957c2.4 -3.6 5.4 -5.4 9 -5.4c3.6 0 6.6 1.8 9 5.4a15.6 15.6 0 0 1 -.524 .734"/><path d="M15 19l2 2l4 -4"/></svg></button>
-      <button id="set-roadmap" title="Roadmap" aria-label="open roadmap"><svg class="ti-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10"/><path d="M4 12h6"/><path d="M4 18h13"/><path d="M16 6l3 0"/><path d="M13 12l6 0"/><path d="M20 18l0 0"/></svg></button>
-      <button id="set-calendar" title="Calendar" aria-label="open calendar"><svg class="ti-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M4 11h16"/><path d="M11 15h1"/><path d="M12 15v3"/></svg></button>
-      <button id="set-settings" title="Settings" aria-label="open settings"><svg class="ti-svg" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z"/><path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"/></svg></button>
-      <button id="tour-btn" title="Watch the guided tour" aria-label="watch the guided tour">▶ Tour</button>
-    </div>
-    <div id="addlink-pop" class="addlink-pop" hidden>
-      <div class="al-head"><span class="al-title">Save a link</span><button id="al-x" class="al-x" title="Discard" aria-label="Discard this link draft">×</button></div>
-      <input id="al-url" type="url" placeholder="https://… (web page or YouTube)" autocomplete="off" />
-      <div id="al-attach-chips" class="al-chips" hidden></div>
-      <div class="al-field">
-        <input id="al-attach" type="text" placeholder="attach to any nodes — type to search (optional)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="al-attach-menu" />
-        <div id="al-attach-menu" class="al-menu" role="listbox" hidden></div>
-      </div>
-      <div class="al-row"><button id="al-add">Add link</button><span id="al-msg" class="al-msg"></span></div>
-      <div id="al-suggest" class="al-suggest"></div>
-    </div>
-    <div class="filter-panel" id="filter-panel" hidden>
-      <div class="ft-head"><span class="ft-title">Filter by type</span><button class="ft-clear" id="ft-clear">clear</button></div>
-      <div class="ft-types" id="filter-types"></div>
-      <button class="chip ft-stale" id="ft-stale"><i class="ti ti-alert-triangle" aria-hidden="true"></i> Needs review</button>
-    </div>
   </header>
+
+  <!-- Capture popover — body-level (NOT inside the hud: its z-index-5 stacking context
+       would paint the popover under the dock), anchored beside the rail's Capture button. -->
+  <div id="addlink-pop" class="addlink-pop" hidden>
+    <div class="al-head"><span class="al-title">Save a link</span><button id="al-x" class="al-x" title="Discard" aria-label="Discard this link draft">×</button></div>
+    <input id="al-url" type="url" placeholder="https://… (web page or YouTube)" autocomplete="off" />
+    <div id="al-attach-chips" class="al-chips" hidden></div>
+    <div class="al-field">
+      <input id="al-attach" type="text" placeholder="attach to any nodes — type to search (optional)" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="al-attach-menu" />
+      <div id="al-attach-menu" class="al-menu" role="listbox" hidden></div>
+    </div>
+    <div class="al-row"><button id="al-add">Add link</button><span id="al-msg" class="al-msg"></span></div>
+    <div id="al-suggest" class="al-suggest"></div>
+  </div>
 
   <!-- Left dock: lenses + status, all linked to the one graph (no Map/Pulse toggle) -->
   <aside class="dock" id="dock">
@@ -79,9 +107,11 @@
       <div class="dk-k"><i class="ti ti-history" aria-hidden="true"></i> where were we</div>
       <div class="dk-v" id="dock-resume-v"></div>
     </div>
-    <div class="dock-sec">
+    <div class="dock-sec" id="lens-sec">
       <div class="dk-h">Lenses</div>
       <div class="lenses" id="lenses"></div>
+      <div class="lens-types" id="lens-types"></div>
+      <div class="lens-list" id="lens-list" hidden></div>
     </div>
     <div class="dock-scroll" id="dock-scroll"><div class="dk-loading">loading status…</div></div>
   </aside>
@@ -118,8 +148,19 @@
       <button id="a-study"><span>🎴</span> Study</button>
       <button id="a-pin"><span>📌</span> Pin</button>
       <button id="a-similar"><span>✦</span> Find similar</button>
+      <button id="a-agent"><span>▶</span> Open agent here</button>
     </div>
   </aside>
+
+  <!-- Act plane (Phase 2): confirm popover for "Open agent here" — shows the resolved working
+       dir + model, a brief preview, then launches a Slipway terminal seeded with the graph brief. -->
+  <div id="agent-pop" class="agent-pop" hidden>
+    <div class="al-head"><span class="al-title">Open agent here</span><button id="agent-x" class="al-x" title="Close" aria-label="Close">×</button></div>
+    <div class="agent-dir" id="agent-dir">resolving…</div>
+    <div class="agent-model" id="agent-model" hidden></div>
+    <details class="agent-brief" id="agent-brief" hidden><summary>brief preview</summary><pre id="agent-brief-pre"></pre></details>
+    <div class="al-row"><button id="agent-go" disabled>Launch ▶</button><span id="agent-msg" class="al-msg"></span></div>
+  </div>
 
   <aside class="report" id="report" hidden>
     <div class="report-head">
@@ -138,70 +179,90 @@
     <div class="report-body" id="r-components"></div>
   </aside>
 
-  <aside class="codebase" id="codebase" hidden>
-    <div class="cb-head">
-      <span class="cb-eyebrow">codebase map</span>
-      <select class="cb-repo" id="cb-repo" aria-label="choose repo"></select>
-      <span class="cb-meta" id="cb-meta"></span>
-      <span class="cb-legend" id="cb-legend"></span>
-      <button class="cb-x" id="cb-x" aria-label="exit codebase map">exit ✕</button>
-    </div>
-    <div class="cb-graph" id="cb-graph"></div>
-    <div class="cb-empty" id="cb-empty" hidden></div>
-  </aside>
-
-  <aside class="review" id="review" hidden>
-    <div class="rv-head">
-      <span class="rv-eyebrow">code review</span>
-      <select class="rv-repo" id="rv-repo" aria-label="choose repo"></select>
-      <span class="rv-ref" id="rv-ref" title="reviewing this commit (frozen)"></span>
-      <label class="rv-base-l" title="Compare the reviewed commit against this base — pick a parent, a branch (for a PR), or an earlier commit. Changed files = the diff vs this base.">vs <select class="rv-base" id="rv-base" aria-label="diff base"></select></label>
-      <button class="rv-changed-toggle on" id="rv-changed-toggle" title="show only files changed vs the base">Changed only</button>
-      <span class="rv-meta" id="rv-meta"></span>
-      <button class="rv-x" id="rv-x" aria-label="close review">close ✕</button>
-    </div>
-    <div class="rv-body">
-      <div class="rv-tree" id="rv-tree"></div>
-      <div class="rv-view">
-        <div class="rv-view-head" id="rv-view-head"></div>
-        <div class="rv-code" id="rv-code"><div class="rv-hint">Pick a file from the tree to review it — frozen at the reviewed commit. Hover a line's gutter to comment.</div></div>
-      </div>
-      <div class="rv-side">
-        <div class="rv-graph-wrap"><div class="rv-graph-t">Review graph</div><div class="rv-graph" id="rv-graph"></div></div>
-        <div class="rv-summary" id="rv-summary"></div>
-      </div>
-    </div>
-  </aside>
-
-  <aside class="cal" id="calendar" hidden>
-    <div class="cal-head">
-      <span class="cal-eyebrow">calendar</span>
-      <button class="cal-nav" id="cal-prev" aria-label="previous month">‹</button>
-      <span class="cal-title" id="cal-title"></span>
-      <button class="cal-nav" id="cal-next" aria-label="next month">›</button>
-      <button class="cal-today" id="cal-today" title="jump to this month">today</button>
-      <span class="cal-legend"><i class="cal-k cal-k-created"></i>activity<i class="cal-k cal-k-due"></i>due<i class="cal-k cal-k-review"></i>review<i class="cal-k cal-k-target"></i>goal date<i class="cal-k cal-k-expiry"></i>expires</span>
-      <button class="cal-x" id="cal-x" aria-label="close calendar">close ✕</button>
-    </div>
-    <div class="cal-body">
-      <div class="cal-grid-wrap">
-        <div class="cal-dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-        <div class="cal-grid" id="cal-grid"></div>
-      </div>
-      <div class="cal-day" id="cal-day"><div class="cal-day-hint">Pick a day to see what happened.</div></div>
-    </div>
-  </aside>
-
-  <aside class="rm" id="roadmap" hidden>
-    <div class="rm-head">
-      <span class="rm-eyebrow">roadmap</span>
-      <span class="rm-title">Goals across quarters</span>
-      <span class="rm-legend">
-        <i class="rm-k st-done"></i>done<i class="rm-k st-active"></i>active<i class="rm-k st-next"></i>next<i class="rm-k st-blocked"></i>blocked<i class="rm-k st-idea"></i>idea
+  <!-- The Code lens (C4): Codebase Map + Code Review merged behind Map|Review tabs with ONE
+       shared repo select. Re-hosting only — both surfaces keep their internals. -->
+  <aside class="codelens" id="codelens" hidden>
+    <div class="lens-head">
+      <button class="lh-back" data-back>‹ Graph</button>
+      <span class="lh-eyebrow">code</span>
+      <span class="lh-tabs" id="code-tabs" role="tablist" aria-label="code lens view">
+        <button class="lh-tab" data-tab="map" role="tab">Map</button>
+        <button class="lh-tab" data-tab="review" role="tab">Review</button>
       </span>
-      <button class="rm-x" id="rm-x" aria-label="close roadmap">close ✕</button>
+      <select class="cb-repo" id="cl-repo" aria-label="choose repo"></select>
+      <span class="lh-ctl" id="cl-ctl-map">
+        <span class="cb-meta" id="cb-meta"></span>
+        <span class="cb-legend" id="cb-legend"></span>
+      </span>
+      <span class="lh-ctl" id="cl-ctl-review" hidden>
+        <span class="rv-ref" id="rv-ref" title="reviewing this commit (frozen)"></span>
+        <label class="rv-base-l" title="Compare the reviewed commit against this base — pick a parent, a branch (for a PR), or an earlier commit. Changed files = the diff vs this base.">vs <select class="rv-base" id="rv-base" aria-label="diff base"></select></label>
+        <button class="rv-changed-toggle on" id="rv-changed-toggle" title="show only files changed vs the base">Changed only</button>
+        <span class="rv-meta" id="rv-meta"></span>
+      </span>
+      <span class="lh-esc">esc</span>
     </div>
-    <div class="rm-body"><div class="rm-grid" id="rm-grid"></div></div>
+    <div class="cl-body" id="code-map-body" hidden>
+      <div class="cb-graph" id="cb-graph"></div>
+      <div class="cb-empty" id="cb-empty" hidden></div>
+    </div>
+    <div class="cl-body" id="code-review-body" hidden>
+      <div class="rv-body">
+        <div class="rv-tree" id="rv-tree"></div>
+        <div class="rv-view">
+          <div class="rv-view-head" id="rv-view-head"></div>
+          <div class="rv-code" id="rv-code"><div class="rv-hint">Pick a file from the tree to review it — frozen at the reviewed commit. Hover a line's gutter to comment.</div></div>
+        </div>
+        <div class="rv-side">
+          <div class="rv-graph-wrap"><div class="rv-graph-t">Review graph</div><div class="rv-graph" id="rv-graph"></div></div>
+          <div class="rv-summary" id="rv-summary"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- The Agents lens (D4): the Act loop made visible. Session rail (left, Studio-native,
+       from /api/agent/sessions) + loop header (Brief → Session → Capture → Insight, per
+       selected session) + the embedded Slipway panel. Wiring: lib/agents-ui.js. -->
+  <aside class="agents" id="agents" hidden>
+    <div class="lens-head">
+      <button class="lh-back" data-back>‹ Graph</button>
+      <span class="lh-eyebrow">agents · slipway</span>
+      <span class="lh-ctl"><span class="agents-meta">run agent CLIs against local or hosted models — without leaving the graph</span></span>
+      <span class="lh-esc">esc</span>
+    </div>
+    <div class="agents-body" id="agents-body">
+      <div class="agents-rail" id="agents-rail" hidden></div>
+      <div class="agents-main">
+        <div class="agents-loop" id="agents-loop" hidden></div>
+        <div class="agents-embed" id="agents-embed"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- The Time lens (D1): Agenda (digest buckets, default) + Quarters (roadmap) + Month
+       (the demoted heatmap grid) merged behind one lens-head — replaces the old
+       #calendar and #roadmap overlays. -->
+  <aside class="tl" id="time" hidden>
+    <div class="lens-head">
+      <button class="lh-back" data-back>‹ Graph</button>
+      <span class="lh-eyebrow">time</span>
+      <span class="lh-tabs" id="time-tabs" role="tablist" aria-label="time lens view">
+        <button class="lh-tab" data-tab="agenda" role="tab">Agenda</button>
+        <button class="lh-tab" data-tab="roadmap" role="tab">Quarters</button>
+      </span>
+      <span class="lh-ctl" id="tl-ctl-roadmap" hidden><span class="rm-legend">
+        <i class="rm-k st-done"></i>done<i class="rm-k st-active"></i>active<i class="rm-k st-next"></i>next<i class="rm-k st-blocked"></i>blocked<i class="rm-k st-idea"></i>idea
+      </span></span>
+      <span class="lh-esc">esc</span>
+    </div>
+    <div class="tl-body" id="time-agenda-body" hidden>
+      <div class="ag-main" id="ag-buckets"></div>
+      <div class="ag-side" id="ag-side" hidden></div>
+    </div>
+    <div class="tl-body" id="time-roadmap-body" hidden>
+      <div class="rm-body"><div class="rm-grid" id="rm-grid"></div></div>
+    </div>
   </aside>
 
   <div class="perms" id="perms" hidden>
@@ -229,6 +290,19 @@
         <button class="perms-x" id="settings-x" aria-label="close">×</button>
       </div>
       <div class="set-body" id="set-body"></div>
+    </div>
+  </div>
+
+  <div class="onboard" id="onboard" hidden role="dialog" aria-modal="true" aria-labelledby="ob-title">
+    <div class="ob-card">
+      <h2 id="ob-title">Welcome to Scatterbrained</h2>
+      <p>Your graph is empty. Start with a <strong>root</strong> — you, or your organization — so everything you add hangs off a hub instead of drifting as disconnected islands.</p>
+      <input id="ob-name" type="text" placeholder="Your name, or your organization's name" aria-label="root owner name" autocomplete="off" />
+      <div class="ob-actions">
+        <button id="ob-person" class="ob-go" type="button">This is me</button>
+        <button id="ob-org" class="ob-alt" type="button">It's an organization</button>
+      </div>
+      <p id="ob-msg" class="ob-msg" role="status" aria-live="polite"></p>
     </div>
   </div>
 
@@ -301,7 +375,8 @@
 
   <footer class="timebar">
     <span class="tb-label"><span class="ico">◷</span> time travel</span>
-    <input id="time" type="range" min="0" max="100" value="100" step="1" />
+    <!-- id renamed from "time" (D1): the Time lens overlay owns #time now -->
+    <input id="time-slider" type="range" min="0" max="100" value="100" step="1" />
     <span class="tb-date" id="time-date">now</span>
     <button class="tb-now" id="tb-now">live</button>
   </footer>

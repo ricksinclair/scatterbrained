@@ -23,6 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import neo4j from 'neo4j-driver';
 import { acquire as lockAcquire, release as lockRelease, status as lockStatus, prune as lockPrune, HOLDER_STUDIO } from './lib/filelock.js';
@@ -34,6 +35,10 @@ import { REL_TYPES, REL_SHAPES, isValidRelType, isValidRelShape, isProvenanceRel
 import { isScheduleKind, isIsoDate } from './public/lib/schedule.js';
 import { detectCandidates, normalizeValue, isProtectedFactKind, checkRewrite } from './public/lib/protected-facts.js';
 import { isWebUrl, isVideoUrl } from './public/lib/links.js';
+import { buildBriefMarkdown, deriveBriefInput, cwdHint } from './public/lib/brief.js';
+import { resolveProvider, generate } from './lib/inference.js';
+import { addSession, markCaptured, pruneSessions, sessionsView } from './lib/agent-sessions.js';
+import { cleanTranscript } from './lib/ansi.js';
 import { detectKind, expandRoots, isWithinRoots, pickPrimarySource, excerptAround, TEXT_KINDS } from './lib/source.js';
 import { buildModuleGraph } from './lib/codebase.js';
 import { walkRepo } from './lib/repo-index.js';
@@ -77,10 +82,16 @@ const REPO_ROOT = [path.join(__dirname, '..'), __dirname]
   .find((b) => { try { return fs.existsSync(path.join(b, 'examples', 'demo-files')); } catch { return false; } }) || path.join(__dirname, '..');
 const DEMO_DIR = path.join(REPO_ROOT, 'examples', 'demo-files');
 const absSrc = (fp) => { const s = String(fp || ''); return s && !path.isAbsolute(s) ? path.resolve(REPO_ROOT, s) : s; };
+// Resolve symlinks before a sandbox check or read, so a symlink INSIDE an allowlisted root can't
+// point outside it (path.resolve is purely lexical — it normalizes `..` but follows no links).
+// realpath throws on a missing path → fall back to the lexical path so the endpoints' normal
+// existsSync/"missing" handling still runs. Roots are realpath'd too (below) so a root that is
+// itself under a symlink (e.g. macOS /tmp -> /private/tmp) still matches a realpath'd file.
+function realOf(fp) { try { return fs.realpathSync(fp); } catch { return fp; } }
 function loadRoots() {
   try { ROOTS_CFG = JSON.parse(fs.readFileSync(ROOTS_PATH, 'utf8')); } catch { ROOTS_CFG = { roots: [] }; }
-  try { SOURCE_ROOTS = expandRoots(ROOTS_CFG, os.homedir()); } catch { SOURCE_ROOTS = []; }
-  try { if (fs.existsSync(DEMO_DIR) && !SOURCE_ROOTS.some((r) => path.resolve(r) === path.resolve(DEMO_DIR))) SOURCE_ROOTS.push(DEMO_DIR); } catch { /* ignore */ }
+  try { SOURCE_ROOTS = expandRoots(ROOTS_CFG, os.homedir()).map(realOf); } catch { SOURCE_ROOTS = []; }
+  try { if (fs.existsSync(DEMO_DIR) && !SOURCE_ROOTS.some((r) => r === realOf(DEMO_DIR))) SOURCE_ROOTS.push(realOf(DEMO_DIR)); } catch { /* ignore */ }
 }
 loadRoots();
 
@@ -108,34 +119,307 @@ function mutateRoots(action, rawPath, tags) {
 }
 const SOURCE_MAX_BYTES = 512 * 1024;   // never slurp a giant file into the inspector
 
-// Intelligence layer (M-E) — LLM-OPTIONAL. Talks to a LOCAL Ollama if present; every
-// endpoint degrades to { available:false } when none is connected (no cloud calls,
-// per the repo's no-external-API rule — Ollama is local).
-const OLLAMA = process.env.OLLAMA_HOST || 'http://localhost:11434';
-async function ollamaTags(timeoutMs = 1500) {
+// Intelligence layer (M-E) — LLM-OPTIONAL, LOCAL-ONLY. Provider resolution + both wire
+// formats live in lib/inference.js (Act plane Phase 4): Slipway-managed MLX when running,
+// else Ollama; a Slipway 'cloud' backend is treated as unavailable (no external API calls).
+// Every endpoint still degrades to { available:false } when no local model is up.
+const nodeText = (n) => (n ? [n.name, n.desc].filter(Boolean).join('\n\n') : '');
+
+// ── Act plane (Phase 2, "Open agent here") ───────────────────────────────────
+// Slipway = the local agent runtime (http://127.0.0.1:8765). We reach it SERVER-SIDE
+// (never the browser): a Node fetch sends no Origin, so Slipway's Origin allowlist —
+// which only rejects a PRESENT, non-allowlisted Origin — is satisfied. Optional +
+// usually-not-running, so same degrade-to-null discipline as the Ollama helper.
+const SLIPWAY = process.env.SLIPWAY_HOST || 'http://127.0.0.1:8765';
+async function slipwayPing(timeoutMs = 1500) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try { const r = await fetch(SLIPWAY + '/api/status', { signal: ctrl.signal }); return r.ok; }
+  catch { return false; } finally { clearTimeout(t); }
+}
+async function slipwayLaunch(body, timeoutMs = 5000) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
-    const r = await fetch(OLLAMA + '/api/tags', { signal: ctrl.signal });
+    const r = await fetch(SLIPWAY + '/api/term/launch', {
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!r.ok) return { error: `slipway returned ${r.status}` };
+    return await r.json();
+  } catch { return { error: 'slipway unreachable' }; } finally { clearTimeout(t); }
+}
+// Thin passthrough to Slipway's archive endpoints (source of truth = Slipway's session
+// index; the Studio never persists archive state). Same server-side, no-Origin posture as
+// slipwayLaunch — the browser can't reach :8765 cross-origin. Rail-VISIBILITY only: Slipway
+// never deletes a session, so a captured session's graph Source/INFORMS edges are untouched.
+async function slipwayArchive(pathSuffix, body, timeoutMs = 3000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(SLIPWAY + pathSuffix, {
+      method: 'POST', signal: ctrl.signal,
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}),
+    });
+    if (!r.ok) return { error: `slipway returned ${r.status}` };
+    return await r.json();
+  } catch { return { error: 'slipway unreachable' }; } finally { clearTimeout(t); }
+}
+
+// Resolve a node's path hint to a real, IN-SANDBOX working directory. Prefers the file's
+// git repo root, else its own directory — whichever lives inside an allowlisted SOURCE_ROOT.
+// Returns null when nothing resolves in-sandbox (→ the node has no launchable local dir).
+function resolveAgentCwd(hint) {
+  if (!hint) return null;
+  let p = realOf(absSrc(String(hint)));
+  try { if (fs.existsSync(p) && fs.statSync(p).isFile()) p = path.dirname(p); } catch { /* ignore */ }
+  let gitRoot = null, dir = p;
+  for (let i = 0; i < 12 && dir && dir !== path.dirname(dir); i++) {
+    try { if (fs.existsSync(path.join(dir, '.git'))) { gitRoot = dir; break; } } catch { /* ignore */ }
+    dir = path.dirname(dir);
+  }
+  for (const c of [gitRoot, p].filter(Boolean)) {
+    const rc = realOf(c);
+    try { if (isWithinRoots(rc, SOURCE_ROOTS) && fs.statSync(rc).isDirectory()) return rc; } catch { /* ignore */ }
+  }
+  return null;
+}
+
+// The graph→agent plan: given a node id, resolve its working dir + compose a brief +
+// choose the launcher kind — WITHOUT writing or launching (that's POST /api/agent/launch).
+// "preset else hosted": a repo with a .slipway.json pins its own model (kind=launcher →
+// claude-local reads the preset); otherwise launch hosted Claude Code (kind=hosted).
+async function buildAgentPlan(id) {
+  if (!id) return { error: 'missing id' };
+  const node = rows(await run(driver, Q_NODE, { id: String(id) }))[0];
+  if (!node) return { error: 'node not found' };
+  const cwd = resolveAgentCwd(cwdHint(node));
+  if (!cwd) return { error: 'no local working directory for this node' };
+  const brief = buildBriefMarkdown(deriveBriefInput(node), cwd);
+  // "preset else hosted" is decided INSIDE claude-local (which always runs, so the brief always
+  // loads): a repo with .slipway.json uses its pinned model; otherwise hosted Claude Code. We only
+  // surface which one for the popover's label here.
+  let preset = false;
+  try { preset = fs.existsSync(path.join(cwd, '.slipway.json')); } catch { /* ignore */ }
+  return { node, cwd, preset, brief };
+}
+
+const BRIEF_FILE = 'SLIPWAY_BRIEF.md';
+const BRIEF_MAX_BYTES = 64 * 1024;
+// Write the brief into the resolved cwd, then launch. Trust-boundary rigor (never minimized):
+// re-validate cwd ∈ SOURCE_ROOTS, force a FIXED basename (no client-influenced path), re-assert
+// the final path stays inside the realpath'd cwd (defeats symlink/traversal), and cap the size.
+async function agentLaunch(id) {
+  const plan = await buildAgentPlan(id);
+  if (plan.error) return plan;
+  const dir = realOf(plan.cwd);
+  if (!isWithinRoots(dir, SOURCE_ROOTS)) return { error: 'forbidden' };
+  const briefPath = path.join(dir, BRIEF_FILE);
+  if (path.dirname(briefPath) !== dir || path.basename(briefPath) !== BRIEF_FILE) return { error: 'forbidden' };
+  const content = String(plan.brief || '').slice(0, BRIEF_MAX_BYTES);
+  try {
+    // O_NOFOLLOW: refuse to follow a symlink at the leaf. The DIR is realpath-validated in-sandbox,
+    // but writeFileSync would follow a planted SLIPWAY_BRIEF.md symlink and clobber its out-of-sandbox
+    // target; O_NOFOLLOW makes the open fail (ELOOP) instead.
+    const fd = fs.openSync(briefPath, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_TRUNC | fs.constants.O_NOFOLLOW, 0o644);
+    try { fs.writeSync(fd, content); } finally { fs.closeSync(fd); }
+  } catch (e) {
+    return { error: (e && e.code === 'ELOOP') ? 'refusing to write the brief through a symlink' : 'could not write brief: ' + String(e.message || e) };
+  }
+  // Always launch via claude-local (kind='launcher') so it runs and loads SLIPWAY_BRIEF.md; claude-local
+  // itself resolves "project preset (.slipway.json) else hosted Claude Code subscription".
+  const launch = await slipwayLaunch({ kind: 'launcher', cwd: dir });
+  if (launch.error) return { error: launch.error, cwd: dir, preset: plan.preset, briefPath };
+  // Phase 3: remember which node this session came from (sid → origin), so the ended session
+  // can be captured back into the graph. Bookkeeping must NEVER fail the launch — it happened.
+  // VALIDATE the sid at this trust boundary: a spoofed/hostile Slipway on :8765 could return a
+  // non-hex id that would otherwise become a map key rendered into the dock (XSS) and joined into
+  // a transcript path (traversal). A real sid is 16 hex chars; anything else just isn't recorded.
+  if (SID_RE.test(String(launch.id || ''))) {
+    try {
+      writeAgentSessions(addSession(readAgentSessions(), {
+        sid: launch.id, nodeId: plan.node.id, nodeName: plan.node.name, nodeLabel: plan.node.label,
+        cwd: dir, briefPath, label: launch.label, launchedAt: new Date().toISOString(),
+      }));
+    } catch { /* dock row lost at worst */ }
+  }
+  return { ok: true, cwd: dir, preset: plan.preset, briefPath, launch };
+}
+
+// ── Act plane (Phase 3, capture sessions back) ───────────────────────────────
+// The return path of the graph↔agent loop: an ended Slipway session becomes a Source node
+// (metadata + file_path to the transcript — the text stays on disk; the inspector reads the
+// .log through the /api/source sandbox), INFORMS its origin node/project, and can be
+// summarized into an Insight — always user-triggered, never automatic (graph discipline).
+const AGENT_SESSIONS_PATH = path.join(os.homedir(), '.scatterbrained', 'agent-sessions.json');
+// CONTRACT with Slipway (its repo documents the federation contract): transcripts live at
+// ~/.claude-code-router/terminals/<sid>.log; deep-links are #terminals / #term:<sid>.
+const SLIPWAY_TERM_DIR = path.join(os.homedir(), '.claude-code-router', 'terminals');
+const TRANSCRIPT_TAIL_BYTES = 1024 * 1024;   // capture reads at most the last 1 MB
+const SID_RE = /^[0-9a-f]{1,32}$/;           // Slipway sids are 16 hex chars
+// Edge targets derived from the closed vocab — never hardcoded (lint shape discipline).
+const INFORMS_TARGETS = new Set(REL_SHAPES.INFORMS.map((s) => s.split('>')[1]));
+const INSIGHT_ABOUT_TARGETS = new Set(REL_SHAPES.ABOUT.filter((s) => s.startsWith('Insight>')).map((s) => s.split('>')[1]));
+
+function readAgentSessions() { try { return pruneSessions(JSON.parse(fs.readFileSync(AGENT_SESSIONS_PATH, 'utf8'))); } catch { return {}; } }
+function writeAgentSessions(map) {
+  fs.mkdirSync(path.dirname(AGENT_SESSIONS_PATH), { recursive: true });
+  const tmp = AGENT_SESSIONS_PATH + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(pruneSessions(map), null, 2));
+  fs.renameSync(tmp, AGENT_SESSIONS_PATH);
+}
+
+async function slipwayHistory(timeoutMs = 2000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(SLIPWAY + '/api/term/history', { signal: ctrl.signal });
+    if (!r.ok) return null;
+    return (await r.json()).sessions || [];
+  } catch { return null; } finally { clearTimeout(t); }
+}
+
+// Primary transcript path: direct tail-read from disk (works with Slipway down — the main
+// capture window — and isn't capped at the API's 256 KB). Sandbox-disciplined like every
+// file read: realpath + isWithinRoots (the ~/.claude-code-router/terminals root grant).
+function readTranscriptTail(sid) {
+  const fp = realOf(path.join(SLIPWAY_TERM_DIR, sid + '.log'));
+  if (!isWithinRoots(fp, SOURCE_ROOTS)) return { blocked: true };
+  let st; try { st = fs.statSync(fp); } catch { return { error: 'no transcript on disk for this session' }; }
+  const start = Math.max(0, st.size - TRANSCRIPT_TAIL_BYTES);
+  const buf = Buffer.alloc(st.size - start);
+  const fd = fs.openSync(fp, 'r');
+  try { fs.readSync(fd, buf, 0, buf.length, start); } finally { fs.closeSync(fd); }
+  return { text: buf.toString('utf8'), bytes: st.size, mtimeMs: st.mtimeMs, truncated: start > 0, filePath: fp };
+}
+// Fallback when the read-sandbox grant hasn't reached this checkout: Slipway's own transcript
+// API (capped at its last 256 KB — still plenty for a capture).
+async function slipwayTranscript(sid, timeoutMs = 3000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(SLIPWAY + '/api/term/transcript?id=' + encodeURIComponent(sid), { signal: ctrl.signal });
     if (!r.ok) return null;
     const j = await r.json();
-    return (j.models || []).map((m) => m.name);
+    if (j.error || j.text == null) return null;
+    return { text: j.text, bytes: j.text.length, mtimeMs: null, truncated: !!j.truncated, filePath: path.join(SLIPWAY_TERM_DIR, sid + '.log') };
   } catch { return null; } finally { clearTimeout(t); }
 }
-async function ollamaGenerate(model, prompt, timeoutMs = 30000) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const r = await fetch(OLLAMA + '/api/generate', {
-      method: 'POST', signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt, stream: false }),
-    });
-    if (!r.ok) return null;
-    return (await r.json()).response;
-  } catch { return null; } finally { clearTimeout(t); }
+
+// (primary-label expression inlined — PRIMARY_LABEL is declared later in the module, and a
+// template literal here would hit its temporal dead zone at module evaluation.)
+const AGENT_LABEL_EXPR = `head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n))`;
+const Q_AGENT_ORIGIN_BY_ID = `MATCH (n) WHERE elementId(n) = $id
+  RETURN elementId(n) AS id, coalesce(n.name, n.title) AS name, ${AGENT_LABEL_EXPR} AS label`;
+// elementIds are not durable across export/import — fall back by stored name + label.
+const Q_AGENT_ORIGIN_BY_NAME = `MATCH (n) WHERE coalesce(n.name, n.title) = $name AND $label IN labels(n)
+  RETURN elementId(n) AS id, coalesce(n.name, n.title) AS name, ${AGENT_LABEL_EXPR} AS label LIMIT 1`;
+const Q_AGENT_PROJECT = `MATCH (n) WHERE elementId(n) = $id
+  OPTIONAL MATCH (n)-[:PART_OF]->(p:Project)
+  RETURN CASE WHEN 'Project' IN labels(n) THEN elementId(n) ELSE elementId(p) END AS pid,
+         CASE WHEN 'Project' IN labels(n) THEN coalesce(n.name, n.title) ELSE p.name END AS pname`;
+const Q_AGENT_SOURCE = `MERGE (s:Source {title: $title})
+  SET s.created_at = coalesce(s.created_at, datetime()),
+      s.source_kind = 'agent_session', s.type = 'agent_session',
+      s.file_path = $fp, s.display_title = $dt, s.session_id = $sid,
+      s.model = CASE WHEN $model <> '' THEN $model ELSE coalesce(s.model, '') END,
+      s.launcher = CASE WHEN $launcher <> '' THEN $launcher ELSE coalesce(s.launcher, '') END,
+      s.cwd = $cwd, s.launched_at = $launchedAt,
+      s.captured_at = datetime(), s.last_synced_at = datetime(),
+      s.content_hash = $hash, s.file_mtime = $mtime, s.transcript_bytes = $bytes, s.tags = $tags
+  RETURN elementId(s) AS id`;
+const Q_AGENT_INFORMS = `MATCH (s:Source {title: $title}) MATCH (n) WHERE elementId(n) = $nid MERGE (s)-[:INFORMS]->(n)`;
+
+async function resolveAgentOrigin(entry) {
+  let origin = rows(await run(driver, Q_AGENT_ORIGIN_BY_ID, { id: String(entry.nodeId || '') }))[0];
+  if (!origin && entry.nodeName) {
+    origin = rows(await run(driver, Q_AGENT_ORIGIN_BY_NAME, { name: entry.nodeName, label: entry.nodeLabel || '' }))[0];
+  }
+  return origin || null;
 }
-const nodeText = (n) => (n ? [n.name, n.desc].filter(Boolean).join('\n\n') : '');
+
+async function agentCapture(p) {
+  const sid = String(p.sid || '');
+  if (!SID_RE.test(sid)) return { error: 'bad sid' };
+  const map = readAgentSessions();
+  const entry = map[sid];
+  if (!entry) return { error: 'not a graph-launched session (no origin node recorded)' };
+  let t = readTranscriptTail(sid);
+  if (t.blocked) t = (await slipwayTranscript(sid)) || { error: 'transcript outside the read sandbox and Slipway is down — grant ~/.claude-code-router/terminals in folder permissions' };
+  if (t.error) return { error: t.error };
+  const text = cleanTranscript(t.text);
+  if (!text) return { error: 'transcript is empty — nothing to capture' };
+  const origin = await resolveAgentOrigin(entry);
+  if (!origin) return { error: `origin node not found (was: ${entry.nodeName || entry.nodeId})` };
+  const title = 'agent-session/' + sid;
+  const dt = `Agent session — ${origin.name} (${String(entry.launchedAt || '').slice(0, 10) || 'undated'})`;
+  // model/launcher come from Slipway's own history (never the client body — untrusted). May be {}
+  // if Slipway is down / the row was pruned; the query then preserves any previously-captured value.
+  const hist = ((await slipwayHistory()) || []).find((h) => h.id === sid) || {};
+  // Track "grown since capture" against RAW on-disk bytes. The fallback (slipwayTranscript) returns
+  // decoded, 256KB-capped char length, so prefer Slipway history's raw transcript_bytes there.
+  const rawBytes = (hist.transcript_bytes != null ? hist.transcript_bytes : t.bytes) || 0;
+  await run(driver, Q_AGENT_SOURCE, {
+    title, fp: t.filePath, dt, sid,
+    model: hist.model || '', launcher: hist.launcher || '', cwd: entry.cwd || '',
+    launchedAt: entry.launchedAt || null, hash: hashText(text),
+    mtime: t.mtimeMs != null ? new Date(t.mtimeMs).toISOString() : null,
+    bytes: rawBytes, tags: ['agent-session', 'slipway'],
+  });
+  // Provenance edges, gated by the closed shape vocab (Source>Project always legal; the
+  // origin edge only when its label is a legal INFORMS target).
+  if (INFORMS_TARGETS.has(origin.label)) await run(driver, Q_AGENT_INFORMS, { title, nid: origin.id });
+  const proj = rows(await run(driver, Q_AGENT_PROJECT, { id: origin.id }))[0];
+  if (proj && proj.pid && proj.pid !== origin.id) await run(driver, Q_AGENT_INFORMS, { title, nid: proj.pid });
+  const recaptured = !!entry.captured;
+  // Re-read the map at write time — capture spans several awaits, and a concurrent launch/capture
+  // must not be clobbered by persisting a stale snapshot (lost update).
+  writeAgentSessions(markCaptured(readAgentSessions(), sid, {
+    capturedAt: new Date().toISOString(), sourceTitle: title,
+    transcriptBytes: rawBytes, contentHash: hashText(text),
+  }));
+  return { ok: true, sourceTitle: title, bytes: rawBytes, truncated: !!t.truncated, recaptured };
+}
+
+// Summarize a CAPTURED session's transcript into an Insight via the local inference lane.
+// Separate endpoint (retry a summary without re-capturing); never automatic.
+async function agentSummarize(p) {
+  const sid = String(p.sid || '');
+  if (!SID_RE.test(sid)) return { error: 'bad sid' };
+  const map = readAgentSessions();
+  const entry = map[sid];
+  if (!entry) return { error: 'not a graph-launched session' };
+  if (!entry.captured || !entry.sourceTitle) return { error: 'capture this session first' };
+  const prov = await resolveProvider();
+  if (!prov) return { available: false };
+  let t = readTranscriptTail(sid);
+  if (t.blocked) t = (await slipwayTranscript(sid)) || { error: 'transcript unreachable' };
+  if (t.error) return { error: t.error };
+  const cleaned = cleanTranscript(t.text);
+  const tail = cleaned.slice(-12000);   // local models: bounded context, newest work wins
+  const prompt = `Below is the tail of a coding-agent terminal session that worked on "${entry.nodeName || 'a project'}". `
+    + `Summarize what the session DID, DECIDED, and CONCLUDED in 3-6 concrete sentences (name files/features/outcomes; no fluff). `
+    + `If it's just a startup banner or noise, say so plainly.\n\n---\n${tail}\n---\n\nSummary:`;
+  const text = await generate(prov, prompt, { timeoutMs: 120000 });
+  if (text == null) return { available: true, error: 'generation failed' };
+  const summary = text.trim();
+  const existing = rows(await run(driver,
+    `MATCH (i:Insight {session_id: $sid})-[:DERIVED_FROM]->(:Source {title: $title}) RETURN i.id AS id LIMIT 1`,
+    { sid, title: entry.sourceTitle }))[0];
+  const iid = existing ? existing.id : crypto.randomUUID();
+  await run(driver, `MERGE (i:Insight {id: $iid})
+    SET i.created_at = coalesce(i.created_at, datetime()),
+        i.summary = $summary, i.full_text = $full, i.session_id = $sid, i.tags = $tags`,
+  { iid, summary: summary.slice(0, 200), full: summary, sid, tags: ['agent-session', 'slipway'] });
+  await run(driver, `MATCH (i:Insight {id: $iid}) MATCH (s:Source {title: $title}) MERGE (i)-[:DERIVED_FROM]->(s)`,
+    { iid, title: entry.sourceTitle });
+  const origin = await resolveAgentOrigin(entry);
+  if (origin && INSIGHT_ABOUT_TARGETS.has(origin.label)) {
+    await run(driver, `MATCH (i:Insight {id: $iid}) MATCH (n) WHERE elementId(n) = $nid MERGE (i)-[:ABOUT]->(n)`,
+      { iid, nid: origin.id });
+  }
+  return { ok: true, available: true, insightId: iid, model: prov.model, text: summary };
+}
 
 // ── Cypher ────────────────────────────────────────────────────────────────
 // Primary label, preferring the meaningful one over the `Embeddable` marker.
@@ -185,9 +469,11 @@ const Q_SEARCH = `
   MATCH (n)
   WHERE toLower(coalesce(n.name, n.title, n.summary, '')) CONTAINS toLower($q)
      OR toLower(coalesce(n.description, n.full_text, '')) CONTAINS toLower($q)
+     OR toLower(coalesce(n.former_name, '')) CONTAINS toLower($q)
   WITH n, COUNT { (n)--() } AS degree
   RETURN elementId(n) AS id, ${PRIMARY_LABEL} AS label,
          coalesce(n.name, n.title, n.summary, n.id) AS name,
+         n.former_name AS former_name,
          (n.valid_until IS NOT NULL) AS superseded
   ORDER BY degree DESC LIMIT 12`;
 
@@ -225,31 +511,24 @@ const Q_NODE = `
             label: head([l IN labels(m) WHERE l <> 'Embeddable'] + labels(m)),
             url: m.url, file_path: m.file_path,
             status: m.status, valid_until: toString(m.valid_until),
-            dir: CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END }][0..60] AS edges`;
+            dir: CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END }][0..60] AS edges,
+         ([(n)-[:ACHIEVED_BY]->(gp:Project)-[:CONTAINS]->(gm:Idea) | { id: elementId(gm), name: coalesce(gm.name, gm.title), status: coalesce(gm.status, ''), valid_until: toString(gm.valid_until) }]
+          + [(n)-[:ACHIEVED_BY]->(gp2:Project)<-[:PART_OF]-(gm2:Idea) | { id: elementId(gm2), name: coalesce(gm2.name, gm2.title), status: coalesce(gm2.status, ''), valid_until: toString(gm2.valid_until) }])[0..40] AS goal_milestones,
+         [(n)-[:BLOCKED_BY]->(gb) | { id: elementId(gb), name: coalesce(gb.name, gb.title, gb.id),
+            label: head([l IN labels(gb) WHERE l <> 'Embeddable'] + labels(gb)) }][0..20] AS goal_blockers`;
 
 // ── Pulse (status board) ────────────────────────────────────────────────────
 const Q_GOALS = `
   MATCH (g:Goal)
   OPTIONAL MATCH (g)-[:ACHIEVED_BY|SUPPORTS]-(p:Project)
   WITH g, collect(DISTINCT p.name) AS projects
-  RETURN g.name AS name, g.timeframe AS timeframe, coalesce(g.status,'active') AS status,
+  RETURN elementId(g) AS id, g.name AS name, g.timeframe AS timeframe, coalesce(g.status,'active') AS status,
+         toString(g.target_date) AS target_date,
          left(coalesce(g.description,''), 200) AS desc, projects[0..5] AS projects
   ORDER BY CASE g.timeframe WHEN '30_days' THEN 0 WHEN 'short_term' THEN 1 WHEN '90_days' THEN 2
                             WHEN '1_year' THEN 3 WHEN 'long_term' THEN 5 ELSE 4 END`;
-const Q_PROJECTS = `
-  MATCH (p:Project)
-  RETURN p.name AS name, coalesce(p.status,'') AS status, coalesce(p.domain,'') AS domain,
-         left(coalesce(p.description,''), 140) AS desc
-  ORDER BY p.name`;
-const Q_BLOCKED = `
-  MATCH (a)-[:BLOCKED_BY]->(b)
-  RETURN coalesce(a.name,a.title) AS name, coalesce(b.name,b.title) AS blocker,
-         head([l IN labels(a) WHERE l <> 'Embeddable'] + labels(a)) AS label LIMIT 12`;
-const Q_NEXT = `
-  MATCH (i:Idea)
-  WHERE i.valid_until IS NULL AND toLower(coalesce(i.status,'')) =~ '.*(open|queued|next|planned|backlog).*'
-  RETURN i.name AS name, coalesce(i.status,'open') AS status, left(coalesce(i.description,''),120) AS desc
-  LIMIT 12`;
+// (Q_PROJECTS / Q_BLOCKED / Q_NEXT removed — the dock's "Now · Next · Blocked" section was
+//  retired as redundant with the command bar, which surfaces next/blocked on demand via INTENT_Q.)
 const Q_WHATSNEW = `
   MATCH (n:Insight) WHERE n.created_at IS NOT NULL AND n.valid_until IS NULL
   RETURN coalesce(n.name, n.title, n.summary, left(n.full_text,90)) AS name,
@@ -288,6 +567,18 @@ const Q_PROTECTED_FACT_REVIEW = `
          k.pending_new AS pending_new, k.pending_reason AS pending_reason,
          coalesce(n.name, n.title, n.summary, n.id) AS target_name, elementId(n) AS target_id
   ORDER BY k.pending_at DESC LIMIT 24`;
+
+// Notes awaiting curation (#note loop): a Note is jotted on a node (state 'raw'), a later sync
+// pass cues/addresses it. Until now the inspector could WRITE notes but nothing surfaced the
+// open ones, so they rotted. Surface raw/cued notes in the dock + resume so the loop closes.
+const Q_NOTES_REVIEW = `
+  MATCH (nt:Note)-[:ABOUT]->(n)
+  WHERE nt.state IN ['raw', 'cued'] AND NOT (nt)-[:PART_OF]->(:Review)
+  RETURN nt.id AS id, nt.text AS text, nt.state AS state, toString(nt.created_at) AS created_at,
+         coalesce(n.name, n.title, n.summary, n.id) AS anchor_name,
+         head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS anchor_label,
+         elementId(n) AS anchor_id
+  ORDER BY nt.created_at DESC LIMIT 20`;
 
 // ── Intent queries (the command bar) — uniform shape {id, name, label, sub} ───
 const PLABEL = `head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n))`;
@@ -362,16 +653,20 @@ async function api(pathname, params) {
     return { ...h, orphans, byLabel, newest, last_sync };
   }
   if (pathname === '/api/pulse') {
-    const [goals, projects, blocked, next, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview] = await Promise.all([
-      run(driver, Q_GOALS), run(driver, Q_PROJECTS), run(driver, Q_BLOCKED), run(driver, Q_NEXT),
+    // 'now/next/blocked' dropped from the dock (the command bar covers next/blocked on demand),
+    // so the pulse no longer computes Q_PROJECTS/Q_BLOCKED/Q_NEXT.
+    const [goals, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview, notesReview] = await Promise.all([
+      run(driver, Q_GOALS),
+      run(driver, QI_DUE),
       run(driver, Q_WHATSNEW), run(driver, Q_SUPERSEDED), run(driver, Q_LOWCONF), run(driver, Q_ORPHAN_LIST),
       run(driver, Q_ALIAS_DRIFT, { aliasLabels: ALIAS_LABELS, aliasNameFields: ALIAS_NAME_FIELDS, brandRe: brandRegexCypher() }),
-      run(driver, Q_PROTECTED_FACT_REVIEW),
+      run(driver, Q_PROTECTED_FACT_REVIEW), run(driver, Q_NOTES_REVIEW),
     ]);
     return {
-      goals: rows(goals), projects: rows(projects), blocked: rows(blocked), next: rows(next),
+      goals: rows(goals),
+      due: rows(due),
       whatsNew: rows(whatsNew),
-      review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview) },
+      review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview), notes: rows(notesReview) },
     };
   }
   if (pathname === '/api/protected-fact/suggest') {
@@ -395,22 +690,52 @@ async function api(pathname, params) {
     }
     return { node };
   }
+  if (pathname === '/api/agent/ping') {
+    return { available: await slipwayPing() };   // is the Slipway runtime up? (gates the launch button)
+  }
+  if (pathname === '/api/agent/plan') {
+    // Dry-run: resolve cwd + compose the brief + pick the kind, WITHOUT writing or launching.
+    // Powers the launch popover's preview.
+    const plan = await buildAgentPlan(String(params.id || ''));
+    if (plan.error) return { ok: false, reason: plan.error };
+    return { ok: true, cwd: plan.cwd, preset: plan.preset, brief: plan.brief };
+  }
+  if (pathname === '/api/agent/sessions') {
+    // The sessions lane: graph-launched sessions (mapped, capturable) joined with Slipway's
+    // history (incl. Slipway-native ones — listed, not capturable). Works with Slipway down:
+    // the mapping + on-disk transcripts are exactly the post-mortem capture window.
+    const history = await slipwayHistory();
+    const map = readAgentSessions();
+    const stats = {};
+    for (const sid of Object.keys(map)) {
+      if (!SID_RE.test(sid)) continue;                        // never stat a poisoned key
+      try {
+        const fp = realOf(path.join(SLIPWAY_TERM_DIR, sid + '.log'));
+        if (!isWithinRoots(fp, SOURCE_ROOTS)) continue;       // same sandbox as every file read
+        const st = fs.statSync(fp); stats[sid] = { bytes: st.size, mtimeMs: st.mtimeMs };
+      } catch { /* no transcript yet */ }
+    }
+    return { available: history !== null, sessions: sessionsView(map, history, stats) };
+  }
   if (pathname === '/api/ai/ping') {
-    const models = await ollamaTags();
-    return { available: !!(models && models.length), models: models || [], host: OLLAMA };
+    const prov = await resolveProvider();
+    return prov
+      ? { available: true, provider: prov.label, model: prov.model, models: prov.models, host: prov.base }
+      : { available: false, models: [] };
   }
   if (pathname === '/api/ai/summary' || pathname === '/api/ai/ask') {
-    const models = await ollamaTags();
-    if (!models || !models.length) return { available: false };
+    const prov = await resolveProvider();
+    if (!prov) return { available: false };
+    // An explicit ?model= is honored only on Ollama (multi-model host); MLX serves one model.
+    if (params.model && prov.kind === 'ollama' && prov.models.includes(params.model)) prov.model = params.model;
     const node = rows(await run(driver, Q_NODE, { id: String(params.id || '') }))[0];
     if (!node) return { available: true, error: 'node not found' };
-    const model = params.model && models.includes(params.model) ? params.model : models[0];
     const ctx = nodeText(node);
     const prompt = pathname === '/api/ai/ask'
       ? `Using ONLY the context below, answer the question concisely. If the context doesn't cover it, say so.\n\nContext:\n${ctx}\n\nQuestion: ${String(params.q || '').slice(0, 400)}\n\nAnswer:`
       : `Summarize the following knowledge-graph node in 2-3 sentences, grounded only in this text. Be concrete.\n\n${ctx}\n\nSummary:`;
-    const out = await ollamaGenerate(model, prompt);
-    return out == null ? { available: true, error: 'generation failed' } : { available: true, model, text: out.trim() };
+    const out = await generate(prov, prompt, { timeoutMs: 60000 });
+    return out == null ? { available: true, error: 'generation failed' } : { available: true, model: prov.model, text: out.trim() };
   }
   if (pathname === '/api/intent') {
     const q = INTENT_Q[String(params.kind || '')];
@@ -422,9 +747,9 @@ async function api(pathname, params) {
     // { source: null } when there is no file, or a typed payload otherwise.
     const node = rows(await run(driver, Q_NODE, { id: String(params.id || '') }))[0];
     if (!node) return { source: null };
-    const primary = pickPrimarySource(node, node.edges || [], (p) => isWithinRoots(absSrc(p), SOURCE_ROOTS));
+    const primary = pickPrimarySource(node, node.edges || [], (p) => isWithinRoots(realOf(absSrc(p)), SOURCE_ROOTS));
     if (!primary) return { source: null };
-    const fp = absSrc(primary.filePath);
+    const fp = realOf(absSrc(primary.filePath));
     const kind = detectKind(fp);
     const base = { kind, title: primary.title, sourcePath: fp };
     if (!isWithinRoots(fp, SOURCE_ROOTS)) return { source: { ...base, blocked: true } };
@@ -443,7 +768,7 @@ async function api(pathname, params) {
   if (pathname === '/api/file') {
     // The "load the whole file" path behind a source/provenance link or a codebase-map
     // node. Same read sandbox as /api/source, just the full text instead of an excerpt.
-    const fp = absSrc(params.path);
+    const fp = realOf(absSrc(params.path));
     const kind = detectKind(fp);
     const base = { kind, path: fp, title: fp.split('/').pop() || fp };
     if (!fp || !isWithinRoots(fp, SOURCE_ROOTS)) return { file: { ...base, blocked: true } };
@@ -483,11 +808,11 @@ async function api(pathname, params) {
     });
     return { roots, home };
   }
-  if (pathname === '/api/file/history') return fileHistory(absSrc(params.path));
-  if (pathname === '/api/file/version') return fileVersion(absSrc(params.path), String(params.rev || ''));
+  if (pathname === '/api/file/history') return fileHistory(realOf(absSrc(params.path)));
+  if (pathname === '/api/file/version') return fileVersion(realOf(absSrc(params.path)), String(params.rev || ''));
   if (pathname === '/api/file/stat') {
     // Cheap liveness probe for the editor: has the file changed on disk under you?
-    const fp = absSrc(params.path);
+    const fp = realOf(absSrc(params.path));
     if (!fp || !isWithinRoots(fp, SOURCE_ROOTS)) return { error: 'forbidden' };
     try { const text = fs.readFileSync(fp, 'utf8'); return { hash: hashText(text), mtime: fs.statSync(fp).mtimeMs }; }
     catch { return { missing: true }; }
@@ -731,6 +1056,24 @@ async function setSchedule({ id, kind, when } = {}) {
      RETURN toString(n.\`${kind}\`) AS value`,
     { id: nid, d });
   return recs.length ? { ok: true, kind, value: toPlain(recs[0].toObject()).value } : { error: 'node not found' };
+}
+
+// First-run onboarding (#6): bootstrap ONE root owner node on a fresh/empty graph so every later
+// Project/Insight has a hub to hang off instead of accumulating as disconnected islands. The single
+// sanctioned node-authoring path in the UI — MERGE-keyed (can't duplicate), is_self:true marks the
+// owner. kind is a closed choice (person|org); name is the only free text and is just a node key.
+async function createRoot({ kind, name } = {}) {
+  const nm = String(name || '').trim();
+  if (!nm) return { error: 'name required' };
+  const org = kind === 'org' || kind === 'organization';
+  const recs = await run(driver,
+    org
+      ? `MERGE (o:Organization {name: $name}) ON CREATE SET o.created_at = datetime() SET o.is_self = true
+         RETURN elementId(o) AS id, o.name AS name`
+      : `MERGE (p:Person {name: $name}) ON CREATE SET p.created_at = datetime() SET p.is_self = true
+         RETURN elementId(p) AS id, p.name AS name`,
+    { name: nm });
+  return recs.length ? { ok: true, root: toPlain(recs[0].toObject()) } : { error: 'could not create root' };
 }
 
 // ── Protected key-facts (#23) ────────────────────────────────────────────────
@@ -1023,10 +1366,16 @@ async function reviewChanges({ id, repo, ref, base } = {}) {
   repo = String(repo || ''); ref = String(ref || '');
   if (!repo || !ref || !isWithinRoots(repo, SOURCE_ROOTS)) return { error: 'repo and ref required' };
   const baseIn = (base && String(base).trim()) || (ref + '^');
-  const rp = git(['-C', repo, 'rev-parse', baseIn]);
-  if (!rp.ok) return { changes: [], base: null, note: 'no base to diff against (first commit?)' };
-  const baseSha = rp.out.trim();
-  const d = git(['-C', repo, 'diff', '--name-status', baseSha, ref]);
+  const rpBase = git(['-C', repo, 'rev-parse', baseIn]);
+  if (!rpBase.ok || !/^[0-9a-fA-F]{40}$/.test(rpBase.out.trim())) return { changes: [], base: null, note: 'no base to diff against (first commit?)' };
+  const baseSha = rpBase.out.trim();
+  // Resolve ref to a full SHA and hard-validate BOTH endpoints as 40-hex before they reach
+  // `git diff` — a crafted ref/base like `--output=…` is a git OPTION, not a commit, so an
+  // unvalidated value lets git write an arbitrary file (argument injection). Mirrors line 966.
+  const rpRef = git(['-C', repo, 'rev-parse', ref]);
+  if (!rpRef.ok || !/^[0-9a-fA-F]{40}$/.test(rpRef.out.trim())) return { error: 'bad ref' };
+  const refSha = rpRef.out.trim();
+  const d = git(['-C', repo, 'diff', '--name-status', baseSha, refSha]);
   if (!d.ok) return { changes: [], base: baseSha, error: d.error };
   const changes = d.out.split('\n').filter(Boolean).map((line) => {
     const parts = line.split('\t');
@@ -1086,7 +1435,9 @@ async function status() {
 const GIT_TIMEOUT = 5000;
 function git(args, trim = true) {
   // Never throws — git is best-effort; a failed commit must not fail a save.
-  try { const out = execFileSync('git', args, { encoding: 'utf8', timeout: GIT_TIMEOUT }); return { ok: true, out: trim ? out.trim() : out }; }
+  // maxBuffer: the default 1MB ENOBUFS-es on `git show` of ordinary assets (a repo screenshot
+  // PNG is ~1.3MB); 8MB lets fileVersion() see the bytes and answer "binary"/"too large" itself.
+  try { const out = execFileSync('git', args, { encoding: 'utf8', timeout: GIT_TIMEOUT, maxBuffer: 8 * 1024 * 1024 }); return { ok: true, out: trim ? out.trim() : out }; }
   catch (err) { return { ok: false, out: '', error: String((err && err.stderr) || (err && err.message) || err).trim() }; }
 }
 function repoOf(fp) { const r = git(gitArgs.repoRoot(path.dirname(fp))); return r.ok && r.out ? r.out : null; }
@@ -1201,38 +1552,89 @@ function fileVersion(fp, rev) {
   const repo = repoOf(fp);
   if (!repo) return { error: 'not a git repo' };
   const r = git(gitArgs.show(repo, relInRepo(repo, fp), rev), false);   // untrimmed: exact bytes
-  return r.ok ? { rev, text: r.out } : { error: r.error || 'not found' };
+  // Human answers, not spawn errors: a binary blob (screenshots in a reviewed diff) or an
+  // oversize file gets the same designed "couldn't read" state with a message that explains.
+  if (!r.ok) return { error: /ENOBUFS/.test(r.error || '') ? 'file too large to preview' : (r.error || 'not found') };
+  if (r.out.includes('\u0000')) return { error: 'binary file — no text preview' };
+  if (r.out.length > SOURCE_MAX_BYTES * 2) return { error: 'file too large to preview' };
+  return { rev, text: r.out };
 }
 
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.mjs': 'text/javascript', '.map': 'application/json' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.mjs': 'text/javascript', '.map': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const RAW_TYPES = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp' };
+
+// Baseline defense-in-depth headers for the app document. script/style keep 'unsafe-inline'
+// because the UI uses inline event handlers — the real XSS sinks are scheme-gated at the
+// source (provenance/miniMarkdown/link). object-src 'none' + frame-ancestors 'none' close the
+// <object>/<embed> SVG vector and clickjacking; frame-src is limited to the video embed hosts
+// plus the local Slipway runtime (the Agents surface) — an explicit, single localhost origin,
+// never a wildcard.
+const SECURITY_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; worker-src 'self' blob:; connect-src 'self' http://localhost:8765 http://127.0.0.1:8765; frame-src https://www.youtube-nocookie.com https://player.vimeo.com http://localhost:8765 http://127.0.0.1:8765; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+};
+
+// Read a request body with a hard BYTE cap. Resolves on 'end'; rejects on overflow or abort.
+// A destroyed stream never emits 'end', so we must also settle on 'close'/'error' — otherwise
+// the handler's await hangs forever and the socket leaks. Byte-counted (Buffer.length), not chars.
+function readBody(req, cap) {
+  return new Promise((resolve, reject) => {
+    let body = '', len = 0, settled = false;
+    // Reject (don't destroy the socket — that would also kill the response, so the caller's
+    // 413 never reaches the client) and stop buffering once over cap; later chunks are dropped.
+    const done = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+    req.on('data', (c) => { len += c.length; if (len > cap) done(reject, new Error('too large')); else if (!settled) body += c; });
+    req.on('end', () => done(resolve, body));
+    req.on('close', () => done(reject, new Error('aborted')));
+    req.on('error', () => done(reject, new Error('aborted')));
+  });
+}
+
+// DNS-rebinding / CSRF guard: a state-changing request must arrive with a loopback Host.
+// (Strips the :port and any [::1] brackets.) Defense-in-depth on top of the loopback bind.
+function isLocalHost(req) {
+  const h = String(req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+  return h === '' || h === 'localhost' || h === '127.0.0.1' || h === '::1';
+}
 
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://localhost:${PORT}`);
+    // Every state-changing request is a POST; reject any that didn't arrive with a loopback
+    // Host (DNS-rebinding / cross-site). The loopback bind is the primary control; this is depth.
+    if (req.method === 'POST' && !isLocalHost(req)) return send(res, 403, { error: 'forbidden' });
     // Raw byte stream for in-app binary viewers (PDF/images), sandboxed to the allowlist.
     if (url.pathname === '/api/raw') {
       const fp = String(url.searchParams.get('path') || '');
-      const ext = (/\.([a-z0-9]+)$/i.exec(fp) || [, ''])[1].toLowerCase();
-      if (!fp || !isWithinRoots(fp, SOURCE_ROOTS) || !RAW_TYPES[ext]) return send(res, 403, { error: 'forbidden' });
-      if (!fs.existsSync(fp)) return send(res, 404, { error: 'not found' });
-      res.writeHead(200, { 'Content-Type': RAW_TYPES[ext], 'Cache-Control': 'no-store', 'Content-Disposition': 'inline' });
-      return fs.createReadStream(fp).pipe(res);
+      const real = realOf(fp);   // resolve symlinks so a link inside a root can't escape it
+      const ext = (/\.([a-z0-9]+)$/i.exec(real) || [, ''])[1].toLowerCase();
+      if (!fp || !isWithinRoots(real, SOURCE_ROOTS) || !RAW_TYPES[ext]) return send(res, 403, { error: 'forbidden' });
+      if (!fs.existsSync(real)) return send(res, 404, { error: 'not found' });
+      // SVG can carry <script> that runs as THIS origin if navigated to directly. Browsers
+      // ignore Content-Disposition on <img> (inline viewers still render it) but honor it on
+      // top-level navigation — so `attachment` neutralizes the script vector; nosniff stops
+      // MIME-confusion on the rest.
+      const svg = ext === 'svg';
+      res.writeHead(200, {
+        'Content-Type': RAW_TYPES[ext],
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Disposition': svg ? 'attachment' : 'inline',
+      });
+      const rs = fs.createReadStream(real);
+      rs.on('error', () => { if (!res.headersSent) send(res, 500, { error: 'read failed' }); else res.destroy(); });
+      return rs.pipe(res);
     }
     // Mutate the folder allowlist (grant/revoke). The one write endpoint; guardrailed.
     if (url.pathname === '/api/roots' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 4096) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 4096); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = mutateRoots(String(p.action || ''), String(p.path || ''), p.tags);
       return send(res, result.error ? 400 : 200, result);
     }
     // Notes: add a note to a node, or change a note's state.
     if ((url.pathname === '/api/note' || url.pathname === '/api/note/state') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/note' ? await addNote(p) : await setNoteState(p.id, p.state);
       if (!result.error) broadcast('graph-changed');
@@ -1241,9 +1643,7 @@ const server = http.createServer(async (req, res) => {
     // Markdown editing: acquire/release the edit lock, or save (write + git commit).
     if ((url.pathname === '/api/file/lock' || url.pathname === '/api/file/unlock' || url.pathname === '/api/file/save') && req.method === 'POST') {
       const cap = url.pathname === '/api/file/save' ? SOURCE_MAX_BYTES + 16 * 1024 : 8192;
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > cap) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, cap); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       if (p && p.path) p.path = absSrc(p.path);   // resolve repo-relative paths (e.g. demo files)
       const result = url.pathname === '/api/file/lock' ? await lockFile(p)
@@ -1255,9 +1655,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Link intake: save a web link (+ fuzzy associate), or attach an existing link.
     if ((url.pathname === '/api/link' || url.pathname === '/api/link/attach') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/link' ? await addLink(p) : await attachLink(p.linkId, p.targetId);
       if (!result.error) broadcast('graph-changed');
@@ -1265,9 +1663,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Code review (#34): create a review, or set its verdict/status.
     if ((url.pathname === '/api/review' || url.pathname === '/api/review/verdict') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/review' ? await createReview(p) : await setReviewVerdict(p);
       if (!result.error) broadcast('graph-changed');
@@ -1275,9 +1671,7 @@ const server = http.createServer(async (req, res) => {
     }
     // Inline associate (#29): wire / remove a typed edge between two existing nodes.
     if ((url.pathname === '/api/relate' || url.pathname === '/api/relate/remove') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/relate' ? await relate(p) : await unrelate(p);
       if (!result.error) broadcast('graph-changed');
@@ -1285,19 +1679,51 @@ const server = http.createServer(async (req, res) => {
     }
     // Goal target_date (#25 P1) + intention-time scheduler (#25 P2): narrow scalar setters.
     if ((url.pathname === '/api/goal/target-date' || url.pathname === '/api/schedule') && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 8192) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/schedule' ? await setSchedule(p) : await setGoalTargetDate(p);
       if (!result.error) broadcast('graph-changed');
       return send(res, result.error ? 400 : 200, result);
     }
+    // First-run onboarding (#6): bootstrap a single root owner node on an empty graph.
+    if (url.pathname === '/api/root' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 4096); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await createRoot(p);
+      if (!result.error) broadcast('graph-changed');
+      return send(res, result.error ? 400 : 200, result);
+    }
+    // Act plane (Phase 2): "Open agent here" — resolve cwd, write the graph brief into it,
+    // then launch a Slipway terminal there. No broadcast — a launch mutates nothing in the graph.
+    if (url.pathname === '/api/agent/launch' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await agentLaunch(String(p.id || ''));
+      return send(res, result.error ? 400 : 200, result);
+    }
+    // Act plane (Phase 3): capture an ended agent session into the graph as a Source, or
+    // summarize a captured one into an Insight (local inference lane; user-triggered only).
+    if ((url.pathname === '/api/agent/capture' || url.pathname === '/api/agent/summarize') && req.method === 'POST') {
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = url.pathname === '/api/agent/capture' ? await agentCapture(p) : await agentSummarize(p);
+      if (result.ok) broadcast('graph-changed');
+      return send(res, result.error ? 400 : 200, result);
+    }
+    // Rail-visibility archiving: a thin passthrough to Slipway's index (the source of truth).
+    // { id, archived } toggles one; { all: true } bulk-archives every ended session. Never
+    // deletes a session or touches the graph — captured Sources/INFORMS edges stay visible.
+    if (url.pathname === '/api/agent/archive' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = p.all
+        ? await slipwayArchive('/api/term/archive-ended', {})
+        : await slipwayArchive('/api/term/archive', { id: String(p.id || ''), archived: p.archived !== false });
+      return send(res, result.error ? 502 : 200, result);
+    }
     // Protected key-facts (#23): pin/unpin a fact, check a rewrite (optionally queue), resolve.
     if (url.pathname.startsWith('/api/protected-fact/') && url.pathname !== '/api/protected-fact/suggest' && req.method === 'POST') {
-      let body = '';
-      req.on('data', (c) => { body += c; if (body.length > 64 * 1024) req.destroy(); });
-      await new Promise((r) => req.on('end', r));
+      let body; try { body = await readBody(req, 64 * 1024); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
       const result = url.pathname === '/api/protected-fact/pin' ? await pinProtectedFact(p)
         : url.pathname === '/api/protected-fact/unpin' ? await unpinProtectedFact(p)
@@ -1325,8 +1751,10 @@ const server = http.createServer(async (req, res) => {
     const rel = url.pathname === '/' ? '/index.html' : url.pathname;
     const file = path.join(PUBLIC, path.normalize(rel).replace(/^(\.\.[/\\])+/, ''));
     if (!file.startsWith(PUBLIC) || !fs.existsSync(file)) return send(res, 404, { error: 'not found' });
-    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'text/plain' });
-    fs.createReadStream(file).pipe(res);
+    res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'text/plain', ...SECURITY_HEADERS });
+    const rs = fs.createReadStream(file);
+    rs.on('error', () => { if (!res.headersSent) send(res, 500, { error: 'read failed' }); else res.destroy(); });
+    rs.pipe(res);
   } catch (err) {
     send(res, 500, { error: String(err.message || err) });
   }
@@ -1334,13 +1762,15 @@ const server = http.createServer(async (req, res) => {
 
 function send(res, code, obj) {
   const body = JSON.stringify(obj);
-  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   res.end(body);
 }
 
-server.listen(PORT, () => {
+// Bind loopback only — this BFF reads/writes local files and the graph with NO auth, so it
+// must never be reachable from the LAN (the file-header "only ever talks to localhost" intent).
+server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Scatterbrained Studio  ·  observatory`);
-  console.log(`  ▸ http://localhost:${PORT}`);
+  console.log(`  ▸ http://127.0.0.1:${PORT}`);
   console.log(`  ▸ Neo4j: ${process.env.NEO4J_URI || 'bolt://localhost:7687'}\n`);
 });
 

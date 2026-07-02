@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { statusText, lensActive, computeDoi, placeLabels, neighborhoodLayout, smartLabel } from '../public/lib/graph.js';
+import { statusText, lensActive, computeDoi, placeLabels, neighborhoodLayout, smartLabel, collideRadius, particlesForZoom } from '../public/lib/graph.js';
 
 describe('smartLabel', () => {
   it('shows the basename for path-like names so siblings stop colliding', () => {
@@ -106,5 +106,43 @@ describe('computeDoi (degree-of-interest focus)', () => {
   it('does not downgrade a 1-hop that is also reachable at 2 hops', () => {
     // a is 2-hop-reachable from itself via b→a, but must stay 1 (focus)
     expect(doi.a).toBe(1);
+  });
+});
+
+describe('collideRadius (constellation spacing)', () => {
+  it('is the rendered radius (relSize·√val) plus a constant pad', () => {
+    expect(collideRadius({ r: 4 }, 4, 6)).toBe(4 * 2 + 6);     // √4=2 → 8+6=14
+    expect(collideRadius({ r: 9 }, 4, 6)).toBe(4 * 3 + 6);     // √9=3 → 12+6=18
+  });
+  it('bigger nodes reserve more room; the pad is the floor for tiny/zero nodes', () => {
+    expect(collideRadius({ r: 16 }, 4, 6)).toBeGreaterThan(collideRadius({ r: 4 }, 4, 6));
+    expect(collideRadius({ r: 0 }, 4, 6)).toBe(6);
+    expect(collideRadius({}, 4, 6)).toBe(6);                   // missing/NaN r → just the pad
+  });
+  it('has sane defaults (relSize 4, pad 6)', () => {
+    expect(collideRadius({ r: 4 })).toBe(14);
+  });
+});
+
+describe('particlesForZoom (zoom-stable edge particles)', () => {
+  it('overview zoom is unchanged — exactly base', () => {
+    expect(particlesForZoom(1, 1)).toBe(1);
+    expect(particlesForZoom(2, 2.9)).toBe(2);
+  });
+  it('thins particles when zoomed past the thin threshold', () => {
+    expect(particlesForZoom(2, 4)).toBe(1);                    // 2/2 rounded
+    expect(particlesForZoom(1, 4)).toBe(1);                    // never below 1 while still flowing
+  });
+  it('pauses particles entirely when zoomed way in', () => {
+    expect(particlesForZoom(2, 7)).toBe(0);
+    expect(particlesForZoom(1, 10)).toBe(0);
+  });
+  it('a base of 0 (calm / filtered link) stays off at every zoom', () => {
+    expect(particlesForZoom(0, 1)).toBe(0);
+    expect(particlesForZoom(0, 5)).toBe(0);
+  });
+  it('thresholds are tunable', () => {
+    expect(particlesForZoom(2, 2.5, { thinAbove: 2, pauseAbove: 4 })).toBe(1);
+    expect(particlesForZoom(2, 5, { thinAbove: 2, pauseAbove: 4 })).toBe(0);
   });
 });

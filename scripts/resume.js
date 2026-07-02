@@ -9,6 +9,7 @@
 //   node scripts/resume.js                  # full brief
 //   node scripts/resume.js --project Acme # focus on one project
 import { getDriver, run, parseArgs, toPlain } from './lib/db.js';
+import { classifyStatus } from '../public/lib/roadmap.js';
 
 function hoursSince(dt) {
   if (!dt) return null;
@@ -33,19 +34,33 @@ async function main() {
         (age != null && age > 24 ? '  ⚠️  stale — consider graph-sync' : '')
     );
 
-    // 2. Active goals + the projects that achieve them
-    const goals = await run(
+    // 2. Live goals + the projects that achieve them. Filter on classifyStatus (the
+    //    same classifier the Studio uses) instead of an exact status:'active' match —
+    //    goals drift through 'open'/'in_progress', and an exact match silently hid them
+    //    from the brief, so every goal you defined was invisible to the very loop goals
+    //    exist to feed.
+    const goals = (await run(
       driver,
-      `MATCH (g:Goal {status:'active'})
+      `MATCH (g:Goal) WHERE g.valid_until IS NULL
        OPTIONAL MATCH (g)-[:ACHIEVED_BY]->(p:Project)
-       RETURN g.name AS goal, g.timeframe AS tf, collect(p.name) AS projects
+       RETURN g.name AS goal, g.status AS status, g.timeframe AS tf,
+              toString(g.target_date) AS targetDate, collect(p.name) AS projects
        ORDER BY g.name`
-    );
-    console.log('\n🎯 Active goals');
+    )).filter((r) => classifyStatus(toPlain(r.get('status'))) !== 'done');
+    console.log('\n🎯 Live goals');
+    const undated = [];
     for (const r of goals) {
+      const goal = toPlain(r.get('goal'));
       const projects = toPlain(r.get('projects')).filter(Boolean);
-      console.log(`   • ${toPlain(r.get('goal'))} [${toPlain(r.get('tf')) || '—'}]` +
+      const date = toPlain(r.get('targetDate'));
+      console.log(`   • ${goal} [${toPlain(r.get('tf')) || '—'}]` +
+        (date ? `  ·  🎯 ${date}` : '') +
         (projects.length ? `  ← ${projects.join(', ')}` : ''));
+      if (!date) undated.push(goal);
+    }
+    if (undated.length) {
+      console.log(`\n   ⏳ ${undated.length} goal${undated.length > 1 ? 's' : ''} with no target date` +
+        ` — set one in the Studio (Inspector → Schedule) so it shows up due.`);
     }
 
     // 3. Newest insights (optionally project-scoped)
@@ -85,6 +100,23 @@ async function main() {
     if (blocked.length) {
       console.log('\n🚧 Blocked');
       for (const r of blocked) console.log(`   • ${toPlain(r.get('a'))} ← blocked by ${toPlain(r.get('b'))}`);
+    }
+
+    // Notes awaiting curation — raw/cued notes jotted on nodes for a later pass to act on.
+    // Surfacing them here closes the loop (the Studio could write them but nothing read them).
+    const notes = await run(
+      driver,
+      `MATCH (nt:Note)-[:ABOUT]->(n)
+       WHERE nt.state IN ['raw','cued'] AND NOT (nt)-[:PART_OF]->(:Review)
+       RETURN nt.text AS text, nt.state AS state, coalesce(n.name,n.title,n.summary,n.id) AS anchor
+       ORDER BY nt.created_at DESC LIMIT 12`
+    );
+    if (notes.length) {
+      console.log('\n🗒️  Notes awaiting review');
+      for (const r of notes) {
+        const t = toPlain(r.get('text')) || '';
+        console.log(`   • [${toPlain(r.get('state'))}] ${toPlain(r.get('anchor'))} — ${t.length > 70 ? t.slice(0, 69) + '…' : t}`);
+      }
     }
 
     console.log('\n' + '─'.repeat(48));

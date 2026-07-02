@@ -1,71 +1,125 @@
 #!/usr/bin/env node
-// scatterbrained — thin CLI dispatcher over the toolkit scripts, so the published
-// package is usable via `npx scatterbrained <command>` (or globally as `scatterbrained`).
-// For the full setup (docker-compose Neo4j, schema, demo graph), clone the repo:
+// scatterbrained — the published CLI. Deliberately small: the three commands a new
+// user needs to get going via `npx scatterbrained <command>` (or globally as
+// `scatterbrained`). The full ~18-command graph toolkit is for repo-clone
+// contributors and lives in package.json scripts — run it with `npm run <command>`.
+//
+//   studio    launch the Studio (auto-starts Neo4j + demo graph)
+//   capture   drop a note or a web link into a running Studio
+//   status    is the Studio up? what's in the graph?
+//
+// Zero deps, Node stdlib only (http). For the full setup — docker-compose Neo4j,
+// schema, demo graph, and the whole toolkit — clone the repo:
 // https://github.com/ricksinclair/scatterbrained
 import { spawnSync } from 'node:child_process';
+import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { captureRequest, studioBaseUrl } from '../lib/cli-capture.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// subcommand -> script under scripts/
-const COMMANDS = {
-  lint: 'lint-graph.js',
-  search: 'search.js',
-  embed: 'embed.js',
-  context: 'build-context.js',
-  resume: 'resume.js',
-  supersede: 'supersede.js',
-  review: 'review-supersession.js',
-  'review-docs': 'review-doc-staleness.js',
-  'check-notion': 'check-notion.js',
-  'new-project': 'new-project.js',
-  'setup-notion': 'setup-notion.js',
-  add: 'add-node.js',
-  insight: 'write-insight.js',
-  index: 'notion-index.js',
-  'doc-index': 'document-index.js',
-  export: 'export-graph.js',
-  import: 'import-graph.js',
-};
-
-// subcommands that live outside scripts/ (the Studio app + tools)
-const SPECIAL = {
-  studio: ['studio-scripts/start.mjs'],   // launch the observatory (auto-Neo4j + demo seed)
-  'code-graph': ['bin/code-graph.mjs'],   // query a repo's import structure
-};
-
-const HELP = `scatterbrained — a local-first knowledge observatory you can run on your own machine
+const HELP = `scatterbrained — a second brain you can see
 
 Usage:  scatterbrained <command> [args]
 
 Commands:
-  studio          launch the visual observatory (auto-starts Neo4j + demo graph)
-  code-graph      query a repo's import structure
-  lint            graph integrity check (orphans, undated, unlinked, vocab)
-  search          hybrid search — keyword + semantic (if embedded), bi-temporal aware
-  embed           backfill semantic embeddings (needs: npm i @xenova/transformers)
-  new-project     stand up a project: Notion workspace + graph + repo CLAUDE.md
-  setup-notion    just the Notion operations workspace (Kanban, changelog, …)
-  context         assemble a context block (--project/--domain/--tag/--recent)
-  resume          cross-session "where were we" brief
-  supersede       invalidate a fact bi-temporally (never deletes)
-  review          surface candidate stale facts for review
-  review-docs     surface describing docs (page/README/site) that may have drifted
-  check-notion    validate the Notion ID manifest
-  add             MERGE a single node
-  insight         record a synthesized Insight (reads stdin)
-  index           Notion "what changed?" probe
-  doc-index       local-document "what changed?" probe
-  export | import versioned JSON graph backups
+  studio                 launch the Studio (auto-starts Neo4j + a demo graph)
+  capture "<text|url>"   drop a note or a web link into the running Studio
+  status                 is the Studio up? and what's in the graph right now?
 
-Connection (env, with sane local defaults):
-  NEO4J_URI (bolt://localhost:7687)  NEO4J_USER (neo4j)  NEO4J_PASSWORD
+Capture a note anchored to a node:  scatterbrained capture "…" --on <nodeId>
 
-Full setup — docker-compose Neo4j, schema, and a demo graph — is in the repo:
+Connection (env, sane local defaults):
+  STUDIO_PORT (4317)   NEO4J_URI (bolt://localhost:7687)   NEO4J_USER (neo4j)   NEO4J_PASSWORD
+
+The full toolkit (lint, resume, search, context, new-project, embed, supersede, …)
+ships with the repo — clone it and run \`npm run <command>\`:
   https://github.com/ricksinclair/scatterbrained   ·   https://ulrictodman.com/scatterbrained
 `;
+
+// POST JSON to a running Studio; GET when body is null. Resolves to { status, json }
+// or rejects with a code we translate to a friendly message (ECONNREFUSED → "run
+// `scatterbrained studio` first", never a raw stack trace).
+function request(pathname, body, method) {
+  const base = new URL(studioBaseUrl());
+  const payload = body == null ? null : JSON.stringify(body);
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { hostname: base.hostname, port: base.port, path: pathname, method: method || (body ? 'POST' : 'GET'),
+        headers: payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {} },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => { let json = null; try { json = JSON.parse(data); } catch { /* non-JSON */ }
+          resolve({ status: res.statusCode, json }); });
+      });
+    req.on('error', reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+const studioDownMsg =
+  `  ✗ The Studio isn't running at ${studioBaseUrl()}.\n` +
+  `    Start it first:  scatterbrained studio\n` +
+  `    (or set STUDIO_PORT if you launched it on another port.)`;
+
+function isDown(err) { return err && (err.code === 'ECONNREFUSED' || err.code === 'ECONNRESET' || err.code === 'EADDRNOTAVAIL'); }
+
+async function capture(args) {
+  // args: the capture string, plus optional `--on <nodeId>` to anchor a note.
+  const onIdx = args.indexOf('--on');
+  const target = onIdx >= 0 ? args[onIdx + 1] : undefined;
+  const text = (onIdx >= 0 ? args.slice(0, onIdx) : args).join(' ');
+  const plan = captureRequest(text, { target });
+  if (plan.error) { console.error(`  ✗ ${plan.error}`); process.exit(1); }
+
+  let res;
+  try { res = await request(plan.path, plan.body); }
+  catch (err) { console.error('\n' + (isDown(err) ? studioDownMsg : `  ✗ ${err.message}`)); process.exit(1); }
+
+  const j = res.json || {};
+  if (res.status !== 200 || j.error) { console.error(`  ✗ ${j.error || `Studio returned ${res.status}`}`); process.exit(1); }
+
+  if (plan.path === '/api/link') {
+    const n = j.node || {};
+    const where = j.attached ? ` → attached to ${j.attached.name}` : '';
+    console.log(`  ${j.kind === 'video' ? '🎬' : '🔗'} saved: ${n.title || n.url}${where}`);
+  } else {
+    const anchored = target ? ` (on ${target})` : '';
+    console.log(`  📝 note captured${anchored}: "${(j.note && j.note.text) || text}"`);
+  }
+}
+
+async function status() {
+  let res;
+  try { res = await request('/api/health', null); }
+  catch (err) {
+    if (isDown(err)) { console.log('  ● Studio: down\n' + studioDownMsg); process.exit(1); }
+    console.error(`  ✗ ${err.message}`); process.exit(1);
+  }
+  // The Studio answered — it's up. A 500 here means the server is running but Neo4j
+  // (which every health query hits) is unreachable; report that distinctly.
+  if (res.status !== 200) {
+    console.log(`  ● Studio: up (${studioBaseUrl()})`);
+    console.log('  ● Neo4j:  unreachable — the Studio is running but can\'t reach the graph.');
+    console.log('    Check NEO4J_URI / NEO4J_PASSWORD, or run `scatterbrained studio` to auto-start one.');
+    process.exit(1);
+  }
+  const h = res.json || {};
+  console.log(`  ● Studio: up (${studioBaseUrl()})`);
+  console.log('  ● Neo4j:  reachable');
+  const bits = [];
+  if (h.total != null) bits.push(`${h.total} nodes`);
+  if (h.indexed != null) bits.push(`${h.indexed} indexed`);
+  if (h.superseded != null) bits.push(`${h.superseded} superseded`);
+  if (h.orphans != null) bits.push(`${h.orphans} orphans`);
+  if (bits.length) console.log(`    graph: ${bits.join(' · ')}`);
+  if (h.newest && h.newest.name) console.log(`    newest insight: ${h.newest.name}`);
+  if (h.last_sync) console.log(`    last sync: ${h.last_sync}`);
+  process.exit(0);
+}
 
 const [cmd, ...rest] = process.argv.slice(2);
 
@@ -74,16 +128,15 @@ if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   process.exit(cmd ? 0 : 1);
 }
 
-if (SPECIAL[cmd]) {
-  const res = spawnSync(process.execPath, [path.join(ROOT, ...SPECIAL[cmd]), ...rest], { stdio: 'inherit' });
+if (cmd === 'studio') {
+  // Launch the observatory (auto-Neo4j + demo seed). Same entry as `npm start`.
+  const res = spawnSync(process.execPath, [path.join(ROOT, 'studio-scripts/start.mjs'), ...rest], { stdio: 'inherit' });
   process.exit(res.status ?? 1);
 }
 
-const script = COMMANDS[cmd];
-if (!script) {
+if (cmd === 'capture') { capture(rest); }
+else if (cmd === 'status') { status(); }
+else {
   console.error(`scatterbrained: unknown command "${cmd}". Run \`scatterbrained help\`.`);
   process.exit(1);
 }
-
-const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts', script), ...rest], { stdio: 'inherit' });
-process.exit(res.status ?? 1);

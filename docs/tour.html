@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>The tour — Scatterbrained</title>
+<meta name="description" content="Ten moments from the Scatterbrained Studio, on the bundled demo graph: the daily brief, the palette, the agenda, provenance, rewindable decisions, protected facts, and capture receipts." />
+<!-- The demo reel as a page (2026-07-02). Every image is the bundled demo graph — never real data. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Spectral:wght@200;300;400;500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #131318; --panel: #1e1e26; --line: rgba(255,255,255,.10); --line-2: rgba(255,255,255,.16);
+    --ink: #ece6d8; --ink-dim: #b9b3a6; --ink-faint: #7c776c;
+    --ink-2: #17171f; --ink-3: #1b1b24;
+    --ember: #ef9a5b; --ember-dk: #c97b3e; --teal: #79b4ab; --teal-dk: #3f7a72;
+    --maxw: 980px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: radial-gradient(1100px 640px at 78% -14%, #20202c 0%, var(--bg) 55%); color: var(--ink);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  h1, h2 { font-family: "Fraunces", Georgia, serif; font-weight: 500; letter-spacing: -.01em; }
+  a { color: var(--ember); text-decoration: none; } a:hover { text-decoration: underline; }
+  code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .82em; color: var(--teal); background: rgba(121,180,171,.08); padding: .1em .4em; border-radius: 4px; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--line); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 13px; }
+  .tb-home { color: var(--ink); } .tb-home .b1 { color: var(--ember); } .tb-home:hover { text-decoration: none; color: var(--ember); }
+  .tb-links a { color: var(--ink-dim); margin-left: 18px; }
+  .tb-here { color: var(--ink-faint); text-transform: uppercase; letter-spacing: .2em; font-size: 11px; margin-left: 18px; }
+
+  .hero { padding: 60px 24px 20px; text-align: center; }
+  .kicker { color: var(--ember); text-transform: uppercase; letter-spacing: .24em; font-size: 12px; margin: 0 0 14px; font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .hero h1 { font-size: clamp(32px, 5.4vw, 54px); line-height: 1.05; margin: 0 auto 16px; max-width: 18ch; }
+  .hero p { color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-weight: 300; font-size: 17px; max-width: 56ch; margin: 0 auto; }
+  .hero p em { color: var(--ink); font-style: italic; }
+
+  .beat { padding: 58px 0 6px; }
+  .beat + .beat { border-top: 1px solid var(--line); margin-top: 52px; }
+  .beat .n { color: var(--ember); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; letter-spacing: .2em; }
+  .beat h2 { font-size: clamp(24px, 3.6vw, 34px); margin: 10px 0 10px; }
+  .beat h2 em { font-style: italic; }
+  .beat .cap { color: var(--ink-dim); font-family: "Spectral", Georgia, serif; font-weight: 300; font-size: 16.5px; line-height: 1.6; max-width: 62ch; margin: 0; }
+  .beat figure { margin: 26px 0 0; }
+  .beat img { width: 100%; display: block; border-radius: 14px; border: 1px solid var(--line-2); background: var(--ink-2);
+    box-shadow: 0 40px 90px -45px rgba(0,0,0,.95), 0 0 60px -30px rgba(239,154,91,.14); cursor: zoom-in; }
+  .beat .sub { margin-top: 14px; color: var(--ink-faint); font-size: 13px; font-family: "JetBrains Mono", ui-monospace, monospace; max-width: 72ch; }
+
+  .end { padding: 72px 24px 80px; text-align: center; border-top: 1px solid var(--line); margin-top: 60px; background: linear-gradient(180deg, var(--ink-2), var(--bg)); }
+  .end h2 { font-size: clamp(24px, 3.4vw, 32px); margin: 0 0 18px; }
+  pre.cmd { background: #0e0e13; border: 1px solid var(--line-2); border-radius: 12px; padding: 16px 20px; overflow-x: auto;
+    color: var(--ink); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 15px; line-height: 1.6; margin: 0 auto; max-width: 480px; text-align: left; }
+  pre.cmd .p { color: var(--teal); user-select: none; } pre.cmd .c { color: var(--ink-faint); }
+  .end .cta-note { color: var(--ink-faint); font-size: 13px; margin-top: 10px; }
+  .honest { color: var(--ink-faint); font-size: 12.5px; margin-top: 26px; }
+
+  html.lb-open { overflow: hidden; }
+  .lightbox[hidden] { display: none !important; }
+  .lightbox { position: fixed; inset: 0; z-index: 9000; background: rgba(6,7,11,.94); display: flex; align-items: center; justify-content: center; padding: 3vh 3vw; cursor: zoom-out; }
+  .lightbox img { max-width: 96vw; max-height: 94vh; border-radius: 8px; border: 1px solid var(--line-2); box-shadow: 0 30px 90px -20px rgba(0,0,0,.95); }
+  .lb-close { position: fixed; top: 12px; right: 22px; font-size: 2rem; line-height: 1; color: var(--ink-dim); background: none; border: 0; cursor: pointer; }
+  .lb-close:hover { color: var(--ink); }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="tb-home" href="index.html"><span class="b1">scatter</span>brained</a>
+  <span class="tb-links"><a href="getting-started.html">Get started</a><a href="https://github.com/ricksinclair/scatterbrained">GitHub</a><span class="tb-here">the tour</span></span>
+</header>
+
+<section class="hero">
+  <p class="kicker">the demo reel, as a page</p>
+  <h1>Ten moments from the Studio.</h1>
+  <p>Every image below is the bundled demo graph — a small fictional engineering team's work — captured
+    from the running app. Run <code>npx scatterbrained@alpha studio</code> and you're looking at the
+    same graph; the in-app tour (Help&nbsp;·&nbsp;<em>Start the tour</em>) plays these beats live.</p>
+</section>
+
+<div class="wrap">
+
+  <section class="beat">
+    <span class="n">01 · THE DAILY BRIEF</span>
+    <h2>The morning it opens on what changed.</h2>
+    <p class="cap">First open of the day: <em>2 new insights · 5 due · 0 blocked since your last visit</em> —
+      and a pick-up-where-you-left-off button that lands on the last node you touched.</p>
+    <figure><img loading="lazy" src="screenshots/01-overview.png" alt="The constellation with the daily brief card: since your last visit — 2 new insights, 5 due today, 0 blocked" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">02 · ASK, DON'T HUNT</span>
+    <h2>⌘K — "what's due."</h2>
+    <p class="cap">The palette answers questions from the graph — due, blocked, changed, needs review —
+      as dated items, not search hits. Anything else falls through to search.</p>
+    <figure><img loading="lazy" src="screenshots/10-palette.png" alt="The command palette answering 'what's due' with six dated items drawn from the graph" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">03 · TIME LENS — AGENDA</span>
+    <h2>The agenda the graph keeps.</h2>
+    <p class="cap">Overdue, today, upcoming, worth revisiting — built from dates you put on nodes, with a
+      clickable mini-month and a created-per-day sparkline in the margin.</p>
+    <figure><img loading="lazy" src="screenshots/11-agenda.png" alt="The Time lens agenda: overdue, today, and upcoming buckets beside a mini-month calendar" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">04 · TIME LENS — QUARTERS</span>
+    <h2>The same graph, at planning distance.</h2>
+    <p class="cap">Goals and milestones on quarter swimlanes — a roadmap read straight from the graph's
+      intention dates, not a second tool to keep in sync.</p>
+    <figure><img loading="lazy" src="screenshots/12-quarters.png" alt="The quarters view: a project swimlane with a goal card in Q3 2026 and its milestones beneath" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">05 · FOCUS</span>
+    <h2>Focus, and the noise steps back.</h2>
+    <p class="cap">Focus any node and everything unrelated fades — the thread from a conference talk to
+      the skill it teaches to the project that needs it stays lit.</p>
+    <figure><img loading="lazy" src="screenshots/13-focus.png" alt="A focused subgraph: a Kafka talk, the skill it teaches, and the project that requires it, with the rest of the constellation faded" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">06 · THE INSPECTOR</span>
+    <h2>Every claim, wearing its receipts.</h2>
+    <p class="cap">Click a node and the inspector composes itself from what the node <em>is</em> —
+      its sources, relations, history, progress — so provenance is the default view, not a tab.</p>
+    <figure><img loading="lazy" src="screenshots/02-inspector.png" alt="The composable inspector on the demo project: sources, relations, history and progress assembled from the node itself" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">07 · REWIND</span>
+    <h2>A decision, superseded — not erased.</h2>
+    <p class="cap"><em>Created → valid until → superseded by → reason.</em> The old belief stays walkable,
+      the successor is one click away, and "why did we change course?" has an answer on the record.</p>
+    <figure><img loading="lazy" src="screenshots/04-timeline.png" alt="A superseded decision's bi-temporal history with the reason and the superseding decision linked" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">08 · PROTECTED FACTS</span>
+    <h2>The number a rewrite can't quietly change.</h2>
+    <p class="cap">$2,400/mo is pinned. A rewrite tried to make it $3,100 — so the change is held for
+      approve / reject instead of slipping through, with history kept either way.</p>
+    <figure><img loading="lazy" src="screenshots/03-protected-facts.png" alt="Protected facts on a decision: a pinned value with a rewrite's altered version held for approval" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">09 · REVIEWS THAT PERSIST</span>
+    <h2>The review is a node, not a tab.</h2>
+    <p class="cap">Code-review comments live as graph notes pinned to a repo at a commit, connected to
+      what they were about — and whatever still needs a human collects in one queue.</p>
+    <figure><img loading="lazy" src="screenshots/05-needs-review-dock.png" alt="The needs-review queue: an open review note, a protected-fact change, and a superseded decision" /></figure>
+  </section>
+
+  <section class="beat">
+    <span class="n">10 · CAPTURE, RECEIPT, DONE</span>
+    <h2>Drop a link; it lands as a glowing dot.</h2>
+    <p class="cap">Paste a URL and it becomes a connected source — a talk renders as a playable card on
+      its node. Agent-session captures get the same receipt: a toast, then the camera flies to the new node.</p>
+    <figure><img loading="lazy" src="screenshots/07-link-video.png" alt="A captured conference talk rendered as a playable card on its source node, connected to the nodes it informs" /></figure>
+    <p class="sub">honest: the Agents lens — the Brief → Session → Capture → Insight loop around a local
+      agent terminal — is feature-detected and optional; capture works with or without it.</p>
+  </section>
+
+</div>
+
+<section class="end">
+  <h2>Same graph, on your machine, in one command.</h2>
+<pre class="cmd"><span class="p">$</span> npx scatterbrained@alpha studio <span class="c"># → http://localhost:4317</span></pre>
+  <p class="cta-note">Node 18+ · Docker for the bundled database · <a href="getting-started.html">the two-minute walkthrough</a></p>
+  <p class="honest">All captures: the bundled demo graph at 1440×900 — never real data. Scatterbrained is alpha; surfaces can change between versions.</p>
+</section>
+
+<div id="lightbox" class="lightbox" hidden>
+  <button class="lb-close" aria-label="close">×</button>
+  <img id="lightbox-img" alt="" />
+</div>
+<script>
+(function () {
+  var lb = document.getElementById('lightbox'), img = document.getElementById('lightbox-img');
+  function close() { lb.hidden = true; img.removeAttribute('src'); document.documentElement.classList.remove('lb-open'); }
+  function open(el) { img.src = el.currentSrc || el.src; img.alt = el.alt || ''; lb.hidden = false; document.documentElement.classList.add('lb-open'); }
+  document.querySelectorAll('.beat img').forEach(function (el) { el.addEventListener('click', function () { open(el); }); });
+  lb.addEventListener('click', close);
+  document.querySelector('.lb-close').addEventListener('click', function (e) { e.stopPropagation(); close(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !lb.hidden) close(); });
+})();
+</script>
+</body>
+</html>
