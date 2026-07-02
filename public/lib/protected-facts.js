@@ -16,7 +16,7 @@ export const KIND_META = {
   money:      { label: 'amount',     re: /\$\s?\d[\d,]*(?:\.\d+)?\s?(?:million|billion|thousand|bn|[kmb])?\b/gi },
   percent:    { label: 'percent',    re: /\b\d[\d,]*(?:\.\d+)?\s?%/g },
   date:       { label: 'date',       re: /\b\d{4}-\d{2}-\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,?\s+\d{4})?\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g },
-  citation:   { label: 'citation',   re: /\b\d+\s+U\.?S\.?C\.?\s*§+\s*\d+[\w().-]*|\bSubchapter\s+[A-Z]\b|\b(?:§|Section)\s*\d+[\w().-]*|\b\d{3,4}-[A-Z]{1,5}\b/g },
+  citation:   { label: 'citation',   re: /\b\d+\s+U\.?S\.?C\.?\s*§+\s*\d+[\w().-]*|\b(?:§|Section)\s*\d+[\w().-]*|\b\d{3,4}-[A-Z]{1,5}\b/g },
   number:     { label: 'number',     re: /\b\d{1,3}(?:,\d{3})+(?:\.\d+)?\b|\b\d+\.\d+\b/g },
   identifier: { label: 'identifier', re: null },   // codes/SKUs/IDs — too varied to auto-detect; pin only
   name:       { label: 'name',       re: null },   // proper names — pin only

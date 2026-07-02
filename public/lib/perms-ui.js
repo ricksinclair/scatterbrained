@@ -41,7 +41,9 @@ export function initPerms({ esc, onRootsChanged }) {
   };
   document.getElementById('perms-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('perms-grant').click(); });
   PERMS.addEventListener('click', (e) => { if (e.target === PERMS) close(); });
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !PERMS.hidden) close(); });
+  // Modal-owned Escape: consume it (stopPropagation) so the global unwind (app.js, C2)
+  // never also steps a layer on the same keypress. Document-level → runs before window.
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !PERMS.hidden) { e.stopPropagation(); close(); } });
   // set-folders moved into Settings (declutter); openPerms is still reached via the
   // Settings "manage" link. Guard in case the toolbar button is absent.
   const sf = document.getElementById('set-folders'); if (sf) sf.onclick = open;

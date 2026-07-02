@@ -4,35 +4,42 @@
 // global vendored lib. Repos are shared with the review surface, so the cache lives in app.js and
 // is read through deps.getRepos (keeps the folder-permissions "refresh repos next open" reset working).
 import { langColor } from './lang-colors.js';
+import { emptyState } from './empty-state.js';
 
 // deps: { esc, pauseMainGraph, resumeMainGraph, openFile, getRepos, prefRepo? }
 //   getRepos(): Promise<[{path,name}]> — shared, cached + reset by app.js.
 //   prefRepo?: name of a repo to select first (omitted in the public build).
-//   returns { open, close } so app.js can drive it (e.g. Esc-to-close the codebase view).
+//   returns { open, close } so the nav state machine (app.js) can drive it.
 export function initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, getRepos, prefRepo }) {
   let cbGraph = null, cbHover = null;
 
-  function showEmpty(msg) {
-    const e = document.getElementById('cb-empty'); e.textContent = msg; e.hidden = false;
+  // D2: every map dead-end renders the designed empty state (title, body, optional action).
+  function showEmpty(title, body, action) {
+    const e = document.getElementById('cb-empty');
+    e.innerHTML = emptyState({ title, body, action }); e.hidden = false;
     document.getElementById('cb-meta').textContent = '';
     document.getElementById('cb-legend').innerHTML = '';
   }
 
   async function open() {
     pauseMainGraph();
-    document.getElementById('codebase').hidden = false;
-    const sel = document.getElementById('cb-repo');
+    document.getElementById('code-map-body').hidden = false;
+    // The repo <select> is SHARED with the review tab (C4): keep whatever repo the user
+    // already picked there, so switching tabs never resets the selection.
+    const sel = document.getElementById('cl-repo');
+    const prev = sel.value;
     const repos = await getRepos();
     sel.innerHTML = repos.map((r) => `<option value="${esc(r.path)}">${esc(r.name)}</option>`).join('');
     sel.onchange = () => loadRepo(sel.value);
-    if (!repos.length) { showEmpty('no mappable repos in the allowlist'); return; }
-    const pref = (prefRepo && repos.find((r) => r.name === prefRepo)) || repos[0];
+    if (!repos.length) { showEmpty('No folders to map yet.', 'Grant a folder and its module/import graph renders here.', { label: 'Manage folders', cmd: 'manage-folders' }); return; }
+    const pref = (prev && repos.find((r) => r.path === prev))
+      || (prefRepo && repos.find((r) => r.name === prefRepo)) || repos[0];
     sel.value = pref.path;
     loadRepo(pref.path);
   }
 
   function close() {
-    document.getElementById('codebase').hidden = true;
+    document.getElementById('code-map-body').hidden = true;
     if (cbGraph) cbGraph.pauseAnimation();
     resumeMainGraph();
   }
@@ -42,10 +49,10 @@ export function initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, g
     document.getElementById('cb-meta').textContent = 'mapping…';
     let repo;
     try { repo = (await fetch('/api/repo?path=' + encodeURIComponent(repoPath)).then((r) => r.json())).repo || {}; }
-    catch (err) { return showEmpty(String(err)); }
-    if (repo.blocked) return showEmpty('outside the read sandbox');
-    if (repo.missing || repo.notDir) return showEmpty('repo not found');
-    if (!repo.nodes || !repo.nodes.length) return showEmpty('no files to map');
+    catch (err) { return showEmpty('Couldn’t map this repo.', String(err)); }
+    if (repo.blocked) return showEmpty('Outside the read sandbox.', 'This folder isn’t in the allowlist.', { label: 'Manage folders', cmd: 'manage-folders' });
+    if (repo.missing || repo.notDir) return showEmpty('Repo not found.', 'The folder moved or was deleted — grant its new home.', { label: 'Manage folders', cmd: 'manage-folders' });
+    if (!repo.nodes || !repo.nodes.length) return showEmpty('No files to map.', 'Nothing importable found in this folder.');
     document.getElementById('cb-meta').textContent =
       `${repo.fileCount} files · ${repo.edgeCount} imports${repo.truncated ? ' · truncated' : ''}`;
     const langs = [...new Set(repo.nodes.map((n) => n.lang))].sort();
@@ -84,11 +91,10 @@ export function initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, g
     setTimeout(() => cbGraph && cbGraph.zoomToFit(600, 50), 700);
   }
 
-  document.getElementById('set-code').onclick = open;
-  document.getElementById('cb-x').onclick = close;
+  // launch/close/Escape wiring live in app.js (nav state machine + the shared lens-head).
   // keep the codebase canvas sized to its container while it's open
   window.addEventListener('resize', () => {
-    if (cbGraph && !document.getElementById('codebase').hidden) {
+    if (cbGraph && !document.getElementById('code-map-body').hidden) {
       const h = document.getElementById('cb-graph'); cbGraph.width(h.clientWidth).height(h.clientHeight);
     }
   });

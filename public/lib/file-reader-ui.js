@@ -483,10 +483,8 @@ export function initFileReader({ esc, trunc }) {
     });
   });
   FR.addEventListener('click', (e) => { if (e.target === FR && !frEdit.active) closeFile(); });
-  window.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || FR.hidden) return;
-    if (frEdit.active) cancelEdit(); else closeFile();   // Escape cancels an edit before closing
-  });
+  // Escape is owned by app.js's single unwind handler (nav, C2); it calls esc() below,
+  // which keeps the contextual step: Escape cancels an in-progress edit before closing.
 
   // ── Markdown editor: lock + save-confirm + git versioning ───────────────────
   // Edit mode swaps the raw view for a <textarea>; the file is locked on its :Source node
@@ -665,5 +663,8 @@ export function initFileReader({ esc, trunc }) {
   }
   document.getElementById('fr-history').onclick = openHistory;
 
-  return { openFile, openNoteModal, postNote, isOpen: () => !FR.hidden, close: closeFile };
+  return {
+    openFile, openNoteModal, postNote, isOpen: () => !FR.hidden, close: closeFile,
+    esc: () => { if (frEdit.active) cancelEdit(); else closeFile(); },   // one Esc step (edit → view → closed)
+  };
 }

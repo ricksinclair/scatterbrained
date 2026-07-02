@@ -79,3 +79,26 @@ export function computeDoi(id, getAdj) {
   }
   return doi;
 }
+
+// collideRadius(node, relSize=4, pad=6) → the collision radius in GRAPH units for the
+// simulation's collide force. force-graph paints a node at `relSize * √val` (val = node.r),
+// so the collide radius is that rendered radius + a constant pad so neighbors keep a hairline
+// of space and their labels have room. Pure so the sizing is tested, not eyeballed.
+export function collideRadius(node, relSize = 4, pad = 6) {
+  const val = Math.max(0, Number(node && node.r) || 0);
+  return relSize * Math.sqrt(val) + pad;
+}
+
+// particlesForZoom(base, zoom, { pauseAbove=6, thinAbove=3 }) → how many edge particles to
+// run on a link at the current zoom. Zoomed WAY in, particle animation is the choppy cost
+// (canvas redraws per DPR² pixel), and the flow is barely legible on a near-empty viewport —
+// so thin them above `thinAbove`, pause them entirely above `pauseAbove`. At overview zoom
+// it's exactly `base` (no behavior change where the constellation is judged). Pure + tested.
+export function particlesForZoom(base, zoom, { pauseAbove = 6, thinAbove = 3 } = {}) {
+  const b = Math.max(0, base | 0);
+  if (b === 0) return 0;                 // calm / filtered-out links stay off
+  const z = Number(zoom) || 1;
+  if (z > pauseAbove) return 0;
+  if (z > thinAbove) return Math.max(1, Math.round(b / 2));
+  return b;
+}

@@ -33,6 +33,12 @@ export const SOURCE_KINDS = {
   csv: 'A comma/tab-separated spreadsheet (.csv/.tsv) — rendered as a table + chart by the Studio.',
   xlsx: 'An Excel spreadsheet (.xlsx) — rendered as a table by the Studio.',
 
+  // — Agent lane (set by the Studio's POST /api/agent/capture) —
+  // An agent-terminal session captured back into the graph: the Source holds metadata +
+  // file_path to the transcript .log; the transcript text itself stays on disk, never in
+  // the graph.
+  agent_session: 'A captured agent-terminal session (transcript .log on disk).',
+
   // — Curated / manually-added artifacts (set by hand during a session) —
   claude_memory: 'A Claude memory file (~/.claude/.../memory/*.md).',
   git_repo: 'A git repository as a whole (not a single file in it).',
@@ -48,7 +54,7 @@ export const SOURCE_KIND_LIST = Object.keys(SOURCE_KINDS);
 
 // Kinds that originate from a file on disk, so they MUST carry a file_path.
 // (Used by lint to flag document-lane Sources that lost their absolute path.)
-export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'csv', 'xlsx', 'claude_memory'];
+export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'csv', 'xlsx', 'claude_memory', 'agent_session'];
 
 export function isValidSourceKind(k) {
   return typeof k === 'string' && Object.prototype.hasOwnProperty.call(SOURCE_KINDS, k);

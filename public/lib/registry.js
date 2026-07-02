@@ -14,6 +14,7 @@ import { resolveLayout } from './resolve.js';
 import { coerceView } from './views.js';
 import { parseVideoUrl, domainOf, isWebUrl } from './links.js';
 import { classifyStatus } from './roadmap.js';
+import { emptyState } from './empty-state.js';
 
 // Color per node label (mirrors app.js PAL) for inline subgraph dots — kept here so
 // the pure renderer needs no DOM/theme. Falls back to a neutral gray.
@@ -215,8 +216,14 @@ export const REGISTRY = {
       if (!s) return '';
       const cap = (txt) => `<div class="ex-cap">${txt}</div>`;
       const file = esc(trunc(s.title || s.sourcePath || 'source', 34));
-      if (s.blocked) return `<div class="c-excerpt">${cap('source outside the read sandbox')}</div>`;
-      if (s.missing) return `<div class="c-excerpt">${cap('source file not found')}</div>`;
+      // D2: dead-end source states render the designed empty state (with the fix inline)
+      // instead of a bare caption string.
+      if (s.blocked) return `<div class="c-excerpt">${emptyState({
+        title: 'Source outside the read sandbox.', body: 'The file exists but its folder isn’t in the allowlist.',
+        action: { label: 'Manage folders', cmd: 'manage-folders' } })}</div>`;
+      if (s.missing) return `<div class="c-excerpt">${emptyState({
+        title: 'Source file not found.', body: 'The file this memory points at isn’t on disk — moved, renamed, or outside the granted folders.',
+        action: { label: 'Manage folders', cmd: 'manage-folders' } })}</div>`;
       if (s.tooLarge) return `<div class="c-excerpt">${cap(file + ' — too large to preview')}</div>`;
       if (s.unsupported) return `<div class="c-excerpt">${cap(file + ' · ' + esc(s.kind) + ' — open to view')}</div>`;
       if (!s.text) return '';

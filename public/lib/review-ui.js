@@ -5,11 +5,13 @@
 // folder-permissions "refresh repos next open" reset working). ForceGraph is the vendored global.
 // deps: { esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos, prefRepo? }
 //   prefRepo: name of a repo to select first (omitted in the public build).
-// returns { openReview } — the one cross-surface entry (app.js #i-expand opens a Review node here).
+// returns { openReview, close } — openReview is the one cross-surface entry (app.js #i-expand
+// opens a Review node here); close lets the nav state machine drive the surface.
 import { langColor } from './lang-colors.js';
 import { highlightCode, jsonDepths } from './codehl.js';
 import { buildFileTree, flattenTree } from './filetree.js';
 import { rawLinesHtml } from './docnotes.js';
+import { emptyState } from './empty-state.js';
 
 export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos, prefRepo }) {
   let rvReview = null, rvFiles = [], rvComments = [], rvActive = null, rvFrozenLines = [];
@@ -65,8 +67,11 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
 
   async function openReview(target) {
     pauseMainGraph();
-    document.getElementById('review').hidden = false;
-    const sel = document.getElementById('rv-repo');
+    document.getElementById('code-review-body').hidden = false;
+    // The repo <select> is SHARED with the map tab (C4): keep whatever repo the user
+    // already picked there, so switching tabs never resets the selection.
+    const sel = document.getElementById('cl-repo');
+    const prev = sel.value;
     const repos = await getRepos();              // shared cache, owned by app.js (codebase + perms)
     sel.innerHTML = repos.map((r) => `<option value="${esc(r.path)}">${esc(r.name)}</option>`).join('');
     sel.onchange = () => startReview(sel.value);
@@ -77,12 +82,21 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
       startReview(target.repo, target.gitRef || 'HEAD');
       return;
     }
-    if (!repos.length) { document.getElementById('rv-meta').textContent = 'no repos in the allowlist'; return; }
-    const pref = (prefRepo && repos.find((r) => r.name === prefRepo)) || repos[0];
+    if (!repos.length) {
+      // D2: an empty allowlist is a dead-end for the whole surface — say so where the code goes.
+      document.getElementById('rv-meta').textContent = '';
+      document.getElementById('rv-code').innerHTML = emptyState({
+        title: 'No repos to review yet.', body: 'Grant a folder and its git history becomes reviewable.',
+        action: { label: 'Manage folders', cmd: 'manage-folders' },
+      });
+      return;
+    }
+    const pref = (prev && repos.find((r) => r.path === prev))
+      || (prefRepo && repos.find((r) => r.name === prefRepo)) || repos[0];
     sel.value = pref.path;
     startReview(pref.path);
   }
-  function closeReview() { document.getElementById('review').hidden = true; if (rvGraph) rvGraph.pauseAnimation(); resumeMainGraph(); }
+  function closeReview() { document.getElementById('code-review-body').hidden = true; if (rvGraph) rvGraph.pauseAnimation(); resumeMainGraph(); }
 
   async function startReview(repoPath, gitRef = 'HEAD') {
     document.getElementById('rv-meta').textContent = 'opening…';
@@ -96,8 +110,8 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
     // the first comment (ensureReview).
     let r;
     try { r = await fetch(`/api/review/resolve?repo=${encodeURIComponent(repoPath)}&gitRef=${encodeURIComponent(gitRef)}`).then((x) => x.json()); }
-    catch (e) { document.getElementById('rv-meta').textContent = 'failed to open review'; return; }
-    if (r.error) { document.getElementById('rv-meta').textContent = r.error; return; }
+    catch (e) { document.getElementById('rv-meta').textContent = ''; document.getElementById('rv-code').innerHTML = emptyState({ title: 'Couldn’t open the review.', body: 'The server didn’t answer — try again.' }); return; }
+    if (r.error) { document.getElementById('rv-meta').textContent = ''; document.getElementById('rv-code').innerHTML = emptyState({ title: 'Couldn’t open the review.', body: r.error }); return; }
     rvReview = r.review;                              // id is null until the first comment
     document.getElementById('rv-ref').textContent = (rvReview.ref_label || 'HEAD') + ' · ' + rvShortRef();
     const repo = await fetch('/api/repo?path=' + encodeURIComponent(repoPath)).then((x) => x.json()).then((x) => x.repo || {});
@@ -224,8 +238,8 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
     code.innerHTML = '<div class="rv-hint">loading…</div>';
     let v;
     try { v = await fetch(`/api/file/version?path=${encodeURIComponent(f.path)}&rev=${encodeURIComponent(rvReview.git_ref)}`).then((x) => x.json()); }
-    catch (e) { code.innerHTML = '<div class="rv-hint">failed to read file</div>'; return; }
-    if (v.error) { code.innerHTML = `<div class="rv-hint">${esc(v.error)}</div>`; return; }
+    catch (e) { code.innerHTML = emptyState({ title: 'Couldn’t read this file.', body: 'The server didn’t answer — pick it again.' }); return; }
+    if (v.error) { code.innerHTML = emptyState({ title: 'Couldn’t read this file.', body: v.error }); return; }
     rvFrozenLines = String(v.text || '').split('\n');
     renderReviewCode();
   }
@@ -313,20 +327,13 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
     };
   }
 
-  document.getElementById('set-review').onclick = () => openReview();   // wrap: no click Event leaks in as target
-  document.getElementById('rv-x').onclick = closeReview;
+  // launch/close/Escape wiring live in app.js (nav state machine + the shared lens-head).
   document.getElementById('rv-changed-toggle').onclick = () => {
     rvChangedOnly = !rvChangedOnly;
     document.getElementById('rv-changed-toggle').classList.toggle('on', rvChangedOnly);
     renderReviewTree();
   };
   document.getElementById('rv-base').addEventListener('change', () => { if (rvReview) loadReviewChanges(); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key !== 'Escape' || document.getElementById('review').hidden) return;
-    // contextual: don't close the whole review if a comment input is open
-    if (document.querySelector('#rv-code .fr-addrow')) return;
-    closeReview();
-  });
 
-  return { openReview };
+  return { openReview, close: closeReview };
 }
