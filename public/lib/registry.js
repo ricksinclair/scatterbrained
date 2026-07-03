@@ -15,6 +15,7 @@ import { coerceView } from './views.js';
 import { parseVideoUrl, domainOf, isWebUrl } from './links.js';
 import { classifyStatus } from './roadmap.js';
 import { emptyState } from './empty-state.js';
+import { splitCriteria, criterionStatus, criteriaSummary } from './criteria.js';
 
 // Color per node label (mirrors app.js PAL) for inline subgraph dots — kept here so
 // the pure renderer needs no DOM/theme. Falls back to a neutral gray.
@@ -363,7 +364,8 @@ export const REGISTRY = {
   notes: {
     id: 'notes',
     render(node, data, { esc, trunc }) {
-      const notes = data.notes || [];
+      // Criterion notes have their own `acceptance` section — never double-list them here.
+      const notes = splitCriteria(data.notes || []).rest;
       const tid = esc(node.id || data.id || '');
       const STATE_LABEL = { raw: 'new', cued: 'cued', addressed: 'done', skipped: 'skipped' };
       const rows = notes.map((nt) => {
@@ -430,6 +432,43 @@ export const REGISTRY = {
           `<button class="pf-restore" data-fid="${esc(f.id || '')}" onclick="__restoreFact(this);return false" title="restore — guard this value again">restore</button></div>`).join('') +
         `</details>` : '';
       return `<div class="c-protected-facts"><div class="ph">protected facts${facts.length ? ` · ${facts.length}` : ''}</div>${rows}${empty}${add}${retiredHtml}</div>`;
+    },
+  },
+
+  // Acceptance criteria — regression guardrails. Criteria are to BEHAVIOR what protected
+  // facts are to PROSE: pinned at design time (the add form), verified by explicit events
+  // (the pass/fail buttons → POST /api/criterion/verify — never a silent edit). Each row is
+  // a state chip (unverified/pass/fail, pass decays to `stale` after criteria.STALE_DAYS)
+  // + the criterion text + last-verified date/evidence. Same component pattern as
+  // protected-facts; interactions (__addCriterion / __verifyCriterion) live in app.js.
+  acceptance: {
+    id: 'acceptance',
+    render(node, data, { esc, trunc }) {
+      const list = data.criteria || [];
+      const tid = esc(node.id || data.id || '');
+      const now = Date.now();
+      const rows = list.map((c) => {
+        const cid = esc(c.id || '');
+        const status = criterionStatus(c, now);
+        const when = c.last_verified_at
+          ? `verified ${esc(String(c.last_verified_at).slice(0, 10))}${status === 'stale' ? ' · stale' : ''}`
+          : 'never verified';
+        const evidence = c.evidence ? `<span class="ac-evidence" title="${esc(c.evidence)}">${esc(trunc(c.evidence, 40))}</span>` : '';
+        return `<div class="ac-row ac-${esc(status)}">` +
+          `<span class="ac-chip ac-chip-${esc(status)}">${esc(status)}</span>` +
+          `<div class="ac-body"><div class="ac-text">${esc(trunc(c.text || '', 280))}</div>` +
+          `<div class="ac-meta">${when}${evidence ? ' · ' : ''}${evidence}</div></div>` +
+          `<span class="ac-acts"><button class="ac-verify ac-pass" data-cid="${cid}" data-state="pass" onclick="__verifyCriterion(this);return false" title="record a passing verification">✓</button>` +
+          `<button class="ac-verify ac-fail" data-cid="${cid}" data-state="fail" onclick="__verifyCriterion(this);return false" title="record a failing verification (regression)">✗</button></span></div>`;
+      }).join('');
+      const empty = list.length ? '' : `<div class="ac-empty">No acceptance criteria — pin a testable expectation this feature must keep.</div>`;
+      const sum = criteriaSummary(list, now);
+      const badge = list.length ? ` · ${sum.pass}/${sum.total} pass${sum.fail ? ` · ${sum.fail} fail` : ''}${sum.stale ? ` · ${sum.stale} stale` : ''}` : '';
+      const add = `<form class="ac-form" data-tid="${tid}" onsubmit="__addCriterion(this);return false">` +
+        `<input name="text" type="text" placeholder="add a criterion — e.g. “export stays under 2s”" aria-label="acceptance criterion" autocomplete="off" />` +
+        `<button type="submit" class="ac-add-btn">add criterion</button></form>`;
+      const receipt = `<div class="ac-receipt" aria-live="polite"></div>`;
+      return `<div class="c-acceptance"><div class="ph">acceptance${badge}</div>${rows}${empty}${add}${receipt}</div>`;
     },
   },
 

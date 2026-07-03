@@ -13,6 +13,8 @@
 import { getDriver, run, parseArgs, toPlain } from './lib/db.js';
 import { SOURCE_KIND_LIST, FILE_BACKED_KINDS } from './lib/vocab.js';
 import { IDENTITY_SIGNALS } from './lib/identity.js';
+// Acceptance-criterion state vocabulary (unverified/pass/fail) — single source in the Studio lib.
+import { CRITERION_STATES } from '../public/lib/criteria.js';
 
 // Build the `likely-duplicate-entity` query: for every (label, identity-signal)
 // pair, group nodes by that signal's value and flag any value shared by more
@@ -145,6 +147,15 @@ const CHECKS = [
       MATCH (n) WHERE n.valid_until IS NOT NULL AND n.valid_until < datetime()
       RETURN labels(n) AS labels, coalesce(n.summary, n.name, n.title, n.id) AS key`,
   },
+  {
+    name: 'criterion-invalid',
+    severity: 'ERROR',
+    hint: 'An acceptance criterion (Note.anchor_kind=criterion) must be ABOUT a target node and carry a state from the closed set (unverified/pass/fail, public/lib/criteria.js). An orphan or off-vocab criterion can never gate a regression.',
+    cypher: `
+      MATCH (c:Note {anchor_kind: 'criterion'})
+      WHERE NOT (c)-[:ABOUT]->() OR NOT coalesce(c.state, '') IN $criterionStates
+      RETURN labels(c) AS labels, coalesce(left(c.text, 70), c.id, '<no-text>') AS key`,
+  },
 ];
 
 function fmt(labels, key) {
@@ -161,6 +172,7 @@ async function main() {
     dated: DATED_LABELS,
     kinds: SOURCE_KIND_LIST,
     fileKinds: FILE_BACKED_KINDS,
+    criterionStates: CRITERION_STATES,
   };
   const findings = [];
 

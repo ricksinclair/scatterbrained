@@ -9,6 +9,7 @@
 import { statusText, computeDoi, placeLabels, smartLabel, collideRadius, particlesForZoom } from '/lib/graph.js';
 import { composeView, keyFacts, resurfaceState, miniMarkdown, dueLabel } from '/lib/registry.js';
 import { detectCandidates } from '/lib/protected-facts.js';
+import { splitCriteria } from '/lib/criteria.js';
 import { initTour } from '/lib/tour-ui.js';
 import { initStaleBanner } from '/lib/stale-banner-ui.js';
 import { initReview } from '/lib/review-ui.js';
@@ -577,6 +578,8 @@ function selectNode(n) {
     // The composable inspector: resolveLayout picks components from the node's
     // content-signals, the registry renders each. Merge the live graph node (raw
     // props for keyvalue/body) with derived resolver signals.
+    // criterion notes get their own `acceptance` section; ordinary notes keep the inbox
+    const noteSplit = splitCriteria(node.notes || []);
     const signals = {
       ...node, ...n,
       label: n.label,
@@ -597,6 +600,7 @@ function selectNode(n) {
       status: node.status || n.status,
       full_text: node.full_text || n.full_text,
       desc: node.desc || n.desc,
+      criterionCount: noteSplit.criteria.length,   // resolver signal for the acceptance section
     };
     const data = {
       edges, sources, source,
@@ -606,7 +610,8 @@ function selectNode(n) {
       superseded_by_id: node.superseded_by_id, superseded_by_name: node.superseded_by_name,
       resurface: resurfaceState(node.created_at, node.degree, { snoozedUntil: getSnooze(n.id), now: Date.now(), superseded: !!node.superseded_by }),
       chart: relationDistribution(node.rel_types || edges.map((e) => e.type)),
-      notes: node.notes || [], protectedFacts: node.protected_facts || [], retiredFacts: node.retired_facts || [], id: n.id,
+      notes: noteSplit.rest, criteria: noteSplit.criteria,
+      protectedFacts: node.protected_facts || [], retiredFacts: node.retired_facts || [], id: n.id,
       goal_milestones: node.goal_milestones || [], goal_blockers: node.goal_blockers || [],
       propCount: node.props ? Object.keys(node.props).filter((k) => k !== 'embedding' && k !== 'embedding_hash' && node.props[k] != null).length : null,
     };
@@ -672,6 +677,7 @@ const SEC_TITLES = {
   relations: { title: 'Relations', count: (d) => (d.degree != null ? d.degree : (d.edges || []).length) },
   notes: { title: 'Notes', count: (d) => (d.notes || []).length },
   'protected-facts': { title: 'Protected facts', count: (d) => (d.protectedFacts || []).length },
+  acceptance: { title: 'Acceptance', count: (d) => (d.criteria || []).length },
   timeline: { title: 'History' },
   keyvalue: { title: 'Properties', count: (d) => d.propCount },
 };
@@ -1166,6 +1172,43 @@ window.__noteCycle = (btn) => {
         reRenderNotePanel();
       }
     }).catch(() => {});
+};
+// Acceptance criteria — add at design time; verify via explicit pass/fail events. Both
+// paths re-render and show a visible receipt in the section (aria-live, self-clearing).
+function criterionReceipt(msg) {
+  const el = document.querySelector('.c-acceptance .ac-receipt');
+  if (!el) return;
+  el.textContent = msg;
+  setTimeout(() => { if (el.isConnected) el.textContent = ''; }, 2600);
+}
+window.__addCriterion = (form) => {
+  const target = form.dataset.tid, text = form.elements.text.value.trim();
+  if (!text || !target) return;
+  const btn = form.querySelector('.ac-add-btn'); if (btn) btn.disabled = true;
+  fetch('/api/note', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target, text, anchor_kind: 'criterion' }) })
+    .then((r) => r.json()).then((j) => {
+      if (j && j.note && current && current.data) {
+        current.data.criteria = [...(current.data.criteria || []), j.note];
+        current.signals.criterionCount = current.data.criteria.length;
+        reRenderNotePanel();
+        criterionReceipt('✓ criterion added — unverified until a verification event');
+      } else if (btn) btn.disabled = false;
+    }).catch(() => { if (btn) btn.disabled = false; });
+};
+window.__verifyCriterion = (btn) => {
+  const id = btn.dataset.cid, state = btn.dataset.state;
+  if (!id || !state) return;
+  btn.disabled = true;
+  fetch('/api/criterion/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, state }) })
+    .then((r) => r.json()).then((j) => {
+      if (j && j.ok && current && current.data && current.data.criteria) {
+        const c = current.data.criteria.find((x) => x.id === id);
+        if (c) Object.assign(c, j.criterion);
+        reRenderNotePanel();
+        criterionReceipt(`✓ verification recorded — ${j.criterion.state} · ${String(j.criterion.last_verified_at || '').slice(0, 10)}`);
+        if (typeof loadDock === 'function') loadDock();   // a fail lands in the needs-review lane
+      } else btn.disabled = false;
+    }).catch(() => { btn.disabled = false; });
 };
 // Protected facts (#23) — pin/unpin/resolve, then refresh the panel from the server (a
 // resolve can supersede + create nodes, so re-fetch rather than guess the new state).
@@ -1719,6 +1762,25 @@ function dispatch(id) {
     case 'agent-archive-selected': navigate({ type: 'open', lens: 'agents' }); agentsUi.archiveSelected(); break;
     case 'agent-archive-ended': navigate({ type: 'open', lens: 'agents' }); agentsUi.archiveAllEnded(); break;
     case 'capture-link': addLink.open(); break;
+    case 'add-criterion': {
+      // Jump to the selected node's Acceptance section and focus the add input (the section
+      // is offered on every node once summoned — resolver hints aside, the form is the CTA).
+      if (!current) break;
+      const go = () => {
+        const sec = document.querySelector('.c-acceptance');
+        if (!sec) return;
+        const host = sec.closest('.insp-sec'); if (host) host.classList.remove('collapsed');
+        sec.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const input = sec.querySelector('.ac-form input'); if (input) input.focus();
+      };
+      if (!document.querySelector('.c-acceptance')) {
+        // not an Idea/Project and no criteria yet — summon the section for this node once
+        current.signals.criterionCount = Math.max(1, current.signals.criterionCount || 0);
+        reRenderNotePanel();
+      }
+      go();
+      break;
+    }
     case 'needs-review': staleOnly = true; applyFilter(); break;
     case 'toggle-mode': applyTheme(themeState.name, themeState.mode === 'light' ? 'dark' : 'light'); break;
     case 'toggle-calm': setCalm(!themeState.calm); break;
@@ -2108,14 +2170,22 @@ function renderDock(p) {
     return `<div class="dk-item ${overdue ? 'warn' : ''}" role="button" tabindex="0" ${open}>${esc(trunc(d.name || '(unnamed)', 48))}<div class="dk-meta">${esc(d.sub || '')}${d.label ? ' · ' + esc(d.label) : ''}</div></div>`;
   });
   const newItems = (p.whatsNew || []).map((w) => item(w.name, `<div class="dk-meta">${w.created_at ? w.created_at.slice(0, 10) : ''}${(w.tags && w.tags.length) ? ' · ' + esc(w.tags[0]) : ''}</div>`));
-  const rv = p.review || { superseded: [], lowConfidence: [], orphans: [], aliasDrift: [], protectedFacts: [], notes: [] };
+  const rv = p.review || { superseded: [], lowConfidence: [], orphans: [], aliasDrift: [], protectedFacts: [], notes: [], criteria: [] };
   // Open Notes (raw/cued) first — they're explicit asks left for the next agent/session, the
   // most actionable thing in the queue. The row opens the note's anchor node (not the note).
   const noteRows = (rv.notes || []).map((nt) => {
     const open = `onclick="__open(${JSON.stringify(nt.anchor_id || '').replace(/"/g, '&quot;')},${JSON.stringify(nt.anchor_name || '').replace(/"/g, '&quot;')},${JSON.stringify(nt.anchor_label || '')})"`;
     return `<div class="dk-item warn" role="button" tabindex="0" ${open}><span class="dk-badge">note · ${esc(nt.state)}</span> ${esc(trunc(nt.anchor_name || '(unnamed)', 40))}<div class="dk-meta">“${esc(trunc(nt.text || '', 46))}”</div></div>`;
   });
+  // Criteria lane: regressed (fail) and verified-then-stale acceptance criteria — the
+  // regression guardrails demanding attention first. The row opens the criterion's anchor.
+  const criteriaRows = (rv.criteria || []).map((c) => {
+    const open = `onclick="__open(${JSON.stringify(c.anchor_id || '').replace(/"/g, '&quot;')},${JSON.stringify(c.anchor_name || '').replace(/"/g, '&quot;')},${JSON.stringify(c.anchor_label || '')})"`;
+    const meta = c.status === 'fail' ? 'regressed' : `stale · last verified ${c.last_verified_at ? esc(String(c.last_verified_at).slice(0, 10)) : 'never'}`;
+    return `<div class="dk-item warn" role="button" tabindex="0" ${open}><span class="dk-badge">criterion · ${esc(c.status)}</span> ${esc(trunc(c.anchor_name || '(unnamed)', 40))}<div class="dk-meta">“${esc(trunc(c.text || '', 40))}” · ${meta}</div></div>`;
+  });
   const reviewItems = [
+    ...criteriaRows,
     ...noteRows,
     ...(rv.protectedFacts || []).map((k) => item(k.target_name, `<span class="dk-badge">fact ${esc(k.pending_status)}</span><div class="dk-meta">“${esc(trunc(k.value, 24))}”${k.pending_new ? ' → “' + esc(trunc(k.pending_new, 18)) + '”' : ''}</div>`, 'warn')),
     ...(rv.aliasDrift || []).map((d) => item(d.name, `<span class="dk-badge">renamed · ${esc(d.label)}</span>${d.former_name ? `<div class="dk-meta">was “${esc(trunc(d.former_name, 28))}”</div>` : ''}`, 'warn')),

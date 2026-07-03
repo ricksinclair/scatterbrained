@@ -209,6 +209,56 @@ describe('composeInspector — resolver order → registered renderers', () => {
     expect(html).toContain('__suggestFacts');
   });
 
+  it('renders acceptance criteria: state chips, verify buttons, add form, receipt slot', () => {
+    const ctx = { esc: (s) => String(s), trunc: (s) => String(s) };
+    const now = new Date().toISOString();
+    const data = { id: 'e1', criteria: [
+      { id: 'c1', text: 'export stays under 2s', state: 'pass', last_verified_at: now },
+      { id: 'c2', text: 'dock shows regressions', state: 'fail', last_verified_at: now, evidence: 'e2e criteria.spec' },
+      { id: 'c3', text: 'tour shows the loop', state: 'unverified' },
+    ] };
+    const html = REGISTRY.acceptance.render({ id: 'e1' }, data, ctx);
+    expect(html).toContain('ac-chip-pass');
+    expect(html).toContain('ac-chip-fail');
+    expect(html).toContain('ac-chip-unverified');
+    expect(html).toContain('export stays under 2s');
+    expect(html).toContain('e2e criteria.spec');                    // evidence surfaces
+    expect(html).toContain('verified ' + now.slice(0, 10));         // last_verified_at surfaces
+    expect(html).toContain('never verified');                       // the unverified row says so
+    expect(html).toContain('__verifyCriterion(this)');              // explicit verification events
+    expect(html).toContain('data-state="pass"');
+    expect(html).toContain('data-state="fail"');
+    expect(html).toContain('__addCriterion(this)');                 // design-time pin form
+    expect(html).toContain('ac-receipt');                           // visible receipt slot
+    expect(html).toContain('1/3 pass');                             // summary badge
+  });
+  it('acceptance marks a decayed pass as stale and renders the empty-state prompt', () => {
+    const ctx = { esc: (s) => String(s), trunc: (s) => String(s) };
+    const old = new Date(Date.now() - 40 * 86400000).toISOString();
+    const html = REGISTRY.acceptance.render({ id: 'e1' }, { id: 'e1', criteria: [
+      { id: 'c1', text: 'old pass', state: 'pass', last_verified_at: old }] }, ctx);
+    expect(html).toContain('ac-chip-stale');
+    const empty = REGISTRY.acceptance.render({ id: 'e1' }, { id: 'e1', criteria: [] }, ctx);
+    expect(empty).toContain('No acceptance criteria');
+  });
+  it('notes never double-lists criterion notes (they belong to acceptance)', () => {
+    const ctx = { esc: (s) => String(s), trunc: (s) => String(s) };
+    const html = REGISTRY.notes.render({ id: 'e1' }, { id: 'e1', notes: [
+      { id: 'n1', text: 'plain note', state: 'raw' },
+      { id: 'c1', text: 'a criterion', state: 'unverified', anchor_kind: 'criterion' },
+    ] }, ctx);
+    expect(html).toContain('plain note');
+    expect(html).not.toContain('a criterion');
+    expect(html).toContain('notes · 1');
+  });
+  it('acceptance composes into the report view for an Idea (criterion 1: appears in its report)', () => {
+    const out = composeView({ id: 'i1', label: 'Idea', name: 'Feature' },
+      { id: 'i1', criteria: [{ id: 'c1', text: 'must keep working', state: 'unverified' }] }, {}, 'report');
+    const acc = out.find((c) => c.id === 'acceptance');
+    expect(acc).toBeTruthy();
+    expect(acc.html).toContain('must keep working');
+  });
+
   it('falls back to keyvalue when nothing else renders (+ always-on governance/inbox)', () => {
     const out = composeInspector({ name: 'Bare', label: 'Person', role: 'founder' });
     expect(out.map((c) => c.id)).toEqual(['keyvalue', 'protected-facts', 'notes']);

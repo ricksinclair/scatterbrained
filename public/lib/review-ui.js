@@ -12,9 +12,11 @@ import { highlightCode, jsonDepths } from './codehl.js';
 import { buildFileTree, flattenTree } from './filetree.js';
 import { rawLinesHtml } from './docnotes.js';
 import { emptyState } from './empty-state.js';
+import { groupCriteriaByAnchor } from './criteria.js';
 
 export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos, prefRepo }) {
   let rvReview = null, rvFiles = [], rvComments = [], rvActive = null, rvFrozenLines = [];
+  let rvCriteria = [];   // the resolved Project's acceptance criteria (read-only checklist, v1)
   let rvCollapsed = new Set();   // collapsed directory paths in the review tree
   let rvChanges = new Map(), rvChangedOnly = true;   // rel → A|M|D|R status; "changed only" filter
 
@@ -117,6 +119,13 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
     const repo = await fetch('/api/repo?path=' + encodeURIComponent(repoPath)).then((x) => x.json()).then((x) => x.repo || {});
     rvFiles = (repo.nodes || []).slice().sort((a, b) => (a.rel || '').localeCompare(b.rel || ''));
     rvComments = rvReview.comments || [];
+    // Acceptance checklist (read-only v1): when the review resolves to a Project, list that
+    // project's (and its Ideas') criteria beside the verdict — the behavior this change must keep.
+    rvCriteria = [];
+    if (rvReview.project) {
+      try { rvCriteria = (await fetch('/api/criteria?project=' + encodeURIComponent(rvReview.project)).then((x) => x.json())).criteria || []; }
+      catch (e) { rvCriteria = []; }
+    }
     renderReviewSummary();
     renderReviewGraph();
     await populateBaseSelect();                        // refs dropdown for the diff base
@@ -297,6 +306,21 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
     });
   }
 
+  // The project's acceptance criteria as a read-only checklist (v1: states shown, verified
+  // from the node inspector / the verify endpoint — no editing here). Grouped by the
+  // Idea/Project each criterion is pinned to; open work (fail/stale/unverified) leads.
+  function criteriaChecklistHtml() {
+    if (!rvReview || !rvReview.project || !rvCriteria.length) return '';
+    const groups = groupCriteriaByAnchor(rvCriteria, Date.now());
+    const rows = groups.map((g) =>
+      `<div class="rv-ac-anchor">${esc(trunc(g.anchor_name || '(unnamed)', 34))}</div>` +
+      g.items.map((c) =>
+        `<div class="rv-ac-row rv-ac-${esc(c.status)}"><span class="ac-chip ac-chip-${esc(c.status)}">${esc(c.status)}</span>` +
+        `<span class="rv-ac-text" title="${esc(c.text || '')}">${esc(trunc(c.text || '', 72))}</span></div>`).join('')
+    ).join('');
+    return `<div class="rv-ac"><div class="rv-ac-l">Acceptance criteria · ${esc(trunc(rvReview.project, 26))}</div>${rows}</div>`;
+  }
+
   function renderReviewSummary() {
     const counts = { raw: 0, cued: 0, addressed: 0, skipped: 0 };
     rvComments.forEach((c) => { if (counts[c.state] != null) counts[c.state]++; });
@@ -311,6 +335,7 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
         `<div class="rv-count done"><b>${counts.addressed}</b><span>done</span></div>` +
       '</div>' +
       `<div style="font-size:11px;color:var(--ink-dim);margin-bottom:12px">${rvComments.length} comments · ${files} files touched</div>` +
+      criteriaChecklistHtml() +
       '<div class="rv-verdict-l">Verdict</div>' +
       `<textarea class="rv-verdict" id="rv-verdict" placeholder="overall verdict…">${esc(rvReview && rvReview.verdict ? rvReview.verdict : '')}</textarea>` +
       '<button class="rv-verdict-save" id="rv-verdict-save">Save verdict</button>';

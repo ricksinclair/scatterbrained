@@ -119,6 +119,20 @@ MERGE (note2:Note {id:'note-ttl-index'})
   SET note2.text='Confirmed: the idempotency dedup table needs a TTL index - rows were never expiring and the table hit 40GB.',
       note2.state='addressed', note2.anchor_kind='node', note2.created_at=coalesce(note2.created_at, datetime('2026-04-18'));
 
+// --- Acceptance criteria (regression guardrails: Notes with anchor_kind 'criterion') --
+// Pinned at design time on the ideas they guard; verified via POST /api/criterion/verify.
+// One verified-pass (with evidence) and one still-unverified, so the tour shows the loop.
+MERGE (crit1:Note {id:'crit-idem-replay'})
+  SET crit1.text='Replaying any committed offset produces zero duplicate side-effects (at-least-once redelivery is safe).',
+      crit1.state='pass', crit1.anchor_kind='criterion',
+      crit1.last_verified_at=datetime('2026-04-19'), crit1.verifications=3,
+      crit1.evidence='ingestion-svc CI: consumer_replay_test (build #412)',
+      crit1.created_at=coalesce(crit1.created_at, datetime('2026-02-03'));
+MERGE (crit2:Note {id:'crit-dlq-latency'})
+  SET crit2.text='A poison message lands on ingestion.dlq within 5s and never blocks the partition.',
+      crit2.state='unverified', crit2.anchor_kind='criterion',
+      crit2.created_at=coalesce(crit2.created_at, datetime('2026-02-18'));
+
 // === Edges (each re-MATCHes its endpoints by key) ===========================
 MATCH (maya:Person {name:'Maya Okonkwo'}), (lattice:Organization {name:'Lattice Payments'}) MERGE (maya)-[:WORKS_AT]->(lattice);
 MATCH (maya:Person {name:'Maya Okonkwo'}), (proj:Project {name:'Ingestion Pipeline → Kafka Migration'}) MERGE (maya)-[:COLLABORATES_ON]->(proj);
@@ -169,6 +183,10 @@ MATCH (talk:Resource {url:'https://www.youtube.com/watch?v=aJuo_bLSW6s'}), (skil
 // notes ABOUT their target
 MATCH (note1:Note {id:'note-dlq-policy'}), (dlq:Idea {name:'Dead-letter topic with replay tooling'}) MERGE (note1)-[:ABOUT]->(dlq);
 MATCH (note2:Note {id:'note-ttl-index'}), (idem:Idea {name:'Idempotency via dedup keys in the consumer'}) MERGE (note2)-[:ABOUT]->(idem);
+
+// acceptance criteria ABOUT the ideas they guard (lint: a criterion must never orphan)
+MATCH (crit1:Note {id:'crit-idem-replay'}), (idem:Idea {name:'Idempotency via dedup keys in the consumer'}) MERGE (crit1)-[:ABOUT]->(idem);
+MATCH (crit2:Note {id:'crit-dlq-latency'}), (dlq:Idea {name:'Dead-letter topic with replay tooling'}) MERGE (crit2)-[:ABOUT]->(dlq);
 
 // ============================================================================
 // USE CASE 2 — give stakeholders information easily.

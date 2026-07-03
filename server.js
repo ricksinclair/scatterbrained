@@ -35,6 +35,8 @@ import { REL_TYPES, REL_SHAPES, isValidRelType, isValidRelShape, isProvenanceRel
 import { isScheduleKind, isIsoDate, isRecurKind } from './public/lib/schedule.js';
 import { effectiveDate, recurLabel } from './public/lib/recurrence.js';
 import { detectCandidates, normalizeValue, isProtectedFactKind, checkRewrite } from './public/lib/protected-facts.js';
+import { NOTE_CYCLE_STATES } from './public/lib/docnotes.js';
+import { VERIFY_STATES, shapeCriteriaLane } from './public/lib/criteria.js';
 import { isWebUrl, isVideoUrl } from './public/lib/links.js';
 import { buildBriefMarkdown, deriveBriefInput, cwdHint } from './public/lib/brief.js';
 import { resolveProvider, generate } from './lib/inference.js';
@@ -507,7 +509,9 @@ const Q_NODE = `
          [(s3:Source)-[:INFORMS]->(n) | { id: elementId(s3), name: coalesce(s3.title, s3.name, s3.id),
             source_kind: s3.source_kind, url: s3.url, file_path: s3.file_path }][0..500] AS all_sources,
          [(nt:Note)-[:ABOUT]->(n) | { id: nt.id, text: nt.text, state: nt.state,
-            anchor_kind: nt.anchor_kind, locator: nt.locator, created_at: toString(nt.created_at) }][0..200] AS notes,
+            anchor_kind: nt.anchor_kind, locator: nt.locator, created_at: toString(nt.created_at),
+            last_verified_at: toString(nt.last_verified_at), evidence: nt.evidence,
+            verifications: nt.verifications }][0..200] AS notes,
          [(kf:ProtectedFact)-[:ABOUT]->(n) WHERE kf.valid_until IS NULL | { id: kf.id, value: kf.value, note: kf.note,
             pending_status: kf.pending_status, pending_new: kf.pending_new,
             pending_reason: kf.pending_reason, created_at: toString(kf.created_at) }][0..200] AS protected_facts,
@@ -588,6 +592,19 @@ const Q_NOTES_REVIEW = `
          head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS anchor_label,
          elementId(n) AS anchor_id
   ORDER BY nt.created_at DESC LIMIT 20`;
+
+// Acceptance criteria needing attention (criteria lane, dock): regressed (fail) or
+// verified-then-stale. Over-fetches fail+pass rows; the tested staleness math
+// (criteria.js shapeCriteriaLane, STALE_DAYS) prunes — one source for the threshold.
+const Q_CRITERIA_REVIEW = `
+  MATCH (c:Note {anchor_kind: 'criterion'})-[:ABOUT]->(n)
+  WHERE c.state IN ['fail', 'pass']
+  RETURN c.id AS id, c.text AS text, c.state AS state,
+         toString(c.last_verified_at) AS last_verified_at,
+         coalesce(n.name, n.title, n.summary, n.id) AS anchor_name,
+         head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS anchor_label,
+         elementId(n) AS anchor_id
+  ORDER BY c.last_verified_at LIMIT 100`;
 
 // ── Intent queries (the command bar) — uniform shape {id, name, label, sub} ───
 const PLABEL = `head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n))`;
@@ -694,18 +711,19 @@ async function api(pathname, params) {
   if (pathname === '/api/pulse') {
     // 'now/next/blocked' dropped from the dock (the command bar covers next/blocked on demand),
     // so the pulse no longer computes Q_PROJECTS/Q_BLOCKED/Q_NEXT.
-    const [goals, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview, notesReview] = await Promise.all([
+    const [goals, due, whatsNew, superseded, lowConf, orphans, aliasDrift, protectedFactsReview, notesReview, criteriaReview] = await Promise.all([
       run(driver, Q_GOALS),
       run(driver, QI_DUE),
       run(driver, Q_WHATSNEW), run(driver, Q_SUPERSEDED), run(driver, Q_LOWCONF), run(driver, Q_ORPHAN_LIST),
       run(driver, Q_ALIAS_DRIFT, { aliasLabels: ALIAS_LABELS, aliasNameFields: ALIAS_NAME_FIELDS, brandRe: brandRegexCypher() }),
-      run(driver, Q_PROTECTED_FACT_REVIEW), run(driver, Q_NOTES_REVIEW),
+      run(driver, Q_PROTECTED_FACT_REVIEW), run(driver, Q_NOTES_REVIEW), run(driver, Q_CRITERIA_REVIEW),
     ]);
     return {
       goals: rows(goals),
       due: rollDueRows(rows(due)),
       whatsNew: rows(whatsNew),
-      review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview), notes: rows(notesReview) },
+      review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview), notes: rows(notesReview),
+        criteria: shapeCriteriaLane(rows(criteriaReview), Date.now()) },
     };
   }
   if (pathname === '/api/protected-fact/suggest') {
@@ -878,6 +896,7 @@ async function api(pathname, params) {
   if (pathname === '/api/status') return await status();
   if (pathname === '/api/calendar') return await calendar(params);
   if (pathname === '/api/roadmap') return await roadmap();
+  if (pathname === '/api/criteria') return await projectCriteria(params.project);
   if (pathname === '/api/review/resolve') return await resolveReview(params);
   if (pathname === '/api/review/changes') return await reviewChanges(params);
   if (pathname === '/api/review/refs') return await reviewRefs(params);
@@ -938,14 +957,17 @@ async function api(pathname, params) {
 // ── Notes (deferred-instruction inbox; ROADMAP #15) ─────────────────────────
 // Any node can carry freeform Notes; a later sync pass evaluates them (raw →
 // cued → addressed/skipped). Local-first write endpoint, mirrors /api/roots.
-const NOTE_STATES = new Set(['raw', 'cued', 'addressed', 'skipped']);
+// The cycle set comes from the shared vocab (docnotes.js). Criterion states
+// (unverified/pass/fail) are deliberately NOT settable here — see verifyCriterion.
+const NOTE_STATES = new Set(NOTE_CYCLE_STATES);
 async function addNote({ target, filePath, text, anchor_kind, locator, snippet, author, reviewId } = {}) {
   const t = String(text || '').trim();
   if (!t || (!target && !filePath && !reviewId)) return { error: 'text and (target, filePath, or reviewId) required' };
   // author: 'you' (default) or 'agent:<model>' — the seam for a later multi-team tier (#34).
   const a = String(author || 'you').trim() || 'you';
   const RET = `RETURN n.id AS id, n.text AS text, n.state AS state, n.anchor_kind AS anchor_kind,
-               n.locator AS locator, n.snippet AS snippet, n.author AS author, toString(n.created_at) AS created_at`;
+               n.locator AS locator, n.snippet AS snippet, n.author AS author, toString(n.created_at) AS created_at,
+               toString(n.last_verified_at) AS last_verified_at, n.evidence AS evidence, n.verifications AS verifications`;
   const params = { target: target ? String(target) : null, filePath: filePath ? String(filePath) : null,
     text: t, anchor_kind: anchor_kind || null, locator: locator ?? null, snippet: snippet || null,
     author: a, reviewId: reviewId ? String(reviewId) : null };
@@ -970,11 +992,14 @@ async function addNote({ target, filePath, text, anchor_kind, locator, snippet, 
   }
 
   // Otherwise: a node note (ABOUT a node by id) or a document note (ABOUT a file's Source).
+  // An acceptance criterion (anchor_kind 'criterion') is born 'unverified' — its state then
+  // moves only through explicit verification events (verifyCriterion), never the inbox cycle.
   const match = target ? 'MATCH (tg) WHERE elementId(tg) = $target' : 'MATCH (tg:Source) WHERE tg.file_path = $filePath';
   const recs = await run(driver,
     `${match}
      CREATE (n:Note {id: randomUUID()})
-     SET n.text = $text, n.state = 'raw', n.anchor_kind = coalesce($anchor_kind, 'node'),
+     SET n.text = $text, n.state = CASE WHEN $anchor_kind = 'criterion' THEN 'unverified' ELSE 'raw' END,
+         n.anchor_kind = coalesce($anchor_kind, 'node'),
          n.locator = $locator, n.snippet = $snippet, n.author = $author,
          n.file_path = $filePath, n.created_at = datetime()
      MERGE (n)-[:ABOUT]->(tg)
@@ -993,11 +1018,54 @@ async function fileNotes(fp) {
 }
 async function setNoteState(id, state) {
   if (!id || !NOTE_STATES.has(state)) return { error: 'bad id or state' };
+  // Criterion notes are excluded here BY the match: their state changes only via an explicit
+  // verification event (POST /api/criterion/verify) — never the generic cycle (criterion 2).
   const recs = await run(driver,
-    `MATCH (n:Note {id: $id}) SET n.state = $state, n.state_changed_at = datetime()
+    `MATCH (n:Note {id: $id}) WHERE coalesce(n.anchor_kind, '') <> 'criterion'
+     SET n.state = $state, n.state_changed_at = datetime()
      RETURN n.id AS id, n.state AS state`, { id: String(id), state });
-  if (!recs.length) return { error: 'note not found' };
+  if (!recs.length) return { error: 'note not found (criterion states change only via /api/criterion/verify)' };
   return toPlain(recs[0].toObject());
+}
+
+// ── Acceptance criteria (regression guardrails) ─────────────────────────────
+// A criterion is a Note (anchor_kind 'criterion') ABOUT an Idea/Project; created via the
+// existing POST /api/note. THIS is the one write path for its state: an explicit verification
+// event {id, state: pass|fail, evidence?} → state + last_verified_at + a verifications
+// counter (monotonic — how many events this criterion has absorbed). The update is in-place,
+// matching how Notes mutate today (setNoteState); the EVENT is the POST, so "changed only via
+// explicit verification events — never silently" holds. Full state history in v1 = the graph's
+// git-versioned backup snapshots (invalidate-don't-delete per event would mint a new Note id
+// per verification and break the criterion's identity/anchoring — rejected for v1).
+async function verifyCriterion({ id, state, evidence } = {}) {
+  if (!id || !VERIFY_STATES.includes(state)) return { error: `id and state (${VERIFY_STATES.join('|')}) required` };
+  const recs = await run(driver,
+    `MATCH (n:Note {id: $id}) WHERE n.anchor_kind = 'criterion'
+     SET n.state = $state, n.last_verified_at = datetime(), n.state_changed_at = datetime(),
+         n.verifications = coalesce(n.verifications, 0) + 1,
+         n.evidence = coalesce($evidence, n.evidence)
+     RETURN n.id AS id, n.state AS state, toString(n.last_verified_at) AS last_verified_at,
+            n.verifications AS verifications, n.evidence AS evidence`,
+    { id: String(id), state, evidence: evidence != null && String(evidence).trim() ? String(evidence).trim() : null });
+  if (!recs.length) return { error: 'criterion not found' };
+  return { ok: true, criterion: toPlain(recs[0].toObject()) };
+}
+
+// All criteria for a Project — its own plus its Ideas' (CONTAINS / PART_OF), for the review
+// lens checklist (criterion 5). Grouping/ordering is the pure groupCriteriaByAnchor client-side.
+const CRIT_RET = `
+  RETURN DISTINCT c.id AS id, c.text AS text, c.state AS state,
+         toString(c.last_verified_at) AS last_verified_at, c.evidence AS evidence,
+         elementId(a) AS anchor_id, coalesce(a.name, a.title) AS anchor_name`;
+const Q_PROJECT_CRITERIA = `
+  MATCH (c:Note {anchor_kind: 'criterion'})-[:ABOUT]->(a:Project {name: $name}) ${CRIT_RET}
+  UNION
+  MATCH (:Project {name: $name})-[:CONTAINS]->(a:Idea)<-[:ABOUT]-(c:Note {anchor_kind: 'criterion'}) ${CRIT_RET}
+  UNION
+  MATCH (a:Idea)-[:PART_OF]->(:Project {name: $name}) MATCH (c:Note {anchor_kind: 'criterion'})-[:ABOUT]->(a) ${CRIT_RET}`;
+async function projectCriteria(name) {
+  if (!name || !String(name).trim()) return { criteria: [] };
+  return { criteria: rows(await run(driver, Q_PROJECT_CRITERIA, { name: String(name).trim() })) };
 }
 
 // ── Link intake (ROADMAP #19) ───────────────────────────────────────────────
@@ -1446,6 +1514,12 @@ async function resolveReview({ repo, gitRef } = {}) {
   const existing = (await getReview({ repo: dir, gitRef: sha })).review;
   const review = existing || { id: null, repo: dir, git_ref: sha, ref_label: refIn, status: 'open', verdict: null, project: null, comments: [] };
   if (!review.ref_label) review.ref_label = refIn;
+  // Resolve the Project even for an unmaterialized review (same conservative lib the ABOUT
+  // edge uses), so the summary's acceptance-criteria checklist works from the first open.
+  if (!review.project) {
+    const projects = rows(await run(driver, `MATCH (p:Project) RETURN p.name AS name, p.repo_url AS repo_url`));
+    review.project = resolveReviewProject(dir, projects);
+  }
   return { review };
 }
 async function getReview({ id, repo, gitRef } = {}) {
@@ -1749,6 +1823,14 @@ const server = http.createServer(async (req, res) => {
       return send(res, result.error ? 400 : 200, result);
     }
     // Notes: add a note to a node, or change a note's state.
+    if (url.pathname === '/api/criterion/verify' && req.method === 'POST') {
+      // The explicit verification event (criterion 2/3): {id, state: pass|fail, evidence?}.
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await verifyCriterion(p);
+      if (!result.error) broadcast('graph-changed');
+      return send(res, result.error ? 400 : 200, result);
+    }
     if ((url.pathname === '/api/note' || url.pathname === '/api/note/state') && req.method === 'POST') {
       let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
       let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
