@@ -10,8 +10,18 @@
 //   pdf     — locator: "p<page>" (1-based)       (PDF pages)
 // No DOM here — fully unit-tested; app.js sets innerHTML on the result.
 
-const STATE_LABEL = { raw: 'new', cued: 'cued', addressed: 'done', skipped: 'skipped' };
+// The closed Note.state vocabulary — the single source both the UI and the server read.
+// Two lifecycles share the field: the review-inbox cycle (raw → cued → addressed/skipped,
+// mutated via /api/note/state) and the acceptance-criterion lifecycle (unverified → pass/fail,
+// changed ONLY via explicit verification events — POST /api/criterion/verify; see criteria.js).
+const STATE_LABEL = {
+  raw: 'new', cued: 'cued', addressed: 'done', skipped: 'skipped',
+  unverified: 'unverified', pass: 'pass', fail: 'fail',
+};
 export { STATE_LABEL };
+// The inbox cycle order (what __noteCycle and /api/note/state accept). Criterion states are
+// deliberately NOT here: a criterion's state may never change silently via the generic cycle.
+export const NOTE_CYCLE_STATES = ['raw', 'cued', 'addressed', 'skipped'];
 
 // ── locator codec ────────────────────────────────────────────────────────────
 export function makeCellLocator(r, c) { return `r${r}c${c}`; }

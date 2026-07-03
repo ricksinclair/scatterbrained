@@ -14,7 +14,7 @@ import { isVideoUrl, isWebUrl } from './links.js';
 export const COMPONENTS = [
   'markdown', 'excerpt', 'chart', 'text', 'timeline', 'resurface', 'flashcard',
   'provenance', 'relations', 'confidence', 'goal-progress', 'map', 'keyvalue', 'ai-summary', 'ai-qa',
-  'protected-facts', 'notes',
+  'protected-facts', 'notes', 'acceptance',
   'video', 'link',
 ];
 
@@ -77,5 +77,8 @@ export function resolveLayout(node = {}, caps = {}) {
   //    then the deferred-instruction note inbox. Both render their own add affordance.
   add('protected-facts');
   add('notes');
+  // 8. acceptance criteria — regression guardrails. Offered where design-time expectations
+  //    live (Idea/Project) or wherever criteria already exist (criterionCount from app.js).
+  if (node.label === 'Idea' || node.label === 'Project' || (node.criterionCount || 0) > 0) add('acceptance');
   return out;
 }

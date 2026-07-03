@@ -412,6 +412,38 @@ body.dock-closed .dock { transform: translateX(-264px); }
 .pf-restore { flex: none; margin-left: auto; font-size: var(--fs-xs); cursor: pointer; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: var(--r-xs); padding: 1px 8px; }
 .pf-restore:disabled { opacity: 0.5; cursor: default; }
 
+/* ── Acceptance criteria — regression guardrails (theme-aware via vars) ── */
+.c-acceptance .ph { font-size: var(--fs-xs); color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.ac-row { display: flex; gap: 7px; align-items: flex-start; padding: 4px 0; border-top: 1px solid var(--line, rgba(255,255,255,0.1)); }
+.ac-row:first-of-type { border-top: 0; }
+.ac-chip { flex: none; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.03em; border: 1px solid var(--line, rgba(255,255,255,0.18)); border-radius: var(--r-xs); padding: 1px 5px; color: var(--ink-dim); }
+.ac-chip-pass { color: var(--ok); border-color: var(--ok); }
+.ac-chip-fail { color: var(--warn); border-color: var(--warn); }
+.ac-chip-stale { color: var(--accent); border-color: var(--accent); }
+.ac-chip-unverified { color: var(--ink-faint); }
+.ac-body { min-width: 0; flex: 1; }
+.ac-text { font-size: var(--fs-sm); color: var(--ink-dim); line-height: 1.4; }
+.ac-row.ac-fail .ac-text { color: var(--ink); }
+.ac-meta { font-size: var(--fs-2xs); color: var(--ink-faint); margin-top: 1px; }
+.ac-evidence { font-family: ui-monospace, monospace; }
+.ac-acts { flex: none; display: flex; gap: 4px; }
+.ac-verify { font-size: var(--fs-xs); line-height: 1.3; cursor: pointer; background: transparent; border: 1px solid var(--line, rgba(255,255,255,0.2)); border-radius: var(--r-xs); padding: 1px 6px; }
+.ac-verify.ac-pass { color: var(--ok); } .ac-verify.ac-pass:hover { border-color: var(--ok); }
+.ac-verify.ac-fail { color: var(--warn); } .ac-verify.ac-fail:hover { border-color: var(--warn); }
+.ac-verify:disabled { opacity: 0.5; cursor: default; }
+.ac-empty { font-size: var(--fs-xs); color: var(--ink-dim); padding: 3px 0; }
+.ac-form { display: flex; gap: 6px; margin-top: 7px; }
+.ac-form input { flex: 1; min-width: 0; font: inherit; font-size: var(--fs-sm); color: var(--ink); background: var(--panel, rgba(255,255,255,0.04)); border: 1px solid var(--line, rgba(255,255,255,0.16)); border-radius: var(--r-xs); padding: 4px 6px; }
+.ac-add-btn { flex: none; font-size: var(--fs-xs); cursor: pointer; color: var(--accent-ink); background: transparent; border: 1px solid var(--accent); border-radius: var(--r-xs); padding: 3px 10px; }
+.ac-add-btn:disabled { opacity: 0.5; cursor: default; }
+.ac-receipt { min-height: 0; font-size: var(--fs-xs); color: var(--ok); margin-top: 4px; }
+/* review-lens read-only checklist */
+.rv-ac { margin-bottom: 12px; }
+.rv-ac-l { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); margin-bottom: 4px; }
+.rv-ac-anchor { font-size: var(--fs-2xs); color: var(--ink-faint); margin-top: 5px; }
+.rv-ac-row { display: flex; align-items: baseline; gap: 6px; padding: 2px 0; }
+.rv-ac-text { min-width: 0; font-size: var(--fs-xs); color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ── Link + video cards ──────────────────────────────────────────────── */
 .c-video { margin-top: 2px; }
 .video-frame { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--line, rgba(255,255,255,0.14)); background: #000; }
@@ -1110,7 +1142,11 @@ body.calm .receipt { transition: none; }
 .rv-code .fr-anno { display: block; margin: 2px 0 5px calc(14px + 3.2ch + 1.1ch); padding: 3px 10px; border-left: 2px solid var(--accent); background: var(--accent-soft, rgba(239,154,91,0.12)); color: var(--ink-dim); white-space: pre-wrap; border-radius: 0 6px 6px 0; }
 .rv-code .fr-anno-st { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); margin-right: 7px; }
 /* Syntax-highlight tokens (codehl.js) — driven by the mode-aware --hl-* palette
-   (One Dark / One Light), set in applyTheme. Plain locals/vars keep the default --ink. */
+   (One Dark / One Light), set in applyTheme. Plain locals/vars keep the default --ink.
+   Global (not scoped to .rv-code): the SAME highlighter renders in the file reader's
+   #fr-body when a code file is opened from the Code-lens Map, and these classes are only
+   ever emitted by highlightCode(), so there's no collision. (Restored after the
+   finalize merge accidentally re-scoped these — the reader rendered plain ink.) */
 .hl-kw { color: var(--hl-kw); }
 .hl-str { color: var(--hl-str); }
 .hl-com { color: var(--hl-com); font-style: italic; }
@@ -1123,7 +1159,8 @@ body.calm .receipt { transition: none; }
 .hl-key-0 { color: var(--hl-key0); } .hl-key-1 { color: var(--hl-key1); }
 .hl-key-2 { color: var(--hl-key2); } .hl-key-3 { color: var(--hl-key3); }
 .hl-key-4 { color: var(--hl-key4); }
-/* A code file in the reader renders at full --ink — set when file-reader-ui adds .fr-code. */
+/* A code file in the reader renders at full --ink (like the review pane), not the dim
+   --ink-dim the document raw view uses — set when file-reader-ui adds .fr-code. */
 .fr-body.fr-code, .fr-body.fr-code .fr-tx { color: var(--ink); }
 .rv-code .fr-line { display: flex; align-items: baseline; }
 .rv-code .fr-gut { visibility: hidden; cursor: pointer; color: var(--accent); width: 14px; text-align: center; flex: none; font-weight: 700; }

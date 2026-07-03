@@ -26,7 +26,7 @@ describe('buildRegistry', () => {
     const ids = new Set(reg().map((c) => c.id));
     for (const id of [
       'open-graph', 'open-time-agenda', 'open-roadmap', 'open-code-map', 'open-code-review',
-      'open-agents', 'capture-link', 'needs-review', 'toggle-mode', 'toggle-calm',
+      'open-agents', 'capture-link', 'add-criterion', 'needs-review', 'toggle-mode', 'toggle-calm',
       'ui-size-s', 'ui-size-m', 'ui-size-l', 'focus-clear', 'study-selected',
       'export-report', 'start-tour', 'open-settings', 'manage-folders',
     ]) expect(ids.has(id), id).toBe(true);

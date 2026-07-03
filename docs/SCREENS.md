@@ -195,9 +195,24 @@ graph stays lintable no matter how fast you wire it.
 
 ![Needs review](screenshots/05-needs-review-dock.png)
 
-**Usefulness.** Everything that needs a human collects in one dock section: open
-notes, pending protected-fact changes, renames, low confidence, superseded, orphans —
-each row opens its anchor. The count badge reads in accent when non-zero.
+**Usefulness.** Everything that needs a human collects in one dock section: regressed
+or stale acceptance criteria, open notes, pending protected-fact changes, renames, low
+confidence, superseded, orphans — each row opens its anchor. The count badge reads in
+accent when non-zero.
+
+## 10a. Acceptance criteria — regression guardrails
+
+**Usefulness.** Criteria are to *behavior* what protected facts are to *prose*: pinned,
+testable expectations ABOUT an Idea/Project that must survive change. The **Acceptance**
+section (inspector + report, on Idea/Project or wherever criteria exist; palette:
+*Add acceptance criterion*) pins them at design time and shows state chips —
+`unverified` → `pass`/`fail`, a pass decaying to `stale` after 14 days
+(`lib/criteria.js STALE_DAYS`) — with last-verified dates and evidence. State changes
+ONLY via explicit verification events (`POST /api/criterion/verify`, the seam a test
+runner or CI can drive); the generic note-state cycle refuses criterion notes. Regressed
+and stale criteria surface in the Needs-review dock lane, and the Code lens Review
+summary lists the resolved project's criteria as a read-only checklist beside the
+verdict — the behavior the change under review must keep.
 
 ## 11. Settings, themes, UI size, calm
 

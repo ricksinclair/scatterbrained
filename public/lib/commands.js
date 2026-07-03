@@ -18,6 +18,7 @@ const BASE = [
   { id: 'agent-archive-selected', title: 'Archive / Unarchive session', hint: 'the selected agent session', keywords: ['slipway', 'agent', 'session', 'archive', 'unarchive', 'rail', 'hide'], group: 'action', gated: 'agentSession' },
   { id: 'agent-archive-ended', title: 'Archive all ended sessions', hint: 'clear the agent rail', keywords: ['slipway', 'agent', 'session', 'archive', 'ended', 'rail', 'clean', 'bulk'], group: 'action' },
   { id: 'capture-link', title: 'Capture a link', hint: 'save a web or YouTube page', keywords: ['add', 'save', 'url', 'bookmark', 'resource'], group: 'capture' },
+  { id: 'add-criterion', title: 'Add acceptance criterion', hint: 'pin a testable expectation on this node', keywords: ['acceptance', 'criteria', 'criterion', 'test', 'regression', 'guardrail', 'verify'], group: 'capture', gated: 'selection' },
   { id: 'needs-review', title: 'Show needs review', hint: 'stale · superseded · orphans', keywords: ['stale', 'orphans', 'superseded', 'filter', 'queue'], group: 'filter' },
   { id: 'focus-clear', title: 'Clear focus', hint: 'show the whole graph', keywords: ['unfocus', 'show all', 'reset'], group: 'action', gated: 'focus' },
   { id: 'study-selected', title: 'Study this node', hint: 'flashcards · active recall', keywords: ['flashcards', 'recall', 'cards', 'learn'], group: 'action', gated: 'selection' },

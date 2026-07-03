@@ -78,8 +78,15 @@ describe('resolveLayout — the graph expresses its own UI', () => {
     expect(resolveLayout({ label: 'Goal' })).toContain('notes');
   });
 
+  it('offers acceptance criteria on Idea/Project, or wherever criteria already exist', () => {
+    expect(resolveLayout({ label: 'Idea' })).toContain('acceptance');
+    expect(resolveLayout({ label: 'Project' })).toContain('acceptance');
+    expect(resolveLayout({ label: 'Person' })).not.toContain('acceptance');
+    expect(resolveLayout({ label: 'Person', criterionCount: 2 })).toContain('acceptance');
+  });
+
   it('never emits an unknown component id', () => {
-    const KNOWN = new Set(['markdown', 'excerpt', 'chart', 'text', 'timeline', 'resurface', 'provenance', 'relations', 'confidence', 'goal-progress', 'map', 'keyvalue', 'ai-summary', 'protected-facts', 'notes', 'video', 'link']);
+    const KNOWN = new Set(['markdown', 'excerpt', 'chart', 'text', 'timeline', 'resurface', 'provenance', 'relations', 'confidence', 'goal-progress', 'map', 'keyvalue', 'ai-summary', 'protected-facts', 'notes', 'acceptance', 'video', 'link']);
     const out = resolveLayout({ label: 'Insight', ui: ['bogus', 'chart'], renderHint: 'nonsense' });
     out.forEach((c) => expect(KNOWN.has(c)).toBe(true));
   });

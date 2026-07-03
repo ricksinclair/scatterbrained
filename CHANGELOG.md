@@ -24,6 +24,16 @@ the Code lens now link themselves to the right project automatically. And the Ag
 embedded **Slipway panel** (the optional local-AI companion app) dresses itself in the
 Studio's own design instead of looking like an app inside an app.
 
+Ideas and projects can now carry **acceptance criteria** — little promises like "export
+stays under 2 seconds" pinned right on the idea they guard. Each promise wears a badge:
+**pass**, **fail**, or **unverified** — and a pass quietly fades to **stale** if nobody
+has re-checked it in two weeks. The only way a badge changes is an explicit "I verified
+this" event (a click in the inspector, or your test runner calling one endpoint), so a
+promise never flips silently. Broken or stale promises walk themselves into the morning
+needs-review queue, and a code review shows the project's promises as a checklist beside
+the verdict — "did we break anything we said we'd keep?" gets answered before you ship.
+Criteria are to *behavior* what protected facts are to *prose*.
+
 **Details:** element-level WCAG-AA contrast pass — computed `--accent-ink`/`--warn-ink`/
 `--ok-ink`/`--due-ink`/`--review-ink` component vars (color-mixed toward `--ink` so every
 audited backdrop clears 4.5:1 in all 6 themes × 2 modes), every colored-text site
@@ -40,8 +50,20 @@ anchor date, and the agenda/calendar/pulse/Daily Brief expand occurrences at rea
 code review to the Project whose `repo_url` matches the reviewed repo (no match → no
 edge); the file reader now renders source/config files as syntax-highlighted text (only
 true binaries stay unsupported); `npm start` loads `.env` before deciding whether to spin
-its own database. New tour beat + screenshot: the Code Map on this repo itself. 675
-studio + 49 CLI tests green.
+its own database. **Acceptance criteria** — a criterion is a `Note` with
+`anchor_kind: 'criterion'` `ABOUT` an Idea/Project; the closed `Note.state` vocab gains
+`unverified`/`pass`/`fail` (single source `public/lib/docnotes.js`, criterion helpers +
+`STALE_DAYS = 14` staleness math in the pure `public/lib/criteria.js`); a criterion is
+born `unverified` and its state changes ONLY via `POST /api/criterion/verify`
+`{id, state, evidence?}` (sets `last_verified_at`, bumps a `verifications` counter,
+broadcasts `graph-changed` — `/api/note/state` refuses criterion notes); the `acceptance`
+inspector/report component (Idea/Project, or any node already carrying criteria) pins
+criteria at design time and verifies with visible receipts; palette gains
+*Add acceptance criterion*; the needs-review dock gains a criteria lane (fail + stale)
+via `/api/pulse`; the Code-lens review summary lists the resolved project's criteria as a
+read-only checklist (`GET /api/criteria?project=…`); `lint:graph` gains the
+`criterion-invalid` ERROR check; the demo seed ships two example criteria. New tour beat
++ screenshot: the Code Map on this repo itself. 700 studio + 49 CLI tests green.
 
 ## [0.2.0-alpha.1] — The redesign: a cockpit you can fly (2026-07-02)
 
