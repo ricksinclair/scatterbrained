@@ -72,6 +72,16 @@ or every test run by hand; that rots. Write at milestones and let the graph + Gi
   release or CI-on-main, not a row per local run.
 - **Problem Tests** — opt-in (\`--with-problem-tests\`); only if a team is tracking flaky/failing tests.
 
+## Acceptance criteria — behaviors MUST be expressed and validated
+When you design or build a feature, log **3–8 testable acceptance criteria in the graph at
+design time** — criterion Notes (\`anchor_kind: 'criterion'\`) \`ABOUT\` the feature's Idea
+(Studio inspector → *Acceptance*, the ⌘K *Add acceptance criterion* command, or
+\`POST /api/note\`). A behavior that isn't expressed as a criterion doesn't exist for QA.
+Each criterion maps to ≥1 durable test where feasible; validate only via explicit
+verification events (\`POST /api/criterion/verify\` — your test runner can post results).
+QA reads the criteria back and reports **PASS/FAIL per criterion**; regressed or stale
+criteria surface in the Studio's needs-review dock. **No criteria = not done.**
+
 ## Knowledge graph (Scatterbrained) — primary source of truth for recall
 This project is a \`Project\` node in your Scatterbrained graph. **Query the graph FIRST** for any question
 about work done, decisions made, or *why* something is the way it is — before answering from memory
