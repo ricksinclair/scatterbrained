@@ -1162,6 +1162,11 @@ body.calm .receipt { transition: none; }
 /* A code file in the reader renders at full --ink (like the review pane), not the dim
    --ink-dim the document raw view uses — set when file-reader-ui adds .fr-code. */
 .fr-body.fr-code, .fr-body.fr-code .fr-tx { color: var(--ink); }
+/* Call-site jump flash (file-reader jumpToLine): the clicked occurrence gets 1.6s of
+   visible identity — accent wash + left bar — then fades out via the transition as the
+   class is removed. Static colors, so calm mode needs no special-casing. */
+#fr-body .fr-line { transition: background var(--t-med) var(--ease), box-shadow var(--t-med) var(--ease); }
+#fr-body .fr-line.fr-line-hit { background: var(--accent-soft, rgba(140,151,255,0.16)); box-shadow: inset 2px 0 0 var(--accent); }
 .rv-code .fr-line { display: flex; align-items: baseline; }
 .rv-code .fr-gut { visibility: hidden; cursor: pointer; color: var(--accent); width: 14px; text-align: center; flex: none; font-weight: 700; }
 .rv-code .fr-line:hover .fr-gut { visibility: visible; }
