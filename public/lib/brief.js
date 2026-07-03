@@ -63,10 +63,40 @@ export function deriveBriefInput(node = {}) {
 
 const bullet = (s) => `- ${s}`;
 
+// The repo-map section (the code-graph → brief tie-in): give a launched agent a structural
+// map of the code it's about to work in — the hub files to read first, what's unreferenced,
+// and any import cycles. `repoMap` is lib/codebase.js `repoInsights` output (rel paths).
+// Structure, not semantics — the agent still reads the files; this just points it at the
+// right ones fast. Returns [] (renders nothing) when there's no map. Kept small on purpose:
+// caps so the brief doesn't balloon on a big repo.
+export function repoMapSection(repoMap) {
+  if (!repoMap || !repoMap.fileCount) return [];
+  const { fileCount, edgeCount = 0, hubs = [], unreferenced = [], cycles = [] } = repoMap;
+  const L = ['## Repo map', `*${fileCount} files · ${edgeCount} imports · from the import graph (structure, not semantics — verify before trusting).*`, ''];
+  if (hubs.length) {
+    L.push('**Hub files — read these first (most-connected):**');
+    hubs.slice(0, 8).forEach((h) => L.push(bullet(`\`${h.file}\`${h.degree != null ? ` · ${h.degree}` : ''}`)));
+    L.push('');
+  }
+  if (unreferenced.length) {
+    L.push('**Unreferenced code (nothing imports these — entry points or dead code):**');
+    unreferenced.slice(0, 10).forEach((u) => L.push(bullet(`\`${u.file}\``)));
+    if (unreferenced.length > 10) L.push(bullet(`_…and ${unreferenced.length - 10} more_`));
+    L.push('');
+  }
+  if (cycles.length) {
+    L.push('**Import cycles (files that import each other — refactor candidates):**');
+    cycles.slice(0, 5).forEach((c) => L.push(bullet(c.map((f) => `\`${f}\``).join(' → ') + ' ↩')));
+    L.push('');
+  }
+  return L;
+}
+
 // Compose the SLIPWAY_BRIEF.md markdown from a derived input. `cwd` is the resolved
-// working directory (shown in the footer). Everything is optional and degrades to a
-// short honest note rather than an empty section.
-export function buildBriefMarkdown(input = {}, cwd = '') {
+// working directory (shown in the footer). `repoMap` (optional) is repoInsights output for
+// the cwd's repo — the code-graph tie-in. Everything is optional and degrades to a short
+// honest note rather than an empty section.
+export function buildBriefMarkdown(input = {}, cwd = '', repoMap = null) {
   const { name, label, description, status, domain, tags = [], goals = [], ideas = [], insights = [], sources = [] } = input;
   const { now, next, blocked } = bucketIdeas(ideas);
   const L = [];
@@ -100,6 +130,9 @@ export function buildBriefMarkdown(input = {}, cwd = '') {
   if (blocked.length) blocked.forEach((i) => L.push(bullet(`${i.name}${i.status ? ` (${i.status})` : ''}`)));
   else L.push('_nothing blocked_');
   L.push('');
+
+  // Where in the code: hub files to read first, dead/entry files, cycles (the code-graph tie-in).
+  for (const line of repoMapSection(repoMap)) L.push(line);
 
   if (insights.length) {
     L.push('## Key insights');

@@ -112,7 +112,12 @@ export function isKnownRelType(t) {
 // mis-typed or backwards edge (e.g. a reversed USED_IN, an Insight used as an INFORMS
 // source) gets caught instead of landing silently. Legacy types are not shape-checked.
 export const REL_SHAPES = {
-  ABOUT: ['Insight>Project', 'Insight>Idea', 'Insight>Goal', 'Insight>Organization', 'Insight>Skill', 'Idea>Project', 'Idea>Idea', 'Skill>Project'],
+  // Review>Project: a Studio code-review is ABOUT the Project whose repo it pins —
+  // materialized by createReview via lib/review-project.js (conservative resolver:
+  // no/ambiguous match → no edge). Enumerated here even though Review is
+  // RELSHAPE_EXEMPT, so the shape stays documented+legal if the exemption ever
+  // narrows. Added 2026-07-02.
+  ABOUT: ['Insight>Project', 'Insight>Idea', 'Insight>Goal', 'Insight>Organization', 'Insight>Skill', 'Idea>Project', 'Idea>Idea', 'Skill>Project', 'Review>Project'],
   ACHIEVED_BY: ['Goal>Project'],
   ADVISED_ON: ['Person>Rule', 'Person>Idea'],
   APPLIES_TO: ['Rule>Project', 'Rule>Idea'],

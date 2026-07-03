@@ -70,6 +70,7 @@ export function initTimeLens({ esc, rgba, colorOf, secCollapsed, secToggle, paus
       `<i class="rel-dot" style="background:${rgba(colorOf(r.label), 1)}"></i>` +
       `<span class="ag-n">${esc(r.name)}</span>` +
       `<span class="ag-chip cal-k-${esc(r.kind)}">${esc(r.chip)}</span>` +
+      (r.recur ? `<span class="ag-recur" title="repeats ${esc(r.recur)}">↻ ${esc(r.recur)}</span>` : '') +
       `<span class="ag-d${r.bucket === 'overdue' ? ' warn' : ''}">${esc(r.dateLabel)}</span></button>`;
   }
 

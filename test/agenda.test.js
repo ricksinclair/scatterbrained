@@ -60,6 +60,31 @@ describe('buildAgenda — row building', () => {
   });
 });
 
+describe('buildAgenda — recurrence projection (rank 8)', () => {
+  const rec = (date, kind, recur, id = 'r-' + date) => ({ id, name: 'n', label: 'Insight', kind, date, recur });
+  it('rolls a recurring anchor forward to its next occurrence ≥ now, then buckets that', () => {
+    // weekly review anchored 2026-06-01; as of 2026-07-01 the next occurrence is 2026-07-06 (week)
+    const a = buildAgenda([rec('2026-06-01', 'review', 'weekly')], NOW);
+    expect(a.buckets.overdue).toEqual([]);            // never permanently overdue
+    expect(a.buckets.week.map((r) => r.date)).toEqual(['2026-07-06']);
+    expect(a.buckets.week[0].recur).toBe('weekly');   // cadence rides on the row
+  });
+  it('lands a recurring item on `today` when an occurrence falls on now', () => {
+    const a = buildAgenda([rec('2026-06-03', 'review', 'weekly')], NOW);   // +28d = 2026-07-01 = today
+    expect(a.buckets.today.map((r) => r.date)).toEqual(['2026-07-01']);
+    expect(a.buckets.today[0].recur).toBe('weekly');
+  });
+  it('leaves a non-recurring row shape untouched (no recur key)', () => {
+    const a = buildAgenda([{ id: 'p', name: 'n', label: 'Goal', kind: 'due', date: '2026-07-02' }], NOW);
+    expect('recur' in a.buckets.week[0]).toBe(false);
+  });
+  it('ignores an invalid recur token (treats it as a one-shot date)', () => {
+    const a = buildAgenda([rec('2026-06-20', 'due', 'fortnightly')], NOW);   // bad token → plain overdue date
+    expect(a.buckets.overdue.map((r) => r.date)).toEqual(['2026-06-20']);
+    expect('recur' in a.buckets.overdue[0]).toBe(false);
+  });
+});
+
 describe('buildAgenda — empty case', () => {
   it('no items → all buckets empty, empty flag set', () => {
     const a = buildAgenda([], NOW);

@@ -103,7 +103,7 @@
     <h2>The agenda the graph keeps.</h2>
     <p class="cap">Overdue, today, upcoming, worth revisiting — built from dates you put on nodes, with a
       clickable mini-month and a created-per-day sparkline in the margin.</p>
-    <figure><img loading="lazy" src="screenshots/11-agenda.png" alt="The Time lens agenda: overdue, today, and upcoming buckets beside a mini-month calendar" /></figure>
+    <figure><img loading="lazy" src="screenshots/11-agenda.png" alt="The Time lens agenda: overdue, this-week, and upcoming buckets beside a mini-month calendar" /></figure>
   </section>
 
   <section class="beat">
@@ -157,7 +157,19 @@
   </section>
 
   <section class="beat">
-    <span class="n">10 · REVIEWS THAT PERSIST</span>
+    <span class="n">10 · THE CODE MAP</span>
+    <h2>Understand a repo's structure before you touch it.</h2>
+    <p class="cap">The Code lens maps any granted folder: ranked hubs to read first, unreferenced
+      modules, import cycles — and for any file, an impact diagram of who calls it, function by
+      function, and what it pulls in. The same map briefs a launched agent, so what you see is
+      what it gets.</p>
+    <figure><img loading="lazy" src="screenshots/20-code-map.png" alt="The Code lens impact diagram: registry.js as a focus box listing its used members, six caller files with their calling functions and line numbers on the left, and its five imports on the right" /></figure>
+    <p class="sub">the map above is this project's own public repo — changing registry.js ripples
+      to ten files, and the diagram names the exact functions that would feel it.</p>
+  </section>
+
+  <section class="beat">
+    <span class="n">11 · REVIEWS THAT PERSIST</span>
     <h2>The review is a node, not a tab.</h2>
     <p class="cap">Grant a folder and its git history becomes reviewable: a file tree of what changed,
       the code frozen at a commit, and every line comment saved as a graph note pinned to that repo at
@@ -169,7 +181,7 @@
   </section>
 
   <section class="beat">
-    <span class="n">11 · CAPTURE, RECEIPT, DONE</span>
+    <span class="n">12 · CAPTURE, RECEIPT, DONE</span>
     <h2>Drop a link; it lands as a glowing dot.</h2>
     <p class="cap">Paste a URL and it becomes a connected source — a talk renders as a playable card on
       its node. Agent-session captures get the same receipt: a toast, then the camera flies to the new node.</p>
@@ -177,7 +189,7 @@
   </section>
 
   <section class="beat">
-    <span class="n">12 · THE LAUNCHER</span>
+    <span class="n">13 · THE LAUNCHER</span>
     <h2>The optional local companion.</h2>
     <p class="cap">Slipway is a separate, optional control panel for running agent CLIs against
       <em>local</em> models — pick anything in your HuggingFace cache (MLX) or Ollama, start and stop
@@ -188,7 +200,7 @@
   </section>
 
   <section class="beat">
-    <span class="n">13 · YOUR AGENT, IN THE APP</span>
+    <span class="n">14 · YOUR AGENT, IN THE APP</span>
     <h2>A real terminal, where the graph lives.</h2>
     <p class="cap">Slipway embeds real terminal sessions — an agent CLI or a plain shell — and the
       Studio can talk back: here <code>npx scatterbrained status</code> reads the running graph from
@@ -197,7 +209,7 @@
   </section>
 
   <section class="beat">
-    <span class="n">14 · THE LOOP</span>
+    <span class="n">15 · THE LOOP</span>
     <h2>Brief → Session → Capture → Insight.</h2>
     <p class="cap">When Slipway is running, the Agents lens closes the loop: the session rail keeps
       every run (live and past), the loop header shows where each one stands, and an ended session can
@@ -213,8 +225,8 @@
   <h2>Same graph, on your machine, in one command.</h2>
 <pre class="cmd"><span class="p">$</span> npx scatterbrained@alpha studio <span class="c"># → http://localhost:4317</span></pre>
   <p class="cta-note">Node 18+ · Docker for the bundled database · <a href="getting-started.html">the two-minute walkthrough</a></p>
-  <p class="honest">All captures: the bundled demo graph (plus a seeded demo Slipway workspace for beats 12–14)
-    at 1440×900 — never real data. The code-review beat reviews this project's own public repo.
+  <p class="honest">All captures: the bundled demo graph (plus a seeded demo Slipway workspace for beats 13–15)
+    at 1440×900 — never real data. The code-map and code-review beats point at this project's own public repo.
     Scatterbrained is alpha; surfaces can change between versions.</p>
 </section>
 

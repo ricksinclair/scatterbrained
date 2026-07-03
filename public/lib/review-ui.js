@@ -233,7 +233,7 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
     rvActive = f;
     renderReviewTree();
     const head = document.getElementById('rv-view-head');
-    head.innerHTML = `<span class="rv-dot" style="background:${langColor(f.lang)}"></span> ${esc(f.rel)} <span style="color:var(--ink-faint)">· frozen @ ${esc(rvShortRef())}</span>`;
+    head.innerHTML = `<span class="rv-dot" style="background:${langColor(f.lang)}"></span> ${esc(f.rel)} <span style="color:var(--ink-dim)">· frozen @ ${esc(rvShortRef())}</span>`;
     const code = document.getElementById('rv-code');
     code.innerHTML = '<div class="rv-hint">loading…</div>';
     let v;
@@ -310,7 +310,7 @@ export function initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNo
         `<div class="rv-count"><b>${counts.cued}</b><span>cued</span></div>` +
         `<div class="rv-count done"><b>${counts.addressed}</b><span>done</span></div>` +
       '</div>' +
-      `<div style="font-size:11px;color:var(--ink-faint);margin-bottom:12px">${rvComments.length} comments · ${files} files touched</div>` +
+      `<div style="font-size:11px;color:var(--ink-dim);margin-bottom:12px">${rvComments.length} comments · ${files} files touched</div>` +
       '<div class="rv-verdict-l">Verdict</div>' +
       `<textarea class="rv-verdict" id="rv-verdict" placeholder="overall verdict…">${esc(rvReview && rvReview.verdict ? rvReview.verdict : '')}</textarea>` +
       '<button class="rv-verdict-save" id="rv-verdict-save">Save verdict</button>';

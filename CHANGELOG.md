@@ -10,6 +10,39 @@ can follow, then the technical details underneath.
 > believed six months ago and why, with every claim tracing back to its source. No cloud,
 > no subscription — it's yours.
 
+## [0.2.0-alpha.2] — Readable everywhere, and a map of your code (2026-07-03)
+
+**TL;DR (explain-like-I'm-5):** Every piece of text now passes accessibility contrast
+checks — not just the big headings, but every chip, badge, and label in all six themes,
+light and dark. The **Code lens got a real Map**: point it at a project folder and instead
+of a tangled hairball you get a ranked answer — which files to read first, which nothing
+uses anymore, which import each other in circles — and for any file, a diagram of exactly
+**who calls it, function by function**, before you change it. Schedules can now **repeat**
+(daily … yearly), so a "review this monthly" never gets stuck as permanently overdue —
+it just rolls to its next date, and your morning agenda never runs dry. Reviews you do in
+the Code lens now link themselves to the right project automatically. And the Agents lens'
+embedded **Slipway panel** (the optional local-AI companion app) dresses itself in the
+Studio's own design instead of looking like an app inside an app.
+
+**Details:** element-level WCAG-AA contrast pass — computed `--accent-ink`/`--warn-ink`/
+`--ok-ink`/`--due-ink`/`--review-ink` component vars (color-mixed toward `--ink` so every
+audited backdrop clears 4.5:1 in all 6 themes × 2 modes), every colored-text site
+repointed, agenda kind-chips restyled filled → outline; **Code Map** — `repoInsights()`
+ranked hubs/unreferenced/cycles on `/api/repo` (test files and non-source noise filtered
+so "dead code" stays trustworthy), per-file impact view with a hand-rolled UML-style
+diagram (`impact.js` + `impact-uml.js` + `impact-svg.js`, zero-dep) showing caller
+functions with line numbers via `/api/repo/callsites` (`symbols.js` import-binding +
+call-site extraction), member-click filtering, and the same repo map feeding the agent
+brief; **recurring schedules** — closed `RECUR_KINDS` cadence vocab (`daily … yearly`) +
+pure `recurrence.js` engine, `/api/schedule` stores `due_every`/`review_every` beside the
+anchor date, and the agenda/calendar/pulse/Daily Brief expand occurrences at read time;
+**review→project linking** — a conservative resolver (`lib/review-project.js`) attaches a
+code review to the Project whose `repo_url` matches the reviewed repo (no match → no
+edge); the file reader now renders source/config files as syntax-highlighted text (only
+true binaries stay unsupported); `npm start` loads `.env` before deciding whether to spin
+its own database. New tour beat + screenshot: the Code Map on this repo itself. 675
+studio + 49 CLI tests green.
+
 ## [0.2.0-alpha.1] — The redesign: a cockpit you can fly (2026-07-02)
 
 **TL;DR (explain-like-I'm-5):** The whole app got rebuilt around how you actually use it.

@@ -15,6 +15,26 @@ export function isScheduleKind(k) {
   return typeof k === 'string' && Object.prototype.hasOwnProperty.call(KIND_META, k);
 }
 
+// Recurrence cadences (rank 8) — the closed set of repeat rules a due_at/review_at anchor
+// may carry, stored beside it as due_every / review_every (additive, optional). A closed
+// vocab, same discipline as SCHEDULE_KINDS and vocab.js's source_kind — deliberately NOT
+// an RRULE parser (a handful of cadences cover "review monthly / weekly check-in"). Each
+// carries { label, unit, n } for the pure recurrence engine: day-based cadences advance by
+// `n` days, month-based by `n` calendar months (recurrence.js does the clamping).
+export const RECUR_META = {
+  daily:     { label: 'daily',         unit: 'day',   n: 1 },
+  weekly:    { label: 'weekly',        unit: 'day',   n: 7 },
+  biweekly:  { label: 'every 2 weeks', unit: 'day',   n: 14 },
+  monthly:   { label: 'monthly',       unit: 'month', n: 1 },
+  quarterly: { label: 'quarterly',     unit: 'month', n: 3 },
+  yearly:    { label: 'yearly',        unit: 'month', n: 12 },
+};
+export const RECUR_KINDS = Object.keys(RECUR_META);
+
+export function isRecurKind(r) {
+  return typeof r === 'string' && Object.prototype.hasOwnProperty.call(RECUR_META, r);
+}
+
 // A YYYY-MM-DD string (the only format the setter accepts; '' clears).
 export function isIsoDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);

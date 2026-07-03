@@ -112,6 +112,10 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 // (Goal)-[:REQUIRES]->(Skill)
 // (Goal)-[:ACHIEVED_BY]->(Project)
 // (Goal)-[:BLOCKED_BY]->(Idea)
+//
+// -- Code review (Studio: a Review pins a repo@git-ref; its line comments are Notes)
+// (Review)-[:ABOUT]->(Project)
+// (Note)-[:PART_OF]->(Review)               // a review comment (anchor_kind='line', author='you'|'agent:<model>')
 // ============================================================================
 
 RETURN "schema seeded" AS status;

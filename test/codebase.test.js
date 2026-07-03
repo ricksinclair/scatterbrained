@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { langOf, parseImports, normalizeRel, resolveImport, buildModuleGraph, parsesImports, extractsRefs, IGNORE_DIRS,
-  dependents, dependencies, findPath, orphans, cycles, summary } from '../lib/codebase.js';
+  dependents, dependencies, findPath, orphans, cycles, summary, repoInsights } from '../lib/codebase.js';
 
 describe('langOf', () => {
   it('maps extensions to languages', () => {
@@ -11,6 +11,17 @@ describe('langOf', () => {
     expect(langOf('README.md')).toBe('doc');
     expect(langOf('Makefile')).toBe('other');
     expect(langOf('')).toBe('other');
+  });
+
+  // The file reader gates "render as text" on langOf NOT being a binary kind — guard that
+  // contract so an EXT_LANG change can't silently make code files unviewable (or binaries garble).
+  it('classifies binaries as image/font/media (the reader will not render these as text)', () => {
+    ['a.png', 'b.jpg', 'c.svg', 'd.webp'].forEach((f) => expect(langOf(f)).toBe('image'));
+    ['x.woff2', 'y.ttf'].forEach((f) => expect(langOf(f)).toBe('font'));
+    ['m.mp4', 'n.mp3'].forEach((f) => expect(langOf(f)).toBe('media'));
+    // …while code/config stay text-renderable (not a binary kind):
+    ['app.js', 's.mjs', 'x.css', 'q.scss', 'c.py', 'd.go', 'e.json']
+      .forEach((f) => expect(['image', 'font', 'media']).not.toContain(langOf(f)));
   });
 });
 
@@ -244,6 +255,61 @@ describe('graph queries', () => {
     expect(s.languages).toEqual({ ts: 4, css: 1 });
     expect(s.hubs[0].degree).toBe(3);                                   // app.ts & util.ts tie at degree 3
     expect(s.hubs.slice(0, 2).map((h) => h.file).sort()).toEqual(['app.ts', 'util.ts']);
+  });
+});
+
+describe('repoInsights — the ranked view feeding the Code lens + agent brief', () => {
+  it('carries hubs (with lang), unreferenced code, and code cycles', () => {
+    const ins = repoInsights(G);
+    expect(ins.fileCount).toBe(5);
+    expect(ins.hubs[0]).toMatchObject({ degree: 3, lang: 'ts' });       // hubs gain a lang tag
+    expect(ins.unreferenced).toEqual([{ file: 'entry.ts', lang: 'ts' }]); // the un-imported .ts module
+    expect(ins.cycles).toHaveLength(1);
+    expect(ins.cycles[0].sort()).toEqual(['helper.ts', 'util.ts']);
+  });
+
+  it('drops NOISE: doc/config orphans and non-code (config extends) cycles are filtered out', () => {
+    // Add a README nobody imports (expected orphan) and a tsconfig extends-cycle (config, not code).
+    const noisy = {
+      nodes: [...G.nodes, { id: 'README.md', lang: 'doc' },
+              { id: 'tsconfig.json', lang: 'data' }, { id: 'tsconfig.app.json', lang: 'data' }],
+      links: [...G.links,
+              { source: 'tsconfig.json', target: 'tsconfig.app.json' },
+              { source: 'tsconfig.app.json', target: 'tsconfig.json' }],
+    };
+    const ins = repoInsights(noisy);
+    // README.md has degree 0 → it's a filler, not a hub.
+    expect(ins.hubs.every((h) => h.degree > 0)).toBe(true);
+    expect(ins.hubs.map((h) => h.file)).not.toContain('README.md');
+    // README.md is an orphan but doc → excluded; only the real un-imported CODE module remains.
+    expect(ins.unreferenced.map((u) => u.file)).toEqual(['entry.ts']);
+    // The tsconfig↔tsconfig cycle is data-lang → excluded; only the util↔helper CODE cycle stays.
+    expect(ins.cycles).toHaveLength(1);
+    expect(ins.cycles[0].sort()).toEqual(['helper.ts', 'util.ts']);
+  });
+
+  it('excludes TEST files from hubs (a high-degree test is not "read first") and from unreferenced', () => {
+    // A test helper that imports everything (high out-degree) + an un-imported spec file.
+    const withTests = {
+      nodes: [...G.nodes, { id: 'src/testing/harness.ts', lang: 'ts' }, { id: 'src/foo.spec.ts', lang: 'ts' }],
+      links: [...G.links,
+        { source: 'src/testing/harness.ts', target: 'app.ts' },
+        { source: 'src/testing/harness.ts', target: 'util.ts' },
+        { source: 'src/testing/harness.ts', target: 'helper.ts' }],
+    };
+    const ins = repoInsights(withTests);
+    expect(ins.hubs.map((h) => h.file)).not.toContain('src/testing/harness.ts');   // degree 3 but a test
+    expect(ins.unreferenced.map((u) => u.file)).not.toContain('src/foo.spec.ts');   // orphan but a test, not dead
+    expect(ins.unreferenced.map((u) => u.file)).toContain('entry.ts');               // the real un-imported module
+  });
+
+  it('excludes CSS from unreferenced (styleUrls/@use refs are not parsed → false positives)', () => {
+    const withCss = {
+      nodes: [...G.nodes, { id: 'src/lonely.css', lang: 'css' }],   // nothing imports it, but css orphans are unreliable
+      links: [...G.links],
+    };
+    const ins = repoInsights(withCss);
+    expect(ins.unreferenced.map((u) => u.file)).not.toContain('src/lonely.css');
   });
 });
 

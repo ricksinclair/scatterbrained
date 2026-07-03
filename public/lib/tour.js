@@ -1,6 +1,6 @@
 // tour.js — the guided auto-play tour (#14), rewritten for the rail + palette + lens
 // IA (D7). Pure data + a validator; the runner (tour-ui.js) interprets each beat over
-// the live app. Modeled on a guided product tour: linear, auto-advancing, warm captions,
+// the live app. Modeled on a guided-demo tour: linear, auto-advancing, warm captions,
 // a stop button. It's the showcase AND first-run onboarding — best over the demo graph
 // (examples/seed-demo.cypher), where the named nodes exist; on any other graph a step
 // that can't find its node simply narrates (the runner try/catches every action).

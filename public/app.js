@@ -25,7 +25,7 @@ import { buildOptions, nextIndex, optionAt } from '/lib/typeahead.js';
 import { fieldRowsFor, membersForField, relateArgs } from '/lib/fields.js';
 import { initTimeLens } from '/lib/time-lenses.js';
 import { isCollapsed as isColRaw, toggleCollapsed as togColRaw } from '/lib/collapse.js';
-import { KIND_META } from '/lib/schedule.js';
+import { KIND_META, RECUR_META, RECUR_KINDS } from '/lib/schedule.js';
 import { initCodebase } from '/lib/codebase-ui.js';
 import { initAgents } from '/lib/agents-ui.js';
 import { laneSummary } from '/lib/act-loop.js';
@@ -457,7 +457,7 @@ function onHover(node) {
   const tip = document.getElementById('tip');
   if (node) {
     tip.hidden = false;
-    tip.innerHTML = `<div class="tt">${esc(node.label)}${node.embeddable ? ' · indexed' : ''}</div><div class="tn">${esc(node.name)}</div><div class="ts" style="color:${node.stale ? 'var(--warn)' : 'var(--ok)'}">${esc(statusText(node))}</div>`;
+    tip.innerHTML = `<div class="tt">${esc(node.label)}${node.embeddable ? ' · indexed' : ''}</div><div class="tn">${esc(node.name)}</div><div class="ts" style="color:${node.stale ? 'var(--warn-ink)' : 'var(--ok-ink)'}">${esc(statusText(node))}</div>`;
     positionTip();
   } else tip.hidden = true;
 }
@@ -559,7 +559,7 @@ function selectNode(n) {
     document.getElementById('i-dot').style.background = rgba(colorOf(n.label), 1);
     document.getElementById('i-type').textContent = n.label + (n.embeddable ? ' · indexed' : '');
     document.getElementById('i-name').textContent = n.name;
-    const st = document.getElementById('i-status'); st.textContent = statusText(n); st.style.color = n.stale ? 'var(--warn)' : 'var(--ok)';
+    const st = document.getElementById('i-status'); st.textContent = statusText(n); st.style.color = n.stale ? 'var(--warn-ink)' : 'var(--ok-ink)';
     const of = document.getElementById('i-openfile');             // 1-click access for file-backed nodes
     of.hidden = !n.file_path; of.onclick = () => openFile(n.file_path);
     document.getElementById('i-components').innerHTML = '<div class="dk-empty" style="font-size:11px">loading…</div>';
@@ -716,13 +716,23 @@ function renderScheduleSection() {
   sec.className = 'insp-sec insp-sec-schedule' + (collapsed ? ' collapsed' : '');
   sec.dataset.sec = 'sec:schedule';
   sec.dataset.defcollapsed = '1';
+  // recurrence <select> (rank 8): a cadence rides beside the anchor date (stored as
+  // due_every/review_every). Disabled until a date is set — a cadence needs an anchor.
+  const everyProp = (k) => k.replace(/_at$/, '_every');
+  const recurSelect = (k) => {
+    const cur = node[everyProp(k)] || '';
+    const opts = ['<option value="">once</option>'].concat(
+      RECUR_KINDS.map((r) => `<option value="${r}"${r === cur ? ' selected' : ''}>${esc(RECUR_META[r].label)}</option>`)).join('');
+    return `<select class="sch-recur" data-recur="${esc(k)}" aria-label="${esc(KIND_META[k].label)} recurrence"${node[k] ? '' : ' disabled'}>${opts}</select>`;
+  };
   sec.innerHTML = '<button class="insp-sec-h" type="button"><span class="insp-sec-t">Schedule</span><i class="insp-chev" aria-hidden="true">›</i></button>' +
     '<div class="insp-sec-b">' + order.map((k) => {
       const val = node[k] || '';
       const dl = val ? dueLabel(val, Date.now()) : '';
       const overdue = val && Date.parse(val + 'T00:00:00') < Date.now();
-      return `<div class="sch-row"><span class="sch-label">${esc(KIND_META[k].label)}</span>` +
+      return `<div class="sch-row" data-kind="${esc(k)}"><span class="sch-label">${esc(KIND_META[k].label)}</span>` +
         `<input type="date" class="sch-date" data-schedule="${esc(k)}" value="${esc(val)}" aria-label="${esc(KIND_META[k].label)} date">` +
+        recurSelect(k) +
         (dl ? `<span class="sch-due${overdue ? ' overdue' : ''}">${esc(dl)}</span>` : '') + '</div>';
     }).join('') + '</div>';
   host.appendChild(sec);
@@ -800,7 +810,7 @@ function renderReport() {
   document.getElementById('r-dot').style.background = rgba(colorOf(n.label), 1);
   document.getElementById('r-type').textContent = n.label + (n.embeddable ? ' · indexed' : '');
   document.getElementById('r-name').textContent = n.name;
-  const rst = document.getElementById('r-status'); rst.textContent = statusText(n); rst.style.color = n.stale ? 'var(--warn)' : 'var(--ok)';
+  const rst = document.getElementById('r-status'); rst.textContent = statusText(n); rst.style.color = n.stale ? 'var(--warn-ink)' : 'var(--ok-ink)';
   document.getElementById('r-keyfacts').innerHTML = keyFactsHtml('r');
   wireKeyfactJump(document.getElementById('r-keyfacts'), document.getElementById('r-components'));
   const parts = composeView(current.signals, current.data, caps, 'report');
@@ -1003,14 +1013,22 @@ function handleCard(action) {
   const sh = e.target.closest('.insp-sec-h'); if (!sh) return;
   const sec = sh.closest('.insp-sec'); secToggle(sec.dataset.sec, sec.dataset.defcollapsed === '1'); sec.classList.toggle('collapsed');
 }));
-// Schedule (#25 P2): commit an intention date → narrow setter, then refresh labels.
+// Schedule (#25 P2 + rank 8 recurrence): commit an intention date AND its cadence → the
+// narrow setter, then refresh labels. Date and cadence live on the same row and POST
+// together (the setter clears the cadence when the date clears, and preserves the other
+// field on either change), so we always read both from the row before sending.
 document.getElementById('i-schedule').addEventListener('change', async (e) => {
-  const di = e.target.closest('[data-schedule]'); if (!di || !current) return;
+  const ctl = e.target.closest('[data-schedule], [data-recur]'); if (!ctl || !current) return;
+  const row = ctl.closest('.sch-row'); if (!row) return;
+  const kind = row.dataset.kind;
+  const when = row.querySelector('.sch-date').value;
+  const every = row.querySelector('.sch-recur').value;
   try {
-    const r = await fetch('/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.n.id, kind: di.dataset.schedule, when: di.value }) }).then((x) => x.json());
-    if (r.error) { di.title = r.error; return; }
-    current.signals[di.dataset.schedule] = r.value || '';
-    rerenderActive();   // refresh the relative due label
+    const r = await fetch('/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.n.id, kind, when, every }) }).then((x) => x.json());
+    if (r.error) { ctl.title = r.error; return; }
+    current.signals[kind] = r.value || '';
+    current.signals[kind.replace(/_at$/, '_every')] = r.every || '';
+    rerenderActive();   // re-render: refresh the due label + enable/disable the cadence select
   } catch (err) { /* ignore */ }
 });
 // Goal target_date (#25 P1): commit the date input → narrow setter, then re-render.

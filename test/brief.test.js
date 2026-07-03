@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { bucketIdeas, cwdHint, deriveBriefInput, buildBriefMarkdown } from '../public/lib/brief.js';
+import { bucketIdeas, cwdHint, deriveBriefInput, buildBriefMarkdown, repoMapSection } from '../public/lib/brief.js';
 
 // The graph→agent brief (Phase 2 "Open agent here"): pure derivation from a node's /api/node
 // payload → the SLIPWAY_BRIEF.md the agent loads as opening context. These guard the load-bearing
@@ -105,5 +105,48 @@ describe('buildBriefMarkdown — the SLIPWAY_BRIEF.md string', () => {
     }, '/d');
     expect((md.match(/- ins \d+/g) || []).length).toBe(8);
     expect((md.match(/\[s\d+\]/g) || []).length).toBe(12);
+  });
+
+  it('renders a Repo map section from repoInsights (hubs / unreferenced / cycles)', () => {
+    const repoMap = {
+      fileCount: 3, edgeCount: 2,
+      hubs: [{ file: 'src/core.ts', degree: 12 }, { file: 'src/app.ts', degree: 4 }],
+      unreferenced: [{ file: 'src/main.ts' }],
+      cycles: [['a.ts', 'b.ts']],
+    };
+    const md = buildBriefMarkdown({ name: 'P', label: 'Project' }, '/d', repoMap);
+    expect(md).toContain('## Repo map');
+    expect(md).toContain('3 files · 2 imports');
+    expect(md).toMatch(/Hub files — read these first[^\n]*\n- `src\/core\.ts` · 12/);
+    expect(md).toContain('- `src/main.ts`');
+    expect(md).toContain('- `a.ts` → `b.ts` ↩');
+  });
+
+  it('omits the Repo map section entirely when there is no map', () => {
+    expect(buildBriefMarkdown({ name: 'P', label: 'Project' }, '/d')).not.toContain('## Repo map');
+    expect(buildBriefMarkdown({ name: 'P', label: 'Project' }, '/d', { fileCount: 0 })).not.toContain('## Repo map');
+  });
+});
+
+describe('repoMapSection — caps and empty-subsection handling', () => {
+  it('caps hubs at 8, unreferenced at 10 (with a +N more line), cycles at 5', () => {
+    const map = {
+      fileCount: 50, edgeCount: 40,
+      hubs: Array.from({ length: 20 }, (_, i) => ({ file: `h${i}.ts`, degree: 20 - i })),
+      unreferenced: Array.from({ length: 15 }, (_, i) => ({ file: `u${i}.ts` })),
+      cycles: Array.from({ length: 9 }, (_, i) => [`c${i}a.ts`, `c${i}b.ts`]),
+    };
+    const md = repoMapSection(map).join('\n');
+    expect((md.match(/^- `h\d+\.ts`/gm) || []).length).toBe(8);
+    expect((md.match(/^- `u\d+\.ts`/gm) || []).length).toBe(10);
+    expect(md).toContain('_…and 5 more_');
+    expect((md.match(/↩/g) || []).length).toBe(5);
+  });
+
+  it('drops a subsection whose list is empty (no cycles → no cycles heading)', () => {
+    const md = repoMapSection({ fileCount: 2, edgeCount: 1, hubs: [{ file: 'x.ts', degree: 1 }], unreferenced: [], cycles: [] }).join('\n');
+    expect(md).toContain('Hub files');
+    expect(md).not.toContain('Unreferenced code');
+    expect(md).not.toContain('Import cycles');
   });
 });
