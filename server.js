@@ -38,6 +38,7 @@ import { isWebUrl, isVideoUrl } from './public/lib/links.js';
 import { buildBriefMarkdown, deriveBriefInput, cwdHint } from './public/lib/brief.js';
 import { resolveProvider, generate } from './lib/inference.js';
 import { addSession, markCaptured, pruneSessions, sessionsView } from './lib/agent-sessions.js';
+import { resolveReviewProject } from './lib/review-project.js';
 import { cleanTranscript } from './lib/ansi.js';
 import { detectKind, expandRoots, isWithinRoots, pickPrimarySource, excerptAround, TEXT_KINDS } from './lib/source.js';
 import { buildModuleGraph } from './lib/codebase.js';
@@ -1314,7 +1315,22 @@ async function createReview({ repo, gitRef } = {}) {
      RETURN rv.id AS id, rv.repo AS repo, rv.git_ref AS git_ref, rv.ref_label AS ref_label,
             rv.status AS status, rv.verdict AS verdict, toString(rv.created_at) AS created_at`,
     { repo: dir, sha, refLabel: refIn });
-  return { review: toPlain(recs[0].toObject()) };
+  const review = toPlain(recs[0].toObject());
+  // Attach the review to the Project it reviews — (Review)-[:ABOUT]->(Project) — so
+  // "all reviews for X" is a graph traversal (getReview already reads the edge back).
+  // Resolution (lib/review-project.js) is conservative: no/ambiguous match → NO edge
+  // (a wrong project edge is worse than none); MERGE keeps re-materialization idempotent.
+  const projects = rows(await run(driver, `MATCH (p:Project) RETURN p.name AS name, p.repo_url AS repo_url`));
+  const projectName = resolveReviewProject(dir, projects);
+  if (projectName) {
+    await run(driver,
+      `MATCH (rv:Review {id: $id}) MATCH (p:Project {name: $name}) MERGE (rv)-[:ABOUT]->(p)`,
+      { id: review.id, name: projectName });
+  } else {
+    console.log(`  review ${review.id}: no Project matched repo ${dir} — ABOUT edge skipped`);
+  }
+  review.project = projectName;
+  return { review };
 }
 // Open a review surface WITHOUT persisting a node (lazy creation, #34): resolve repo@ref
 // → sha, load an existing Review if one already has comments, else return a stub with

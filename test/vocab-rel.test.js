@@ -59,6 +59,11 @@ describe('vocab — edge shapes', () => {
     expect(isValidRelShape('Note', 'ABOUT', 'Project')).toBe(true);    // a node-note on anything
     expect(isValidRelShape('Review', 'ABOUT', 'Project')).toBe(true);  // a review about its project
   });
+  it('enumerates the Review>Project ABOUT shape (code-review → its project)', () => {
+    // Belt AND suspenders: Review is exempt today, but the shape is also enumerated so
+    // it stays legal (and documented) if RELSHAPE_EXEMPT_LABELS ever narrows.
+    expect(REL_SHAPE_LIST).toContain('ABOUT|Review>Project');
+  });
   it('REL_SHAPE_LIST encodes TYPE|Src>Tgt entries', () => {
     expect(REL_SHAPE_LIST).toContain('WORKS_AT|Person>Organization');
     expect(REL_SHAPE_LIST.every((s) => /^[A-Z_]+\|\w+>\w+$/.test(s))).toBe(true);
