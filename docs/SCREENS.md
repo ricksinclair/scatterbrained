@@ -150,6 +150,13 @@ shows the "runtime not detected" empty state with the start command.
   `embed=1` flips Slipway into embed mode (terminals become the page, chrome hides
   behind a status strip); mode/accent/uiscale paint it Studio-native before JS runs.
   Accent is validated as a hex color on the Slipway side.
+- **Expanded state = Studio-native, not a modal (2026-07-02).** Opening the strip used to
+  reveal Slipway's standalone panel verbatim (a serif "Local LLM Control" H1, a "Quit panel"
+  button, a duplicate Terminals button, a centered floating card stack) — it read as an
+  app-within-an-app. It now recomposes, embed-only, into flat inspector sections: the eyebrow
+  recipe (`.insp-sec-t`), hairline dividers, full pane width. SERVER · LAUNCHER · MODEL rows
+  plus a collapsible ACTIVITY disclosure; the app H1/Quit/duplicate-Terminals are dropped, Docs
+  is a quiet inline link. Standalone Slipway is untouched (SPEC §11.1; `slipway-panel.spec.js`).
 - **Live theme:** the Studio posts `{ type: 'scatterbrained:theme', mode, uiScale, vars }`
   targeted at the Slipway origin on every theme/mode/UI-size switch; the panel applies
   **only whitelisted CSS custom properties** (`--bg0 --bg1 --ink --ink-dim --ink-faint
@@ -159,9 +166,13 @@ shows the "runtime not detected" empty state with the start command.
   kept so Slipway's terminal-WebSocket Origin check passes; deliberately no
   `allow-top-navigation`).
 
-*(No public screenshot: on the capture machine the embed shows the real local runtime
-and its session names — real-graph information. The `agents-lens.spec.js` e2e covers
-both the detected and not-detected states.)*
+![Slipway embed, expanded — recomposed as Studio-native inspector sections](screenshots/agents-embed-recompose.png)
+
+*The recomposed expanded control view (demo-safe: placeholder model, empty log, no paths).
+The **collapsed** view — terminals as the page — is deliberately not shipped as a public
+shot: on the capture machine it shows the real local runtime and its session names
+(real-graph information). The `agents-lens.spec.js` + `slipway-panel.spec.js` e2e cover the
+detected / not-detected states and the recomposed layout.*
 
 ## 8. Capture — link/video intake + receipt
 

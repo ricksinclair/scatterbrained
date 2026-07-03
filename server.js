@@ -32,7 +32,8 @@ import { getDriver, run, toPlain } from './scripts/lib/db.js';
 import { IDENTITY_LABELS as ALIAS_LABELS, NAME_FIELDS as ALIAS_NAME_FIELDS, brandRegexCypher } from './scripts/lib/aliases.js';
 import { keysLookAlike } from './scripts/lib/identity.js';
 import { REL_TYPES, REL_SHAPES, isValidRelType, isValidRelShape, isProvenanceRelType } from './scripts/lib/vocab.js';
-import { isScheduleKind, isIsoDate } from './public/lib/schedule.js';
+import { isScheduleKind, isIsoDate, isRecurKind } from './public/lib/schedule.js';
+import { effectiveDate, recurLabel } from './public/lib/recurrence.js';
 import { detectCandidates, normalizeValue, isProtectedFactKind, checkRewrite } from './public/lib/protected-facts.js';
 import { isWebUrl, isVideoUrl } from './public/lib/links.js';
 import { buildBriefMarkdown, deriveBriefInput, cwdHint } from './public/lib/brief.js';
@@ -41,7 +42,8 @@ import { addSession, markCaptured, pruneSessions, sessionsView } from './lib/age
 import { resolveReviewProject } from './lib/review-project.js';
 import { cleanTranscript } from './lib/ansi.js';
 import { detectKind, expandRoots, isWithinRoots, pickPrimarySource, excerptAround, TEXT_KINDS } from './lib/source.js';
-import { buildModuleGraph } from './lib/codebase.js';
+import { buildModuleGraph, repoInsights, langOf, resolveImport } from './lib/codebase.js';
+import { parseImportBindings, callSites } from './public/lib/symbols.js';
 import { walkRepo } from './lib/repo-index.js';
 import { unzip, extractText } from './lib/office.js';
 import { firstSheet } from './lib/xlsx.js';
@@ -196,7 +198,12 @@ async function buildAgentPlan(id) {
   if (!node) return { error: 'node not found' };
   const cwd = resolveAgentCwd(cwdHint(node));
   if (!cwd) return { error: 'no local working directory for this node' };
-  const brief = buildBriefMarkdown(deriveBriefInput(node), cwd);
+  // Code-graph tie-in: map the resolved repo so the brief can point the agent at the hub files
+  // first. Best-effort — a walk failure (huge/odd repo) must never fail the brief; skip the map.
+  let repoMap = null;
+  try { const ins = repoInsights(buildModuleGraph(walkRepo(cwd).files)); if (ins.fileCount) repoMap = ins; }
+  catch { /* brief works without a map */ }
+  const brief = buildBriefMarkdown(deriveBriefInput(node), cwd, repoMap);
   // "preset else hosted" is decided INSIDE claude-local (which always runs, so the brief always
   // loads): a repo with .slipway.json uses its pinned model; otherwise hosted Claude Code. We only
   // surface which one for the popover's label here.
@@ -492,6 +499,7 @@ const Q_NODE = `
          n.confidence AS confidence, n.citation AS citation,
          n.timeframe AS timeframe, toString(n.target_date) AS target_date,
          toString(n.due_at) AS due_at, toString(n.review_at) AS review_at,
+         n.due_every AS due_every, n.review_every AS review_every,
          n.status AS status, n.jurisdiction AS jurisdiction,
          n.source_kind AS source_kind, n.file_path AS file_path, n.url AS url, n.tags AS tags,
          n { .*, embedding: NULL } AS props,
@@ -604,18 +612,18 @@ const QI_REVIEW = `
 // last-accessed tracking yet), so order by importance × age. Threshold kept low
 // because the graph is young; it tightens naturally as history accrues.
 // The agenda: nodes carrying a real intention date (#25 P2) — due_at / review_at, or a
-// Goal's target_date — whose SOONEST such date is overdue or within ~14 days, soonest-first.
-// Replaces the old staleness heuristic so "what's due / to revisit" reflects the scheduler.
+// Goal's target_date — plus any recurrence cadence (due_every/review_every, rank 8). This
+// query RAW-SELECTS the intention dates + cadences (a small set — few nodes are scheduled);
+// rollDueRows() below does the recurrence rolling + overdue/within-14d window in JS, reusing
+// the tested recurrence engine (recurring anchors roll to their next occurrence ≥ today, so
+// the "due" lane — and the Daily Brief that counts it — never runs dry after one clear).
 const QI_DUE = `
   MATCH (n) WHERE n.valid_until IS NULL
     AND (n.due_at IS NOT NULL OR n.review_at IS NOT NULL OR (n:Goal AND n.target_date IS NOT NULL))
-  WITH n, [d IN [n.due_at, n.review_at, CASE WHEN n:Goal THEN n.target_date ELSE null END]
-           WHERE d IS NOT NULL | date(d)] AS ds
-  WITH n, reduce(s = null, d IN ds | CASE WHEN s IS NULL OR d < s THEN d ELSE s END) AS soonest
-  WHERE soonest <= date() + duration({days: 14})
   RETURN elementId(n) AS id, coalesce(n.name,n.title,n.summary) AS name, ${PLABEL} AS label,
-         (CASE WHEN soonest < date() THEN 'overdue · ' ELSE 'due · ' END) + toString(soonest) AS sub
-  ORDER BY soonest ASC LIMIT 20`;
+         toString(date(n.due_at)) AS due_at, toString(date(n.review_at)) AS review_at,
+         toString(CASE WHEN n:Goal THEN date(n.target_date) ELSE null END) AS target_date,
+         n.due_every AS due_every, n.review_every AS review_every`;
 const QI_NEXT = `
   MATCH (n:Idea)
   WHERE n.valid_until IS NULL AND toLower(coalesce(n.status,'')) =~ '.*(open|queued|next|planned|backlog).*'
@@ -636,6 +644,36 @@ const Q_RESOLVE = `
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 const rows = (recs) => recs.map((r) => toPlain(r.toObject()));
+
+const DAY_MS = 86400000;
+const _dayNum = (iso) => Math.floor(Date.parse(iso + 'T00:00:00Z') / DAY_MS);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+// Roll the raw QI_DUE rows into the "due" lane. Each node's SOONEST effective intention
+// date wins: a recurring anchor (due_every/review_every) advances to its next occurrence
+// ≥ today; a plain date passes through. Keep overdue-or-within-14d, soonest-first, top 20.
+// `sub` stays exactly "overdue · DATE" / "due · DATE" (daybrief.js parses it); the cadence
+// rides a separate optional `recur` field the dock renders as a chip.
+function rollDueRows(rawRows, today = todayISO()) {
+  const HORIZON = 14;
+  const scored = [];
+  for (const r of rawRows) {
+    const parts = [
+      { d: effectiveDate(r.due_at, r.due_every, today), recur: r.due_every },
+      { d: effectiveDate(r.review_at, r.review_every, today), recur: r.review_every },
+      { d: effectiveDate(r.target_date, null, today), recur: null },   // goals don't recur
+    ].filter((p) => p.d);
+    if (!parts.length) continue;
+    parts.sort((a, z) => a.d.localeCompare(z.d));
+    const s = parts[0];
+    if (_dayNum(s.d) - _dayNum(today) > HORIZON) continue;
+    const row = { id: r.id, name: r.name, label: r.label, sub: (s.d < today ? 'overdue · ' : 'due · ') + s.d, _s: s.d };
+    if (recurLabel(s.recur)) row.recur = recurLabel(s.recur);
+    scored.push(row);
+  }
+  scored.sort((a, z) => a._s.localeCompare(z._s));
+  return scored.slice(0, 20).map(({ _s, ...row }) => row);
+}
 
 async function api(pathname, params) {
   if (pathname === '/api/graph') {
@@ -665,7 +703,7 @@ async function api(pathname, params) {
     ]);
     return {
       goals: rows(goals),
-      due: rows(due),
+      due: rollDueRows(rows(due)),
       whatsNew: rows(whatsNew),
       review: { superseded: rows(superseded), lowConfidence: rows(lowConf), orphans: rows(orphans), aliasDrift: rows(aliasDrift), protectedFacts: rows(protectedFactsReview), notes: rows(notesReview) },
     };
@@ -741,7 +779,9 @@ async function api(pathname, params) {
   if (pathname === '/api/intent') {
     const q = INTENT_Q[String(params.kind || '')];
     if (!q) return { results: [] };
-    return { kind: params.kind, results: rows(await run(driver, q)) };
+    const raw = rows(await run(driver, q));
+    // the 'due' lane shares QI_DUE's raw shape → roll recurrence the same way the pulse does
+    return { kind: params.kind, results: params.kind === 'due' ? rollDueRows(raw) : raw };
   }
   if (pathname === '/api/source') {
     // The "See" layer: read a node's primary file, sandboxed to the allowlist. Returns
@@ -789,7 +829,18 @@ async function api(pathname, params) {
         return { file: { ...base, kind: 'xlsx', rows, sheetName: name, text, lines: rows.length, extracted: 'xlsx', notes: await fileNotes(fp) } };
       } catch (err) { return { file: { ...base, error: 'could not read xlsx: ' + String(err.message || err) } }; }
     }
-    if (!TEXT_KINDS.has(kind)) return { file: { ...base, unsupported: true } };
+    if (!TEXT_KINDS.has(kind)) {
+      // Not a document-lane kind (md/csv/pdf/office), but source code / config / other text is
+      // still readable — return it as text with its `lang` so the client syntax-highlights it the
+      // same way the review tab does. Only true binaries (image/font/media) stay unsupported.
+      const lang = langOf(fp);
+      if (['image', 'font', 'media'].includes(lang)) return { file: { ...base, unsupported: true } };
+      try {
+        if (fs.statSync(fp).size > SOURCE_MAX_BYTES) return { file: { ...base, tooLarge: true } };
+        const text = fs.readFileSync(fp, 'utf8');
+        return { file: { ...base, kind: lang, lang, text, lines: text.split('\n').length, notes: await fileNotes(fp) } };
+      } catch (err) { return { file: { ...base, error: String(err.message || err) } }; }
+    }
     try {
       if (fs.statSync(fp).size > SOURCE_MAX_BYTES) return { file: { ...base, tooLarge: true } };
       const text = fs.readFileSync(fp, 'utf8');
@@ -842,10 +893,44 @@ async function api(pathname, params) {
     try { stat = fs.statSync(dir); } catch { return { repo: { missing: true, path: dir } }; }
     if (!stat.isDirectory()) return { repo: { notDir: true, path: dir } };
     const { files, truncated } = walkRepo(dir);
-    const { nodes, links } = buildModuleGraph(files);
+    const graph = buildModuleGraph(files);
+    const { nodes, links } = graph;
     const byRel = Object.fromEntries(files.map((f) => [f.rel, f.path]));
     nodes.forEach((n) => { n.path = byRel[n.rel]; });   // absolute path so clicking loads the file
-    return { repo: { name: dir.split('/').pop() || dir, path: dir, nodes, links, fileCount: nodes.length, edgeCount: links.length, truncated } };
+    // The ranked view (Code lens) reads `insights`; Review still reads `nodes` — keep both.
+    // Attach the absolute path to each ranked file so a list click can open it.
+    const ins = repoInsights(graph);
+    const withPath = (e) => ({ ...e, path: byRel[e.file] });
+    const insights = {
+      languages: ins.languages,
+      hubs: ins.hubs.map(withPath),
+      unreferenced: ins.unreferenced.map(withPath),
+      cycles: ins.cycles.map((c) => c.map((file) => ({ file, path: byRel[file] }))),
+    };
+    return { repo: { name: dir.split('/').pop() || dir, path: dir, nodes, links, fileCount: nodes.length, edgeCount: links.length, truncated, insights } };
+  }
+  if (pathname === '/api/repo/callsites') {
+    // "Which FUNCTIONS call this file" — for a target rel `file`, read each importer and extract
+    // the call sites of the symbols it binds from the target (symbols.js). Same sandbox as /api/repo.
+    const dir = String(params.repo || '');
+    const file = String(params.file || '');
+    if (!dir || !isWithinRoots(dir, SOURCE_ROOTS)) return { callers: [], blocked: true };
+    const { files } = walkRepo(dir);
+    const relSet = new Set(files.map((f) => f.rel));
+    if (!relSet.has(file)) return { callers: [] };
+    const callers = [];
+    for (const f of files) {
+      if (f.rel === file || !f.text) continue;
+      const lang = langOf(f.rel);
+      if (!(lang === 'js' || lang === 'ts' || lang === 'vue' || lang === 'svelte')) continue;
+      const binds = parseImportBindings(f.text).filter((b) => resolveImport(f.rel, b.specifier, relSet) === file);
+      if (!binds.length) continue;
+      const names = [...new Set(binds.flatMap((b) => b.names))];
+      const sites = names.length ? callSites(f.text, names, new Set(binds.map((b) => b.line))) : [];
+      callers.push({ file: f.rel, path: f.path, symbols: names, sites });
+    }
+    callers.sort((a, b) => a.file.localeCompare(b.file));
+    return { callers };
   }
   return null;
 }
@@ -1045,18 +1130,28 @@ async function setGoalTargetDate({ id, date } = {}) {
 // NARROW: `kind` must be in the closed SCHEDULE_KINDS set (due_at/review_at) so the only
 // property name reaching the query is an allowlisted identifier (never user text); `when`
 // is ISO-validated. The writer half of the intention clock the calendar + agenda read.
-async function setSchedule({ id, kind, when } = {}) {
+async function setSchedule({ id, kind, when, every } = {}) {
   const nid = String(id || '');
   if (!nid) return { error: 'id required' };
   if (!isScheduleKind(kind)) return { error: 'kind must be due_at or review_at' };
   const d = (when == null || when === '') ? null : String(when);
   if (d !== null && !isIsoDate(d)) return { error: 'when must be YYYY-MM-DD (or empty to clear)' };
+  // optional recurrence cadence (rank 8): a closed RECUR_KINDS token or empty to clear.
+  // Stored beside the anchor as due_every / review_every; clearing the date clears its cadence.
+  const ev = (every == null || every === '') ? null : String(every);
+  if (ev !== null && !isRecurKind(ev)) return { error: 'every must be a cadence (daily…yearly) or empty' };
+  // `kind` is allowlisted (isScheduleKind) so the derived property names are safe identifiers,
+  // never user text — same trust-boundary posture as the single-prop setter it extends.
+  const everyProp = kind.replace(/_at$/, '_every');   // due_at→due_every, review_at→review_every
   const recs = await run(driver,
     `MATCH (n) WHERE elementId(n) = $id
-     SET n.\`${kind}\` = CASE WHEN $d IS NULL THEN null ELSE date($d) END
-     RETURN toString(n.\`${kind}\`) AS value`,
-    { id: nid, d });
-  return recs.length ? { ok: true, kind, value: toPlain(recs[0].toObject()).value } : { error: 'node not found' };
+     SET n.\`${kind}\` = CASE WHEN $d IS NULL THEN null ELSE date($d) END,
+         n.\`${everyProp}\` = CASE WHEN $d IS NULL THEN null ELSE $ev END
+     RETURN toString(n.\`${kind}\`) AS value, n.\`${everyProp}\` AS every`,
+    { id: nid, d, ev });
+  if (!recs.length) return { error: 'node not found' };
+  const rec = toPlain(recs[0].toObject());
+  return { ok: true, kind, value: rec.value, every: rec.every };
 }
 
 // First-run onboarding (#6): bootstrap ONE root owner node on a fresh/empty graph so every later
@@ -1253,30 +1348,35 @@ async function calendar({ from, to } = {}) {
   const f = /^\d{4}-\d{2}-\d{2}$/.test(String(from)) ? String(from) : null;
   const t = /^\d{4}-\d{2}-\d{2}$/.test(String(to)) ? String(to) : null;
   if (!f || !t) return { items: [] };
+  // `recur` (due_every/review_every, rank 8) rides along on the due/review rows so the client
+  // can expand occurrences within the window; null on the record-time / target branches. Every
+  // UNION branch returns the same columns (date, kind, id, name, label, recur).
   const q = `
     MATCH (n) WHERE n.created_at IS NOT NULL AND date(n.created_at) >= date($from) AND date(n.created_at) <= date($to)
     RETURN toString(date(n.created_at)) AS date, 'created' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, null AS recur
     UNION
     MATCH (n) WHERE n.valid_until IS NOT NULL AND date(n.valid_until) >= date($from) AND date(n.valid_until) <= date($to)
     RETURN toString(date(n.valid_until)) AS date, 'expiry' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, null AS recur
     UNION
     MATCH (g:Goal) WHERE g.target_date IS NOT NULL AND date(g.target_date) >= date($from) AND date(g.target_date) <= date($to)
     RETURN toString(g.target_date) AS date, 'target' AS kind, elementId(g) AS id,
-           coalesce(g.name, g.title) AS name, 'Goal' AS label
+           coalesce(g.name, g.title) AS name, 'Goal' AS label, null AS recur
     UNION
-    MATCH (n) WHERE n.due_at IS NOT NULL AND date(n.due_at) >= date($from) AND date(n.due_at) <= date($to)
+    MATCH (n) WHERE n.due_at IS NOT NULL AND date(n.due_at) <= date($to)
+      AND (n.due_every IS NOT NULL OR date(n.due_at) >= date($from))
     RETURN toString(date(n.due_at)) AS date, 'due' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, n.due_every AS recur
     UNION
-    MATCH (n) WHERE n.review_at IS NOT NULL AND date(n.review_at) >= date($from) AND date(n.review_at) <= date($to)
+    MATCH (n) WHERE n.review_at IS NOT NULL AND date(n.review_at) <= date($to)
+      AND (n.review_every IS NOT NULL OR date(n.review_at) >= date($from))
     RETURN toString(date(n.review_at)) AS date, 'review' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label`;
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, n.review_every AS recur`;
   return { items: rows(await run(driver, q, { from: f, to: t })) };
 }
 

@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import path from 'node:path';
 import neo4j from 'neo4j-driver';
+import dotenv from 'dotenv';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 // Resolve a file by trying a few candidate roots, so this works whether it is run from the
@@ -30,6 +31,12 @@ function resolve(rel) {
 const SERVER = resolve('server.js');
 const SCHEMA = resolve('scripts/seed-schema.cypher');
 const DEMO = resolve('examples/seed-demo.cypher');
+
+// Load .env so a custom graph's credentials are seen here too — without it the
+// launcher can't auth to an already-running container and tries to spin its own
+// (port clash → hang). No .env → no-op, defaults below apply.
+const ENV_FILE = resolve('.env');
+if (ENV_FILE) dotenv.config({ path: ENV_FILE });
 
 const URI = process.env.NEO4J_URI || 'bolt://localhost:7687';
 const USER = process.env.NEO4J_USER || 'neo4j';

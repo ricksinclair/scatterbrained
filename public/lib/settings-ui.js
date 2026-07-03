@@ -37,7 +37,7 @@ export function initSettings({ esc, THEMES, THEME_ORDER, applyTheme, applyAnim, 
       '<div class="set-section"><div class="set-section-t">Appearance</div>' +
         `<div class="set-row"><span class="set-k">Theme</span></div><div class="set-themes">${themes}</div>` +
         `<div class="set-row"><span class="set-k">Mode</span><button class="set-toggle" id="set-mode-t">${curMode === 'light' ? '☀ Light' : '☾ Dark'}</button></div>` +
-        `<div class="set-row"><span class="set-k">Calm mode <span style="color:var(--ink-faint)">· less motion</span></span><button class="set-toggle${calm ? ' on' : ''}" id="set-calm-t">${calm ? 'On' : 'Off'}</button></div>` +
+        `<div class="set-row"><span class="set-k">Calm mode <span style="color:var(--ink-dim)">· less motion</span></span><button class="set-toggle${calm ? ' on' : ''}" id="set-calm-t">${calm ? 'On' : 'Off'}</button></div>` +
         `<div class="set-row"><span class="set-k">UI size</span><span class="set-seg" id="set-uiscale">${['S', 'M', 'L'].map((l) => `<button class="set-seg-b${curUiScale === l ? ' on' : ''}" data-uiscale="${l}">${l}</button>`).join('')}</span></div>` +
         `<div class="set-row"><span class="set-k">Loading animation</span><span class="set-seg" id="set-anim">${['off', 'light', 'full'].map((l) => `<button class="set-seg-b${curAnim === l ? ' on' : ''}" data-anim="${l}">${l[0].toUpperCase() + l.slice(1)}</button>`).join('')}</span></div>` +
       '</div>' +

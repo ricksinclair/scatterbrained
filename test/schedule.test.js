@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { SCHEDULE_KINDS, KIND_META, isScheduleKind, isIsoDate, soonestDate } from '../public/lib/schedule.js';
+import { SCHEDULE_KINDS, KIND_META, isScheduleKind, isIsoDate, soonestDate,
+  RECUR_KINDS, RECUR_META, isRecurKind } from '../public/lib/schedule.js';
 
 // The intention-clock vocab (#25 P2). The closed set of schedulable date kinds the
 // server validates and the UI offers.
@@ -36,5 +37,23 @@ describe('schedule — date validation + ordering', () => {
   });
   it('soonestDate can be scoped to specific props', () => {
     expect(soonestDate({ due_at: '2026-10-01', review_at: '2026-07-15' }, ['due_at'])).toBe('2026-10-01');
+  });
+});
+
+// Recurrence cadence vocab (rank 8) — the closed set of repeat rules a due_at/review_at
+// anchor may carry (stored as due_every/review_every), parallel to SCHEDULE_KINDS.
+describe('schedule — recurrence vocab', () => {
+  it('exposes the six cadences with labels', () => {
+    expect(RECUR_KINDS).toEqual(['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']);
+    expect(RECUR_META.weekly.label).toBe('weekly');
+    expect(RECUR_META.biweekly.label).toBe('every 2 weeks');
+  });
+  it('isRecurKind gates the closed set', () => {
+    expect(isRecurKind('weekly')).toBe(true);
+    expect(isRecurKind('yearly')).toBe(true);
+    expect(isRecurKind('due_at')).toBe(false);      // a schedule kind, not a cadence
+    expect(isRecurKind('fortnightly')).toBe(false);
+    expect(isRecurKind('')).toBe(false);
+    expect(isRecurKind(null)).toBe(false);
   });
 });

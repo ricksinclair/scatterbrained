@@ -8,6 +8,7 @@ import { miniMarkdown, REGISTRY } from './registry.js';
 import { parseCsv, sortRows, filterRows, isNumericColumn } from './csv.js';
 import { rawLinesHtml, cellNotesIndex, rowNotesIndex, colNotesIndex, sectionNotesIndex, pageNotesIndex, annoHtml, slugify, makeCellLocator, makeRowLocator, makeColLocator, makePageLocator, anchoredCount } from './docnotes.js';
 import { recommendChart, histogramSpec, columnValues, profileColumns } from './dataviz.js';
+import { highlightCode, jsonDepths } from './codehl.js';
 
 export function initFileReader({ esc, trunc }) {
   const FR = document.getElementById('filereader');
@@ -38,7 +39,17 @@ export function initFileReader({ esc, trunc }) {
         md.scrollTop = 0;
       }
     } else {
-      body.innerHTML = rawLinesHtml(frState.text, frState.notes, esc);   // per-line gutters + anchored notes
+      // Code files carry a `lang` → syntax-highlight with the SAME recipe as the review tab
+      // (codehl + json-depth colouring); documents (no lang) stay plain. Notes/gutters are identical.
+      let hl;
+      if (frState.lang) {
+        const isJson = /\.jsonc?5?$/i.test(frState.path || '');
+        const hlLang = isJson ? 'json' : frState.lang;
+        const depths = isJson ? jsonDepths(frState.text) : null;
+        hl = (s, i) => highlightCode(s, hlLang, esc, depths ? depths[i] : 0);
+      }
+      body.classList.toggle('fr-code', !!frState.lang);   // full --ink + token colours (review-pane parity)
+      body.innerHTML = rawLinesHtml(frState.text, frState.notes, esc, hl);   // per-line gutters + anchored notes
       body.scrollTop = 0;
     }
   }
@@ -191,7 +202,7 @@ export function initFileReader({ esc, trunc }) {
     });
   }
 
-  async function openFile(filePath) {
+  async function openFile(filePath, line = null) {
     if (!filePath) return;
     const body = document.getElementById('fr-body'), md = document.getElementById('fr-md'), embed = document.getElementById('fr-embed');
     const toggle = document.getElementById('fr-toggle');
@@ -226,7 +237,7 @@ export function initFileReader({ esc, trunc }) {
       }
       if (f.unsupported) return void (body.innerHTML = `<span class="fr-note">${esc(f.kind)} — no in-app viewer yet</span>`);
       if (f.error) return void (body.innerHTML = `<span class="fr-note">${esc(f.error)}</span>`);
-      frState = { text: String(f.text || ''), kind: f.kind, path: f.path || filePath, notes: f.notes || [], rows: f.rows || null };
+      frState = { text: String(f.text || ''), kind: f.kind, lang: f.lang || null, path: f.path || filePath, notes: f.notes || [], rows: f.rows || null };
       const extracted = f.extracted ? ` · extracted from ${esc(f.extracted)}` : '';
       const nCount = anchoredCount(frState.notes);
       const noteTag = nCount ? ` · ${nCount} note${nCount > 1 ? 's' : ''}` : '';
@@ -240,8 +251,17 @@ export function initFileReader({ esc, trunc }) {
       const editable = f.kind === 'markdown';
       document.getElementById('fr-edit').hidden = !editable;
       document.getElementById('fr-history').hidden = !editable;
-      renderReader(pretty ? 'rendered' : 'raw');
+      renderReader(pretty && !line ? 'rendered' : 'raw');   // a line target needs the raw per-line view
+      if (line) jumpToLine(line);
     } catch (err) { body.innerHTML = `<span class="fr-note">${esc(String(err))}</span>`; }
+  }
+  // Centre a line in the raw view and flash it — how the impact diagram opens a call site.
+  function jumpToLine(ln) {
+    const el = document.querySelector(`#fr-body .fr-line[data-line="${ln}"]`);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('fr-line-hit');
+    setTimeout(() => el.classList.remove('fr-line-hit'), 1600);
   }
   // Interactive spreadsheet: sort (click header), filter (search), resize columns,
   // toggle row density. State is per-open and local to this view; the data is read-only.
