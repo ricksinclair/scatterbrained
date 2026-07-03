@@ -1111,18 +1111,20 @@ body.calm .receipt { transition: none; }
 .rv-code .fr-anno-st { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); margin-right: 7px; }
 /* Syntax-highlight tokens (codehl.js) — driven by the mode-aware --hl-* palette
    (One Dark / One Light), set in applyTheme. Plain locals/vars keep the default --ink. */
-.rv-code .hl-kw { color: var(--hl-kw); }
-.rv-code .hl-str { color: var(--hl-str); }
-.rv-code .hl-com { color: var(--hl-com); font-style: italic; }
-.rv-code .hl-num { color: var(--hl-num); }
-.rv-code .hl-fn { color: var(--hl-fn); }
-.rv-code .hl-type { color: var(--hl-type); }
-.rv-code .hl-prop { color: var(--hl-prop); }
-.rv-code .hl-const { color: var(--hl-const); }
+.hl-kw { color: var(--hl-kw); }
+.hl-str { color: var(--hl-str); }
+.hl-com { color: var(--hl-com); font-style: italic; }
+.hl-num { color: var(--hl-num); }
+.hl-fn { color: var(--hl-fn); }
+.hl-type { color: var(--hl-type); }
+.hl-prop { color: var(--hl-prop); }
+.hl-const { color: var(--hl-const); }
 /* JSON object keys, tinted by nesting depth so structure is easier to read. */
-.rv-code .hl-key-0 { color: var(--hl-key0); } .rv-code .hl-key-1 { color: var(--hl-key1); }
-.rv-code .hl-key-2 { color: var(--hl-key2); } .rv-code .hl-key-3 { color: var(--hl-key3); }
-.rv-code .hl-key-4 { color: var(--hl-key4); }
+.hl-key-0 { color: var(--hl-key0); } .hl-key-1 { color: var(--hl-key1); }
+.hl-key-2 { color: var(--hl-key2); } .hl-key-3 { color: var(--hl-key3); }
+.hl-key-4 { color: var(--hl-key4); }
+/* A code file in the reader renders at full --ink — set when file-reader-ui adds .fr-code. */
+.fr-body.fr-code, .fr-body.fr-code .fr-tx { color: var(--ink); }
 .rv-code .fr-line { display: flex; align-items: baseline; }
 .rv-code .fr-gut { visibility: hidden; cursor: pointer; color: var(--accent); width: 14px; text-align: center; flex: none; font-weight: 700; }
 .rv-code .fr-line:hover .fr-gut { visibility: visible; }
