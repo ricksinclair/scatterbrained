@@ -148,6 +148,17 @@ const CHECKS = [
       RETURN labels(n) AS labels, coalesce(n.summary, n.name, n.title, n.id) AS key`,
   },
   {
+    name: 'feature-without-acceptance',
+    severity: 'WARN',
+    hint: 'CLAUDE.md rule: behaviors must be expressed and validated as acceptance criteria. An Idea being worked (in_progress/implemented) since 2026-07-03 has NO criterion Notes ABOUT it — log 3-8 testable criteria (Studio inspector \u2192 Acceptance, or POST /api/note with anchor_kind=criterion). Earlier Ideas are grandfathered.',
+    cypher: `
+      MATCH (i:Idea)
+      WHERE coalesce(i.status, '') IN ['in_progress', 'implemented']
+        AND i.created_at >= datetime('2026-07-03T00:00:00Z')
+        AND NOT (i)<-[:ABOUT]-(:Note {anchor_kind: 'criterion'})
+      RETURN labels(i) AS labels, i.name AS key`,
+  },
+  {
     name: 'criterion-invalid',
     severity: 'ERROR',
     hint: 'An acceptance criterion (Note.anchor_kind=criterion) must be ABOUT a target node and carry a state from the closed set (unverified/pass/fail, public/lib/criteria.js). An orphan or off-vocab criterion can never gate a regression.',
