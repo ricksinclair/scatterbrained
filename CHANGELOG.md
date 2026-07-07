@@ -10,6 +10,100 @@ can follow, then the technical details underneath.
 > believed six months ago and why, with every claim tracing back to its source. No cloud,
 > no subscription — it's yours.
 
+## [0.2.0-alpha.3] — Ask your map for a chart, docs that read like a site, and an assistant that tells the truth (2026-07-07)
+
+**TL;DR (explain-like-I'm-5):** The assistant can now **draw**. Ask it something countable —
+"how many projects by status?", "what's my note count each week?" — and it answers with a real
+**chart** right in the conversation, not just words. Like a chart? Say "save that" and it becomes
+a **living lens**: a saved question that re-runs itself every time you open it, so the picture is
+always today's, never a stale snapshot. Opening anything is more coherent, too — the little chart
+card in a chat, the peek panel on the right, and the full report are now the **same view at three
+zoom levels**, and the arrow that says "open the full view" finally opens the *full* view. When
+you're done reading, **export exactly what you see** — as a portable text file, a self-contained
+web page that keeps the visuals, a PDF, or raw JSON.
+
+Your project's write-ups now read like a real **docs site**: a new Docs lens organizes every
+ingested markdown file by who it's for (user / admin / builder), and **architecture diagrams
+render live** inside it — drawn by a local PlantUML, restyled instantly when you switch themes,
+never sent anywhere. The assistant can draw those too ("diagram this"), and diagrams live in
+your graph like any other memory.
+
+And the **assistant's orb stopped bluffing**: it only wears a model's name when that model is
+actually loaded in memory. Nothing loaded? It says so — with a tooltip that explains why and a
+**one-click Load button** that brings a model up while you watch. Talking to an empty room now
+gets an honest answer instead of silence.
+
+The **Code Map reads clearer**: the cryptic little arrow on each file is now a labeled
+**"⇄ impact"** button, each section tells you how many files it found, drilling into a file shows a
+**breadcrumb** so you always know where you are, and the "who calls this?" step says what it's doing
+while it works instead of a bare spinner. The map also **timestamps itself** ("mapped 12:55 AM") and
+quietly redraws when you come back to an old tab, and it now sees calls hiding inside template
+strings — so "nothing calls this" means nothing actually calls it. And the **guided tour grew up**:
+a proper spotlight that dims everything but the thing it's pointing at, **Back/Next** buttons and a
+step counter you control, and a **separate short tour for each part of the app** — reachable from
+Help or the command bar. First-timers get a gentle "take the 60-second tour?" nudge they can snooze,
+and it never nags again once you've taken one.
+
+**Details:**
+
+- **One composition, three altitudes (coherence).** The assistant's inline card, the slim inspector,
+  and the full report all render from the *same* composable component pipeline
+  (`composeView(node, data, view)`); a node card's "open full view ↗" now **promotes to the report**.
+  Escape/collapse demotes symmetrically. Off-canvas opens backfill their identity so the
+  header never renders blank.
+
+- **The report *is* the export.** New pure, DOM-free serializers turn the composed report into
+  **Markdown**, a **self-contained HTML** file (inline stylesheet + a live theme snapshot, zero network
+  requests, SVG charts embedded), **PDF** (print-to-PDF over that same HTML), or structure-lossless
+  **JSON**. One compose, four serializers, behind a small export menu.
+
+- **Voice-generated visualizations.** A closed, validated chart-spec contract (**bar / histogram /
+  line / scatter**) means the model composes a *spec*, never raw HTML — the same injection-safety
+  boundary as the assistant's other panels. `show_panel` gains a **`viz`** kind; a new
+  **`get_graph_stats`** tool returns five ready-to-chart facets deterministically — no model required.
+
+- **Saved live lenses.** "Save that" persists a **Lens** — a named node holding the query and the
+  chart's style, **never the data**. Open it and the Studio re-runs the query and charts the *fresh*
+  rows (a broken query shows an honest error, not a crash). Lenses render everywhere the composable
+  UI does — inspector, report, export.
+
+- **PlantUML diagrams + the Docs lens.** A local render lane (`lib/plantuml.js`, sandboxed, stdin-only)
+  turns PlantUML fences into theme-matched SVG live in the app — a **sentinel→CSS-var** trick re-themes
+  rendered diagrams instantly with zero re-renders. Ships a **12-file standalone theme pack**
+  (`public/plantuml/`, 6 themes × 2 modes) usable in any PlantUML toolchain. "Diagram this" lets the
+  assistant draw architecture views (`create_diagram` MCP tool); diagrams persist as graph nodes with
+  provenance. The **Docs lens** classifies every ingested markdown doc by audience (user/admin/builder)
+  into a navigable per-project doc site, rendered by a vendored `marked` with the same sanitization
+  posture as the rest of the app. Needs a local `plantuml` binary — degrades gracefully without one.
+
+- **The voice lane requires a *resident* model.** Availability used to mean "the model library isn't
+  empty" — but an unloaded model is a promise, not a brain, and a first utterance triggering a cold
+  multi-GB load reads as broken. The runtime probe now distinguishes **runtime down** vs **runtime idle**
+  (nothing loaded), the orb wears an honest `no model` dress with a teaching tooltip, the panel's empty
+  state carries a **Load** button (validated against the runtime's own model list, with progress), and
+  talking with no brain answers in-thread — never a silent no-op. A local model runtime (e.g. Slipway
+  or Ollama) is autostarted with the Studio when present (`SLIPWAY_AUTOSTART=0` opts out) — and never
+  loads a model on its own.
+
+- **Code Map: honest time and honest counts.** The map stamps its render time ("mapped 12:55 AM") and
+  **self-heals stale tabs** — returning to a map older than 10 minutes recomputes the view you're on
+  (line numbers are live-computed; a week-old rendering must not pass for current). Call-site scanning
+  now sees **template-literal interpolations** (`${…}` holds real code): previously a caller whose calls
+  lived only inside template HTML showed "no call sites detected." Brace-matching still uses the fully
+  blanked skeleton, so function ranges never corrupt. Verified with whole-repo invariant sweeps
+  (every reported line must contain the symbol — zero violations across two codebases).
+
+- **Code Map clarity.** The per-file drill-in is a labeled **⇄ impact** button; each section carries a
+  count; the impact view shows a **breadcrumb** and back never loses your repo; the call-site read shows
+  a named, bounded **skeleton**; an active member filter shows a visible **clear chip**.
+
+- **A guided tour worth taking.** Rebuilt around a **spotlight overlay** with **manual Back/Next + a
+  progress counter**. Beyond the full autoplay showcase, there are **short per-surface tours** (graph,
+  inspector, time, code, agents, capture, assistant), each opening the surface it describes, reachable
+  from **Help ▸ Take a tour** and the **⌘K** command bar. A dismissible **first-run offer** snoozes on
+  "Later" and never re-offers once any tour is completed. The `#tour` deep-link still autoplays the
+  showcase.
+
 ## [0.2.0-alpha.2] — Readable everywhere, and a map of your code (2026-07-03)
 
 **TL;DR (explain-like-I'm-5):** Every piece of text now passes accessibility contrast
