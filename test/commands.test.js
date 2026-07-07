@@ -6,7 +6,8 @@ const THEMES = [
   { name: 'nebula', label: 'Nebula' }, { name: 'terminal', label: 'Terminal' },
   { name: 'solar', label: 'Solar' }, { name: 'slate', label: 'Slate' },
 ];
-const reg = () => buildRegistry({ themes: THEMES, types: ['Project', 'Goal', 'Source'] });
+const TOURS = [{ id: 'showcase', label: 'Full tour' }, { id: 'graph', label: 'Graph lens' }, { id: 'code', label: 'Code lens' }];
+const reg = () => buildRegistry({ themes: THEMES, types: ['Project', 'Goal', 'Source'], tours: TOURS });
 
 describe('buildRegistry', () => {
   it('every entry has the registry shape', () => {
@@ -26,16 +27,19 @@ describe('buildRegistry', () => {
     const ids = new Set(reg().map((c) => c.id));
     for (const id of [
       'open-graph', 'open-time-agenda', 'open-roadmap', 'open-code-map', 'open-code-review',
-      'open-agents', 'capture-link', 'add-criterion', 'needs-review', 'toggle-mode', 'toggle-calm',
+      'open-agents', 'open-assistant', 'capture-link', 'add-criterion', 'needs-review', 'toggle-mode', 'toggle-calm',
       'ui-size-s', 'ui-size-m', 'ui-size-l', 'focus-clear', 'study-selected',
       'export-report', 'start-tour', 'open-settings', 'manage-folders',
     ]) expect(ids.has(id), id).toBe(true);
-    // one set-theme-* per theme, one filter-* per dynamic type
+    // one set-theme-* per theme, one filter-* per dynamic type, one start-tour-* per surface tour
     for (const t of THEMES) expect(ids.has('set-theme-' + t.name), t.name).toBe(true);
     for (const t of ['Project', 'Goal', 'Source']) expect(ids.has('filter-' + t), t).toBe(true);
+    expect(ids.has('start-tour-graph')).toBe(true);
+    expect(ids.has('start-tour-code')).toBe(true);
+    expect(ids.has('start-tour-showcase')).toBe(false);   // showcase stays the BASE 'start-tour'
     // nothing outside the declared base + factories
     for (const id of ids) {
-      const factory = id.startsWith('set-theme-') || id.startsWith('filter-');
+      const factory = id.startsWith('set-theme-') || id.startsWith('filter-') || id.startsWith('start-tour-');
       expect(factory || BASE_COMMAND_IDS.includes(id), id + ' is not a declared command').toBe(true);
     }
   });

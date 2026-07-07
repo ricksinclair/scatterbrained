@@ -52,7 +52,34 @@ export function nodeToMarkdown(signals = {}, data = {}) {
   return L.join('\n');
 }
 
-// Safe filename from a node name.
-export function exportFilename(name) {
-  return (String(name || 'node').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'node') + '.md';
+// Structure-lossless JSON serializer (the "portable interop" export target). Same composed
+// data the report renders; returns a plain object — the caller stringifies + downloads. Carries
+// node identity, key facts, ranked relations, sources, and the chart spec (a Lens/data node's
+// chart survives the round-trip since it lives in data.chart).
+export function nodeToJson(signals = {}, data = {}) {
+  const sources = data.sources || (data.edges || []).filter((e) => e.label === 'Source' && e.dir === 'in');
+  const rels = rankEdges((data.edges || []).filter((e) => !(e.label === 'Source' && e.dir === 'in')));
+  return {
+    node: {
+      id: signals.id || data.id || null,
+      name: signals.name || null,
+      label: signals.label || null,
+      status: signals.status || null,
+      tags: signals.tags || [],
+      created_at: data.created_at || null,
+      valid_until: data.valid_until || null,
+      superseded_by: data.superseded_by || null,
+    },
+    text: signals.full_text || signals.desc || signals.description || null,
+    facts: keyFacts(signals, data),
+    edges: rels.map((e) => ({ type: e.type, dir: e.dir, name: e.name, label: e.label, id: e.id || null })),
+    sources: sources.map((s) => ({ name: s.name, url: s.url || null, file_path: s.file_path || null, source_kind: s.source_kind || null })),
+    chart: data.chart || null,
+    exported_from: 'Scatterbrained Studio',
+  };
+}
+
+// Safe filename from a node name, with an explicit extension (default 'md' for back-compat).
+export function exportFilename(name, ext = 'md') {
+  return (String(name || 'node').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'node') + '.' + ext;
 }

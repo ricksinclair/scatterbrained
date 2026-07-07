@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { FIELDS, fieldRowsFor, membersForField, relateArgs } from '../public/lib/fields.js';
-import { isValidRelShape } from '../scripts/lib/vocab.js';
+import { isValidRelShape } from '../../scripts/lib/vocab.js';
 
 // Per-field association rows (#29). The curated FIELDS table must never describe an edge
 // shape the server would reject — so every field is validated against REL_SHAPES here.

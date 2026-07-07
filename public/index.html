@@ -29,6 +29,10 @@
       <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 8l-4 4l4 4"/><path d="M17 8l4 4l-4 4"/><path d="M14 4l-4 16"/></svg>
       <span class="rail-l">Code</span>
     </button>
+    <button class="rail-btn" id="rail-docs" title="Docs — project documentation (D)">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6v13"/><path d="M12 6v13"/><path d="M21 6v13"/></svg>
+      <span class="rail-l">Docs</span>
+    </button>
     <button class="rail-btn" id="rail-agents" title="Agents — Slipway runtime (A)">
       <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M8 9l3 3l-3 3"/><path d="M14 15l3 0"/></svg>
       <span class="rail-l">Agents</span>
@@ -37,6 +41,10 @@
     <button class="rail-btn rail-util" id="rail-capture" title="Capture — save a link">
       <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
       <span class="rail-l">Capture</span>
+    </button>
+    <button class="rail-btn rail-util" id="rail-assistant" title="Assistant — talk to your graph (V)">
+      <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a4 4 0 0 1 4 4v5a4 4 0 1 1 -8 0v-5a4 4 0 0 1 4 -4z"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><path d="M12 19v2"/></svg>
+      <span class="rail-l">Assistant</span>
     </button>
     <button class="rail-btn rail-util" id="rail-help" title="Help — tour, shortcuts, docs">
       <svg class="rail-i" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 17v.01"/><path d="M12 13.5a1.5 1.5 0 0 1 1 -1.5a2.6 2.6 0 1 0 -3 -4"/></svg>
@@ -50,11 +58,12 @@
 
   <!-- Help menu (C3): tour + shortcuts + docs, anchored to the rail's Help button. -->
   <div id="help-pop" class="help-pop" hidden>
-    <button class="hp-item" id="hp-tour">▶ Start the tour</button>
+    <button class="hp-item" id="hp-tour">▶ Take a tour</button>
+    <div class="hp-tour-list" id="hp-tour-list" hidden></div>
     <button class="hp-item" id="hp-keys">Keyboard shortcuts</button>
     <div class="hp-keys" id="hp-keys-list" hidden>
       <div class="hp-k"><kbd>⌘K</kbd> / <kbd>/</kbd><span>command palette</span></div>
-      <div class="hp-k"><kbd>G</kbd> <kbd>T</kbd> <kbd>C</kbd> <kbd>A</kbd><span>switch lens</span></div>
+      <div class="hp-k"><kbd>G</kbd> <kbd>T</kbd> <kbd>C</kbd> <kbd>D</kbd> <kbd>A</kbd><span>switch lens</span></div>
       <div class="hp-k"><kbd>Esc</kbd><span>step back one layer</span></div>
     </div>
     <a class="hp-item" href="https://ulrictodman.com/scatterbrained/" target="_blank" rel="noopener">Docs ↗</a>
@@ -170,7 +179,15 @@
       <span class="report-tools">
         <button id="r-focus" title="focus subgraph"><span>◎</span></button>
         <button id="r-pin" title="pin"><span>📌</span></button>
-        <button id="r-export" title="export briefing as Markdown"><span>⤓</span> Export</button>
+        <span class="report-export">
+          <button id="r-export" title="export this briefing" aria-haspopup="menu"><span>⤓</span> Export</button>
+          <div id="r-export-menu" class="export-menu" role="menu" hidden>
+            <button class="export-item" role="menuitem" data-export="md">Markdown <span class="export-sub">portable text</span></button>
+            <button class="export-item" role="menuitem" data-export="html">HTML <span class="export-sub">self-contained, keeps visuals</span></button>
+            <button class="export-item" role="menuitem" data-export="pdf">PDF <span class="export-sub">via print</span></button>
+            <button class="export-item" role="menuitem" data-export="json">JSON <span class="export-sub">structured data</span></button>
+          </div>
+        </span>
         <button class="report-collapse" id="r-collapse"><span>⤡</span> Collapse</button>
         <button class="report-x" id="report-x" aria-label="close">×</button>
       </span>
@@ -218,6 +235,25 @@
           <div class="rv-summary" id="rv-summary"></div>
         </div>
       </div>
+    </div>
+  </aside>
+
+  <!-- The Docs lens (PlantUML/docs integration, 6b): a per-project doc SITE over the
+       markdown the document lane already ingested. Taxonomy sidebar (/api/docs via
+       docsite.js) · reading pane (docmd.js: vendored marked + codehl + sanitizer, with
+       live-themed PlantUML fences) · scroll-spy TOC. Wiring: lib/docs-ui.js. -->
+  <aside class="docslens" id="docslens" hidden>
+    <div class="lens-head">
+      <button class="lh-back" data-back>‹ Graph</button>
+      <span class="lh-eyebrow">docs</span>
+      <select class="docs-project" id="docs-project" aria-label="choose project"></select>
+      <span class="lh-ctl"><span class="docs-meta">the non-Notion reading lane — your ingested project docs, beautifully</span></span>
+      <span class="lh-esc">esc</span>
+    </div>
+    <div class="docs-wrap">
+      <nav class="docs-nav" id="docs-nav" aria-label="documentation"></nav>
+      <article class="docs-body" id="docs-body"></article>
+      <aside class="docs-toc" id="docs-toc" aria-label="on this page"></aside>
     </div>
   </aside>
 
@@ -364,8 +400,50 @@
     </div>
   </div>
 
+  <!-- VOICE (Phase 1): the floating assistant panel — coexists with every lens (body-level,
+       bottom-right, same popover family as addlink-pop). Wiring: lib/voice-ui.js. -->
+  <aside id="voice" class="voice-pop" hidden aria-label="assistant">
+    <div class="vc-head">
+      <span id="vc-glyph" class="vc-glyph" aria-hidden="true"></span>
+      <span id="vc-model" class="vc-model">no model</span>
+      <span class="vc-grow"></span>
+      <select id="vc-picker" class="vc-picker" aria-label="choose model" hidden></select>
+      <button id="vc-save" class="vc-icon" title="Save this conversation to the graph" aria-label="save conversation to graph" hidden>⤓</button>
+      <button id="vc-mute" class="vc-icon" title="Voice replies" aria-label="toggle voice replies">🔊</button>
+      <button id="vc-x" class="al-x" title="Close" aria-label="Close assistant">×</button>
+    </div>
+    <div id="vc-thread" class="vc-thread" aria-live="polite"></div>
+    <div id="vc-empty" class="vc-empty">
+      <p>Talk to your graph — <b>hold Space</b> to speak (release to send), tap <b>talk</b> for hands-free, or type below. Connect a local model (Ollama or Slipway MLX), or your own Claude session via Settings → copy connect command.</p>
+    </div>
+    <div id="vc-chips" class="vc-chips" hidden>
+      <button data-chip="due">What’s due</button>
+      <button data-chip="node" hidden>Show this node</button>
+      <button data-chip="search">Search the graph…</button>
+    </div>
+    <div class="vc-foot">
+      <input id="vc-input" type="text" placeholder="ask about your projects…" autocomplete="off" aria-label="message the assistant" />
+      <button id="vc-mic" title="Talk — click to toggle hands-free listening, or hold Space anywhere" aria-label="toggle microphone" hidden>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a4 4 0 0 1 4 4v5a4 4 0 1 1 -8 0v-5a4 4 0 0 1 4 -4z"/><path d="M5 10v2a7 7 0 0 0 14 0v-2"/><path d="M12 19v2"/></svg>
+        <span id="vc-mic-l">talk</span>
+      </button>
+      <button id="vc-send" title="Send" aria-label="Send">↑</button>
+    </div>
+  </aside>
+
+  <!-- The ORB — the assistant's primary presence (Jarvis-meets-Wispr-Flow, Rick 2026-07-04):
+       breathing/rippling/orbiting/waveform per state; the chat panel expands from it and
+       collapses back into it. The subtitle strip floats above while it speaks. -->
+  <div id="voice-sub" class="voice-sub" hidden aria-live="polite"></div>
+  <button id="voice-orb" class="voice-orb" aria-label="assistant — open">
+    <span id="vo-visual-wrap"></span>
+    <span id="vo-caption" class="vo-caption">assistant</span>
+  </button>
+
   <div class="tip" id="tip" hidden></div>
-  <div class="tour-cap" id="tour-cap" aria-live="polite"></div>
+  <!-- The guided-tour overlay (spotlight + Back/Next popover) and first-run offer-toast are
+       created on demand by lib/tour-ui.js — no static markup needed here. -->
+
 
   <div class="zoom">
     <button id="z-in" aria-label="zoom in">+</button>

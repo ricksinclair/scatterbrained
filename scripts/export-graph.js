@@ -24,6 +24,9 @@ const KEY_BY_LABEL = {
   Insight: 'id',
   Skill: 'name',
   Goal: 'name',
+  Note: 'id',
+  Review: 'id',
+  ProtectedFact: 'id',
 };
 
 function primaryLabel(labels) {
@@ -48,18 +51,21 @@ function keyValue(label, props) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const dateStr = new Date().toISOString().slice(0, 10);
+  // Single, overwritten, git-versioned snapshot (NOT one file per day). git
+  // already preserves history; dated files just duplicated that and bloated the
+  // repo. Determinism (the ORDER BY below) keeps per-commit diffs small + readable.
   const outPath =
     args.output && args.output !== true
       ? path.resolve(ROOT, args.output)
-      : path.resolve(ROOT, 'backups', `graph-${dateStr}.json`);
+      : path.resolve(ROOT, 'backups', 'graph.json');
 
   const driver = getDriver();
   try {
-    // --- Nodes ---
+    // --- Nodes --- (ordered for stable, reviewable git diffs)
     const nodeRecs = await run(
       driver,
-      `MATCH (n) RETURN labels(n) AS labels, properties(n) AS props`
+      `MATCH (n) RETURN labels(n) AS labels, properties(n) AS props
+       ORDER BY head(labels(n)), coalesce(n.name, n.title, n.id, n.summary, '')`
     );
     const nodes = [];
     const nodeCounts = {};
@@ -80,7 +86,8 @@ async function main() {
        RETURN type(r) AS type,
               labels(a) AS from_labels, properties(a) AS from_props,
               labels(b) AS to_labels, properties(b) AS to_props,
-              properties(r) AS props`
+              properties(r) AS props
+       ORDER BY type(r), coalesce(a.name, a.title, a.id, ''), coalesce(b.name, b.title, b.id, '')`
     );
     const relationships = [];
     for (const r of relRecs) {
@@ -109,6 +116,21 @@ async function main() {
 
     mkdirSync(path.dirname(outPath), { recursive: true });
     writeFileSync(outPath, JSON.stringify(payload, null, 2));
+
+    // Integrity gate: a relationship whose endpoint serialized to null can't be
+    // restored (import matches endpoints by natural key) — it would be silently
+    // dropped. The backup is still written, but we FAIL LOUDLY so the cause (a
+    // node missing its natural key) gets fixed instead of hiding in the JSON.
+    const broken = relationships.filter((r) => r.from_name == null || r.to_name == null);
+    if (broken.length) {
+      console.error(`\n❌ ${broken.length} relationship(s) have a NULL endpoint — they will NOT restore.`);
+      console.error('   Cause: an endpoint node is missing its natural key. Fix with `npm run lint:graph` (node-missing-natural-key).');
+      for (const r of broken.slice(0, 8)) {
+        console.error(`     • ${r.type}: (${r.from_label}) ${r.from_name ?? '<NULL>'} -> (${r.to_label}) ${r.to_name ?? '<NULL>'}`);
+      }
+      if (broken.length > 8) console.error(`     … and ${broken.length - 8} more`);
+      process.exitCode = 1; // signal the integrity failure; the file is still written
+    }
 
     console.log('Graph export complete.');
     console.log('Node counts by label:');

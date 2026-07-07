@@ -73,7 +73,7 @@ describe('buildBrief — counts from the pulse', () => {
 
 describe('buildBrief — last focus', () => {
   it('threads the persisted focus name through', () => {
-    expect(buildBrief({ pulse: PULSE, lastFocusName: 'Northwind', lastVisitISO: null, todayISO: TODAY }).lastFocusName).toBe('Northwind');
+    expect(buildBrief({ pulse: PULSE, lastFocusName: 'Atlas', lastVisitISO: null, todayISO: TODAY }).lastFocusName).toBe('Atlas');
   });
   it('absent lastFocus → null (the card drops the resume action)', () => {
     expect(buildBrief({ pulse: PULSE, lastVisitISO: null, todayISO: TODAY }).lastFocusName).toBe(null);

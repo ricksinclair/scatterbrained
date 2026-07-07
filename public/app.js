@@ -9,7 +9,7 @@
 import { statusText, computeDoi, placeLabels, smartLabel, collideRadius, particlesForZoom } from '/lib/graph.js';
 import { composeView, keyFacts, resurfaceState, miniMarkdown, dueLabel } from '/lib/registry.js';
 import { detectCandidates } from '/lib/protected-facts.js';
-import { splitCriteria } from '/lib/criteria.js';
+import { deriveNodeView } from '/lib/node-view.js';
 import { initTour } from '/lib/tour-ui.js';
 import { initStaleBanner } from '/lib/stale-banner-ui.js';
 import { initReview } from '/lib/review-ui.js';
@@ -25,10 +25,12 @@ import { initialState as navInitial, reduce as navReduce, parseHash, serializeHa
 import { buildOptions, nextIndex, optionAt } from '/lib/typeahead.js';
 import { fieldRowsFor, membersForField, relateArgs } from '/lib/fields.js';
 import { initTimeLens } from '/lib/time-lenses.js';
+import { initDocsLens } from '/lib/docs-ui.js';
 import { isCollapsed as isColRaw, toggleCollapsed as togColRaw } from '/lib/collapse.js';
 import { KIND_META, RECUR_META, RECUR_KINDS } from '/lib/schedule.js';
 import { initCodebase } from '/lib/codebase-ui.js';
 import { initAgents } from '/lib/agents-ui.js';
+import { initVoice } from '/lib/voice-ui.js';
 import { laneSummary } from '/lib/act-loop.js';
 import { langColor } from '/lib/lang-colors.js';
 import { initSettings } from '/lib/settings-ui.js';
@@ -37,7 +39,8 @@ import { highlightCode, jsonDepths } from '/lib/codehl.js';
 import { buildFileTree, flattenTree } from '/lib/filetree.js';
 import { parseCards, nextReview } from '/lib/cards.js';
 import { REGISTRY } from '/lib/registry.js';
-import { nodeToMarkdown, exportFilename } from '/lib/export.js';
+import { nodeToMarkdown, nodeToJson, exportFilename } from '/lib/export.js';
+import { nodeToHtml } from '/lib/export-html.js';
 import { parseLayout, orderParts, moveBefore, toggleSpan, serializeLayout } from '/lib/layout.js';
 import { parseCsv, sortRows, filterRows, isNumericColumn } from '/lib/csv.js';
 import {
@@ -57,21 +60,10 @@ function buildCards(signals) {
 }
 const cardSchedKey = (nodeId, idx) => `scatterbrained:card:${nodeId}:${idx}`;
 
-// Relation-type distribution → the chart component's bars (the "shape" of a node's
-// connections). Counts each relationship type. Prefers the server's uncapped
-// `rel_types` (the edge list is capped at 60, which would under-report); falls back
-// to the capped edges if absent.
-function relationDistribution(types = []) {
-  const counts = {};
-  (types || []).forEach((t) => { if (t) counts[t] = (counts[t] || 0) + 1; });
-  const bars = Object.keys(counts).map((t) => ({ label: t, value: counts[t] })).sort((a, b) => b.value - a.value);
-  return bars.length ? { title: 'connections by type', bars } : null;
-}
-
 // Runtime capabilities consumed by the composable inspector (resolveLayout gates
 // e.g. ai-summary on caps.llm). M-E will populate this from a /api/ai/ping probe;
 // until then nothing is connected.
-const caps = { llm: false, notion: false };
+const caps = { llm: false, notion: false, diagram: false };
 
 // esc/trunc/rgba → lib/dom.js (pure, tested); still threaded into *-ui deps below.
 import { esc, trunc, rgba } from '/lib/dom.js';
@@ -99,6 +91,7 @@ let didInitialFit = false;
 let lastMx = 0, lastMy = 0, idleTimer = null;
 const HEADER = 60, DOCKW = 264, INSPW = 300, TIMEBAR = 50, RAILW = 64;
 let dockOpen = true, inspOpen = false, reportOpen = false, studyMode = false;
+let pendingReport = false;                // one-shot: promote the next selection straight to the report (voice card ↗)
 let current = null;                       // cached selection payload {n, signals, data}
 let study = null;                         // active study session { cards, idx, revealed, reviewed }
 const reportWidth = () => Math.round(Math.min(880, Math.max(440, window.innerWidth * 0.6)));
@@ -473,6 +466,8 @@ function layoutGraph() {
   document.body.classList.toggle('insp-open', inspOpen);
   document.body.classList.toggle('report-open', reportOpen);
   document.body.classList.toggle('dock-closed', !dockOpen);
+  // the assistant orb/panel/subtitles (and zoom) slide left of whatever right panel is open
+  document.body.style.setProperty('--right-panel-w', (reportOpen ? reportWidth() : inspOpen ? INSPW : 0) + 'px');
   const rpt = document.getElementById('report');
   if (rpt) rpt.style.width = reportWidth() + 'px';
   if (!Graph) return;
@@ -568,53 +563,25 @@ function selectNode(n) {
   const nodeReq = fetch('/api/node?id=' + encodeURIComponent(n.id)).then((r) => r.json());
   // The "See" layer: read the node's primary file in parallel (sandboxed BFF).
   const srcReq = fetch('/api/source?id=' + encodeURIComponent(n.id)).then((r) => r.json()).catch(() => ({ source: null }));
-  Promise.all([nodeReq, srcReq]).then(([{ node }, { source }]) => {
+  // A Lens's chart is the LIVE re-run of its stored query — fetch it in parallel when we already
+  // know the node is a Lens (on-canvas / opened with a label); the off-canvas case backfills below.
+  const lensReq = n.label === 'Lens'
+    ? fetch('/api/lens/run?id=' + encodeURIComponent(n.id)).then((r) => r.json()).catch(() => null)
+    : Promise.resolve(null);
+  Promise.all([nodeReq, srcReq, lensReq]).then(([{ node }, { source }, lensRes]) => {
     node = node || {};
-    const edges = node.edges || [];
-    const edgeSources = edges.filter((e) => e.label === 'Source' && e.dir === 'in');
-    // Prefer the server's full (uncapped) INFORMS list so provenance can show ALL
-    // sources, not just those within the 60-edge graph cap.
-    const sources = (node.all_sources && node.all_sources.length) ? node.all_sources : edgeSources;
+    // Off-canvas opens (voice card ↗, __open by id) may pass a bare {id}; backfill identity
+    // from the fetched node so the report/inspector header renders a real name + type, not blanks.
+    if (!n.name && node.name) n.name = node.name;
+    if (!n.label && node.label) n.label = node.label;
     // The composable inspector: resolveLayout picks components from the node's
-    // content-signals, the registry renders each. Merge the live graph node (raw
-    // props for keyvalue/body) with derived resolver signals.
-    // criterion notes get their own `acceptance` section; ordinary notes keep the inbox
-    const noteSplit = splitCriteria(node.notes || []);
-    const signals = {
-      ...node, ...n,
-      label: n.label,
-      sourceKind: node.source_kind || n.source_kind,
-      // a primary file may be the node's own, or its top incoming Source (from the BFF)
-      filePath: node.file_path || n.file_path || (source && source.sourcePath),
-      url: node.url || n.url,
-      tags: node.tags || n.tags,
-      hasText: !!(node.full_text || node.desc || n.desc || node.description),
-      sourceCount: sources.length,
-      edgeCount: edges.length - edgeSources.length,
-      source_count: node.source_count,           // real uncapped counts (server COUNT)
-      degree: node.degree != null ? node.degree : n.degree,
-      superseded: !!node.superseded_by,
-      confidence: node.confidence || n.confidence,
-      citation: node.citation || n.citation,
-      jurisdiction: node.jurisdiction || n.jurisdiction,
-      status: node.status || n.status,
-      full_text: node.full_text || n.full_text,
-      desc: node.desc || n.desc,
-      criterionCount: noteSplit.criteria.length,   // resolver signal for the acceptance section
-    };
-    const data = {
-      edges, sources, source,
-      degree: node.degree, relTypes: node.rel_types,
-      created_at: node.created_at, valid_until: node.valid_until,
-      superseded_by: node.superseded_by, invalidated_reason: node.invalidated_reason,
-      superseded_by_id: node.superseded_by_id, superseded_by_name: node.superseded_by_name,
-      resurface: resurfaceState(node.created_at, node.degree, { snoozedUntil: getSnooze(n.id), now: Date.now(), superseded: !!node.superseded_by }),
-      chart: relationDistribution(node.rel_types || edges.map((e) => e.type)),
-      notes: noteSplit.rest, criteria: noteSplit.criteria,
-      protectedFacts: node.protected_facts || [], retiredFacts: node.retired_facts || [], id: n.id,
-      goal_milestones: node.goal_milestones || [], goal_blockers: node.goal_blockers || [],
-      propCount: node.props ? Object.keys(node.props).filter((k) => k !== 'embedding' && k !== 'embedding_hash' && node.props[k] != null).length : null,
-    };
+    // content-signals, the registry renders each. Derivation lives in node-view.js —
+    // shared with the assistant's dynamic panels (same shape, no drift).
+    const { signals, data } = deriveNodeView(node, n, { source, snoozedUntil: getSnooze(n.id), now: Date.now() });
+    // Lens: replace the default relation-distribution chart with the live query result (or null
+    // until the off-canvas fallback fetch below resolves).
+    const isLens = (node.label || n.label) === 'Lens';
+    if (isLens) data.chart = (lensRes && lensRes.chart) ? lensRes.chart : null;
     current = { n, signals, data };
     // Off-canvas opens (__open from the dock/search) pass no file_path, so the pre-fetch
     // "Open file" gating above hid the button — re-gate on the node's OWN file now we know it.
@@ -625,8 +592,17 @@ function selectNode(n) {
       if (filePath) ofBtn.onclick = () => openFile(filePath);
     }
     if (studyMode) { study = { cards: buildCards(signals), idx: 0, revealed: false, reviewed: 0 }; renderStudy(); }
+    else if (pendingReport) { pendingReport = false; expandCurrent(); }   // voice card ↗ promoted straight to the report
     else if (reportOpen) renderReport(); else renderInspector();
-  }).catch(() => { const c = document.getElementById(reportOpen ? 'r-components' : 'i-components'); if (c) c.innerHTML = '<div class="dk-empty" style="font-size:11px">load failed</div>'; });
+    // Stored PlantUML auto-renders on select (cache-backed server-side, so revisits are instant).
+    if (caps.diagram && signals.puml) renderPuml(signals.puml);
+    // Off-canvas Lens open: label wasn't known when lensReq was decided, so run it now + re-render.
+    if (isLens && !lensRes) {
+      fetch('/api/lens/run?id=' + encodeURIComponent(n.id)).then((r) => r.json()).then((lr) => {
+        if (lr && current && current.n === n) { current.data.chart = lr.chart || { error: lr.error || 'lens error', title: n.name }; rerenderActive(); }
+      }).catch(() => { /* leave the chart absent */ });
+    }
+  }).catch(() => { pendingReport = false; const c = document.getElementById(reportOpen ? 'r-components' : 'i-components'); if (c) c.innerHTML = '<div class="dk-empty" style="font-size:11px">load failed</div>'; });
   setFocus(n.id);
   const pinBtn = document.getElementById('a-pin');
   const setPinLabel = () => (pinBtn.innerHTML = n.fx != null ? '<span>📌</span> Unpin' : '<span>📌</span> Pin');
@@ -1007,7 +983,9 @@ function handleCard(action) {
     const card = e.target.closest('[data-card]');
     if (card) { e.preventDefault(); handleCard(card.dataset.card); return; }
     const ai = e.target.closest('button[data-ai]');
-    if (ai) { e.preventDefault(); handleAi(ai.dataset.ai); }
+    if (ai) { e.preventDefault(); handleAi(ai.dataset.ai); return; }
+    const dg = e.target.closest('button[data-diagram]');
+    if (dg) { e.preventDefault(); handleDiagram(dg.dataset.diagram, dg); }
   }));
 ['i-components', 'r-components'].forEach((id) => document.getElementById(id)
   .addEventListener('submit', (e) => {
@@ -1059,6 +1037,17 @@ function handleAi(action, formEl) {
         : res.error ? { error: res.error } : { text: res.text, model: res.model };
       rerenderActive();
     }).catch(() => { current.data.ai.summary = { error: 'request failed' }; rerenderActive(); });
+  } else if (action === 'diagram') {
+    // kind select sits next to the button in the ai-diagram component
+    const sel = document.querySelector('[data-ai-dgkind]');
+    const kind = sel ? sel.value : 'mindmap';
+    current.data.ai.diagram = { loading: true, kind }; rerenderActive();
+    fetch('/api/ai/diagram?id=' + encodeURIComponent(id) + '&kind=' + encodeURIComponent(kind)).then((r) => r.json()).then((res) => {
+      current.data.ai.diagram = res.available === false ? { error: res.error || 'no local model connected', kind }
+        : res.svg ? { svg: res.svg, puml: res.puml, model: res.model, attempts: res.attempts, kind }
+        : { error: res.error || 'generation failed', puml: res.puml, kind };
+      rerenderActive();
+    }).catch(() => { current.data.ai.diagram = { error: 'request failed', kind }; rerenderActive(); });
   } else if (action === 'ask' && formEl) {
     const q = formEl.querySelector('.ai-qa-in').value.trim(); if (!q) return;
     current.data.ai.qa = { question: q, loading: true }; rerenderActive();
@@ -1066,6 +1055,48 @@ function handleAi(action, formEl) {
       current.data.ai.qa = { question: q, answer: res.available === false ? 'no local model connected' : (res.text || res.error || 'no answer') };
       rerenderActive();
     }).catch(() => { current.data.ai.qa = { question: q, answer: 'request failed' }; rerenderActive(); });
+  }
+}
+// Diagram component actions (data-diagram=…). Stored-puml rendering posts the node's
+// source to the local render lane; the SVG comes back sentinel-rewritten (CSS vars), so
+// later theme switches restyle it with ZERO further requests.
+function renderPuml(puml) {
+  if (!current) return;
+  current.data.diagram = { loading: true }; rerenderActive();
+  fetch('/api/diagram/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ puml }) })
+    .then((r) => r.json()).then((res) => {
+      current.data.diagram = res.svg ? { svg: res.svg, puml } : { error: res.error || 'render failed', puml };
+      rerenderActive();
+    }).catch(() => { current.data.diagram = { error: 'request failed', puml }; rerenderActive(); });
+}
+function handleDiagram(action, btn) {
+  if (!current) return;
+  const d = current.data.diagram || {};
+  const srcOf = () => d.puml || current.signals.puml || ((current.data.ai || {}).diagram || {}).puml || '';
+  if (action === 'copy') {
+    navigator.clipboard && navigator.clipboard.writeText(srcOf());
+    if (btn) { const t = btn.textContent; btn.textContent = 'copied'; setTimeout(() => { btn.textContent = t; }, 1200); }
+  } else if (action === 'download') {
+    const svg = d.svg || ((current.data.ai || {}).diagram || {}).svg;
+    if (svg) downloadBlob(svg, 'image/svg+xml', (current.signals.name || current.signals.title || 'diagram').replace(/\W+/g, '-').slice(0, 60) + '.svg');
+  } else if (action === 'rerender') {
+    const src = srcOf(); if (src) renderPuml(src);
+  } else if (action === 'map-mindmap' || action === 'map-component') {
+    const kind = action.slice(4);
+    current.data.diagram = { loading: true }; rerenderActive();
+    fetch('/api/diagram/from-graph?id=' + encodeURIComponent(current.n.id) + '&kind=' + kind)
+      .then((r) => r.json()).then((res) => {
+        current.data.diagram = res.svg ? { svg: res.svg, puml: res.puml } : { error: res.error || 'render failed' };
+        rerenderActive();
+      }).catch(() => { current.data.diagram = { error: 'request failed' }; rerenderActive(); });
+  } else if (action === 'save' || action === 'save-ai') {
+    const g = action === 'save-ai' ? ((current.data.ai || {}).diagram || {}) : d;
+    if (!g.puml) return;
+    const title = 'Diagram: ' + (current.signals.name || current.signals.title || 'untitled').slice(0, 160);
+    fetch('/api/diagram/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, puml: g.puml, about_id: current.n.id, kind: g.kind || 'uml' }) })
+      .then((r) => r.json()).then((res) => {
+        if (btn) btn.textContent = res.error ? 'save failed' : 'saved ✓';
+      }).catch(() => { if (btn) btn.textContent = 'save failed'; });
   }
 }
 function handleResurface(action) {
@@ -1078,24 +1109,70 @@ function handleResurface(action) {
   if (reportOpen) renderReport(); else renderInspector();
 }
 // Type-aware expand: a Review opens the code-review viewer at its frozen repo@git_ref (so its
-// line-comment Notes load); every other node type expands to the report slide-over.
-document.getElementById('i-expand').onclick = () => {
+// line-comment Notes load); every other node type expands to the report slide-over. Shared by the
+// inspector ⤢ button and the voice card ↗ (pendingReport) so promotion is one behavior everywhere.
+function expandCurrent() {
   const s = current && current.signals;
   if (s && s.label === 'Review' && s.props && s.props.repo) navigate({ type: 'open', lens: 'code', tab: 'review', payload: { repo: s.props.repo, gitRef: s.props.git_ref } });
   else openReport();
-};
+}
+document.getElementById('i-expand').onclick = expandCurrent;
 document.getElementById('a-study').onclick = openStudy;
 document.getElementById('r-collapse').onclick = collapseReport;
-function exportBriefing() {
-  if (!current) return;
-  const md = nodeToMarkdown(current.signals, current.data);
-  const blob = new Blob([md], { type: 'text/markdown' });
+
+function downloadBlob(text, type, filename) {
+  const blob = new Blob([text], { type });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob); a.download = exportFilename(current.n.name);
+  a.href = URL.createObjectURL(blob); a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
-document.getElementById('r-export').onclick = exportBriefing;
+// The HTML/PDF exports are self-contained: inline the app stylesheets once, then snapshot the
+// live theme (set inline on <html>) each call so the export matches the current mode. Fonts fall
+// back to system stacks offline (image/font embedding is a flagged follow-up); no blocking network.
+let _exportBaseCss = null;
+async function exportCss() {
+  if (_exportBaseCss == null) {
+    const [tokens, styles] = await Promise.all([
+      fetch('/styles/tokens.css').then((r) => r.text()).catch(() => ''),
+      fetch('/styles.css').then((r) => r.text()).catch(() => ''),
+    ]);
+    _exportBaseCss = tokens + '\n' + styles;
+  }
+  return _exportBaseCss + '\n:root{' + (document.documentElement.getAttribute('style') || '') + '}';
+}
+// The report IS the export: compose the node's view ONCE, serialize to the chosen target.
+async function exportBriefing(format) {
+  if (!current) return;
+  const { signals, data, n } = current;
+  if (format === 'md') return downloadBlob(nodeToMarkdown(signals, data), 'text/markdown', exportFilename(n.name, 'md'));
+  if (format === 'json') return downloadBlob(JSON.stringify(nodeToJson(signals, data), null, 2), 'application/json', exportFilename(n.name, 'json'));
+  // Serialize the STATIC composition (inspector view): the report view's `relations` emits an
+  // empty #rel-live placeholder for the live force-graph app.js mounts, which can't serialize —
+  // inspector renders the self-contained grouped digest instead. Same pipeline, static target.
+  const html = nodeToHtml(signals, data, composeView(signals, data, caps, 'inspector'), { css: await exportCss() });
+  if (format === 'html') return downloadBlob(html, 'text/html', exportFilename(n.name, 'html'));
+  if (format === 'pdf') {                                // print-to-PDF over the same self-contained doc
+    const w = window.open('', '_blank');
+    if (!w) return;
+    w.document.write(html); w.document.close(); w.focus();
+    setTimeout(() => { try { w.print(); } catch (e) { /* user can print manually */ } }, 300);
+  }
+}
+(function initExportMenu() {
+  const btn = document.getElementById('r-export'), menu = document.getElementById('r-export-menu');
+  if (!btn || !menu) return;
+  const close = () => { menu.hidden = true; };
+  btn.onclick = () => { menu.hidden = !menu.hidden; };
+  menu.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-export]');
+    if (!item) return;
+    close();
+    exportBriefing(item.dataset.export);
+  });
+  document.addEventListener('mousedown', (e) => { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { e.stopPropagation(); close(); } });
+})();
 document.getElementById('report-x').onclick = closeReport;
 document.getElementById('r-focus').onclick = () => current && focusNode(current.n);
 document.getElementById('r-pin').onclick = () => { const n = current && current.n; if (!n) return; if (n.fx != null) { n.fx = n.fy = undefined; } else { n.fx = n.x; n.fy = n.y; } Graph.d3ReheatSimulation(); poke(); };
@@ -1297,7 +1374,7 @@ async function getRepos() {
   return cbRepos;
 }
 const requestLensClose = () => navigate({ type: 'close' });   // threaded into every lens (C2)
-const cbUi = initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, getRepos });
+const cbUi = initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, getRepos, prefRepo: null });
 // ── Agents surface → lib/agents-ui.js (embeds Slipway, the local + hosted model/agent runtime) ──
 // showInGraph = the capture receipt's payoff: back to the constellation, focused on the
 // new Source (refreshGraphData(name) refetches, then focuses once the node lands).
@@ -1345,7 +1422,7 @@ const agentLauncher = (function initAgentLaunch() {
     let ping;
     try { ping = await fetch('/api/agent/ping').then((r) => r.json()); } catch { ping = { available: false }; }
     if (stale(id)) return;
-    if (!ping.available) { dirEl.textContent = 'Slipway runtime not running'; msg.textContent = 'start it, then reopen'; return; }
+    if (!ping.available) { dirEl.textContent = 'Slipway runtime not running'; msg.textContent = 'start it (mlx-control), then reopen'; return; }
     let plan;
     try { plan = await fetch('/api/agent/plan?id=' + encodeURIComponent(id)).then((r) => r.json()); } catch { plan = { ok: false, reason: 'plan failed' }; }
     if (stale(id)) return;
@@ -1384,7 +1461,7 @@ const agentLauncher = (function initAgentLaunch() {
 })();
 
 // ── Code review surface (#34) → lib/review-ui.js (repos shared via getRepos, like the codebase map) ──
-const reviewUi = initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos });
+const reviewUi = initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos, prefRepo: null });
 
 // ── folder permissions pane → lib/perms-ui.js (grant/revoke resets the shared repo cache) ──
 const perms = initPerms({ esc, onRootsChanged: () => { cbRepos = null; } });
@@ -1393,6 +1470,27 @@ const perms = initPerms({ esc, onRootsChanged: () => { cbRepos = null; } });
 const settingsUi = initSettings({
   esc, THEMES, THEME_ORDER, applyTheme, applyAnim, applyUiScale, setCalm, openPerms: perms.open,
   getTheme: () => ({ curTheme: themeState.name, curMode: themeState.mode, calm: themeState.calm, curAnim: themeState.anim, curUiScale: themeState.uiscale }),
+});
+
+// VOICE (Phase 1): the floating assistant panel — lib/voice-ui.js owns the DOM.
+const voiceUi = initVoice({
+  getSelectedId: () => (current && current.n ? current.n.id : null),
+  // ui context rides each utterance so the MCP agent knows what the user is looking at
+  getUi: () => ({
+    selected_node_id: current && current.n ? current.n.id : null,
+    selected_node_name: current && current.n ? current.n.name : null,
+    selected_node_label: current && current.n ? current.n.type : null,
+    lens: navState.lens,
+  }),
+  // the agent's navigate_studio tool + voice card ↗ → the same paths a click takes.
+  // view:'report' promotes the selection to the report altitude (consumed in selectNode's fetch).
+  onNavigate: ({ node_id, node_name, lens, view }) => {
+    if (lens) navigate(lens === 'graph' ? { type: 'close' } : { type: 'open', lens });
+    if (node_id) {
+      if (view === 'report') pendingReport = true;
+      selectNode(byId[node_id] || { id: node_id, name: node_name });   // off-canvas → selectNode fetches by id
+    }
+  },
 });
 
 // Add-link intake (#19): save a web/YouTube link as a Resource, fuzzy-attach to a
@@ -1600,6 +1698,7 @@ function createPicker({ input, menu, chips, onPick, getExclude, filterLabel }) {
 
 // The Time lens (D1): Agenda | Quarters | Month in one overlay (lib/time-lenses.js).
 const timeUi = initTimeLens({ esc, rgba, colorOf, secCollapsed, secToggle, pauseMainGraph, resumeMainGraph, selectNode, refreshGraphData, requestClose: requestLensClose });
+const docsUi = initDocsLens({ esc, openPerms: () => perms.open() });
 
 // ── Nav state machine (Stage C2): lib/nav.js owns the states; this block owns the side
 // effects. One navState {lens, tab} mirrored into location.hash (#time/agenda, #code/review,
@@ -1631,6 +1730,10 @@ const LENS_IMPL = {
     open: (tab, payload) => agentsUi.open(payload || {}),
     close: () => agentsUi.close(),
   },
+  docs: {
+    open: () => docsUi.open(),
+    close: () => docsUi.close(),
+  },
 };
 function applyNav(next, payload) {
   if (sameState(navState, next)) {
@@ -1647,7 +1750,7 @@ function applyNav(next, payload) {
 }
 // Rail active state (C3): the current lens reads in accent with a left bar.
 function paintRail(state) {
-  const map = { graph: 'rail-graph', time: 'rail-time', code: 'rail-code', agents: 'rail-agents' };
+  const map = { graph: 'rail-graph', time: 'rail-time', code: 'rail-code', agents: 'rail-agents', docs: 'rail-docs' };
   for (const lens in map) {
     const b = document.getElementById(map[lens]);
     if (b) b.classList.toggle('on', state.lens === lens);
@@ -1678,6 +1781,7 @@ document.getElementById('rail-graph').onclick = () => navigate({ type: 'close' }
 document.getElementById('rail-time').onclick = () => toggleLens('time', 'agenda');
 document.getElementById('rail-code').onclick = () => toggleLens('code', 'map');
 document.getElementById('rail-agents').onclick = () => toggleLens('agents');
+document.getElementById('rail-docs').onclick = () => toggleLens('docs');
 paintRail(navState);
 // The shared lens-head (C4): every ‹ Graph back-chevron returns home; every tab strip
 // drives nav (which updates the hash and swaps the surface).
@@ -1690,7 +1794,19 @@ document.querySelectorAll('.lens-head .lh-tab').forEach((b) => { b.onclick = () 
   if (!pop || !btn) return;
   const close = () => { pop.hidden = true; };
   btn.onclick = () => { pop.hidden = !pop.hidden; };
-  document.getElementById('hp-tour').onclick = () => { close(); window.__toggleTour && window.__toggleTour(); };
+  // "Take a tour" reveals a per-surface list (labels from the tour registry); each starts that tour.
+  const tourList = document.getElementById('hp-tour-list');
+  document.getElementById('hp-tour').onclick = () => {
+    if (tourList.hidden) {
+      const labels = window.__tourLabels || { showcase: 'Full tour' };
+      tourList.innerHTML = Object.entries(labels).map(([id, label]) => `<button class="hp-tour-item" data-tour-id="${id}">${label}</button>`).join('');
+    }
+    tourList.hidden = !tourList.hidden;
+  };
+  tourList.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-tour-id]'); if (!b) return;
+    close(); (window.__startTour || window.__toggleTour)(b.dataset.tourId);
+  });
   document.getElementById('hp-keys').onclick = () => { const l = document.getElementById('hp-keys-list'); l.hidden = !l.hidden; };
   document.addEventListener('mousedown', (e) => { if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close(); });
   // popover-owned Esc, consumed so the global unwind doesn't also step a layer
@@ -1729,6 +1845,8 @@ window.addEventListener('keydown', (e) => {
   else if (k === 't') navigate({ type: 'open', lens: 'time' });
   else if (k === 'c') navigate({ type: 'open', lens: 'code' });
   else if (k === 'a') navigate({ type: 'open', lens: 'agents' });
+  else if (k === 'd') navigate({ type: 'open', lens: 'docs' });
+  else if (k === 'v') voiceUi.toggle();
 });
 
 // ── Command palette (Stage C1): the intent bar gains verbs. lib/commands.js owns the
@@ -1736,7 +1854,10 @@ window.addEventListener('keydown', (e) => {
 // into an action (every entry calls an existing open()/toggle — no new behavior here).
 let cmdRegistry = null;   // rebuilt when the graph's type set changes (buildLenses)
 function commandRegistry() {
-  if (!cmdRegistry) cmdRegistry = buildRegistry({ themes: THEME_ORDER.map((n) => ({ name: n, label: THEMES[n].label })), types: domains });
+  if (!cmdRegistry) cmdRegistry = buildRegistry({
+    themes: THEME_ORDER.map((n) => ({ name: n, label: THEMES[n].label })), types: domains,
+    tours: Object.entries(window.__tourLabels || {}).map(([id, label]) => ({ id, label })),
+  });
   return cmdRegistry;
 }
 function commandMatchesFor(q) {
@@ -1761,6 +1882,7 @@ function dispatch(id) {
     case 'open-agents': navigate({ type: 'open', lens: 'agents' }); break;
     case 'agent-archive-selected': navigate({ type: 'open', lens: 'agents' }); agentsUi.archiveSelected(); break;
     case 'agent-archive-ended': navigate({ type: 'open', lens: 'agents' }); agentsUi.archiveAllEnded(); break;
+    case 'open-assistant': voiceUi.open(); break;
     case 'capture-link': addLink.open(); break;
     case 'add-criterion': {
       // Jump to the selected node's Acceptance section and focus the add input (the section
@@ -1786,10 +1908,13 @@ function dispatch(id) {
     case 'toggle-calm': setCalm(!themeState.calm); break;
     case 'focus-clear': clearFocus(); Graph && Graph.zoomToFit(600, 50); break;
     case 'study-selected': openStudy(); break;
-    case 'export-report': exportBriefing(); break;
-    case 'start-tour': window.__toggleTour && window.__toggleTour(); break;
+    case 'export-report': exportBriefing('md'); break;
+    case 'diagram-neighborhood': handleDiagram('map-mindmap'); break;
+    case 'start-tour': window.__startTour ? window.__startTour('showcase') : (window.__toggleTour && window.__toggleTour()); break;
     case 'open-settings': settingsUi.open(); break;
     case 'manage-folders': perms.open(); break;
+    default:
+      if (id && id.startsWith('start-tour-') && window.__startTour) window.__startTour(id.slice('start-tour-'.length));
   }
 }
 // The ONE delegated listener for empty-state actions (D2): any .es-action carrying a
@@ -2251,6 +2376,17 @@ fetch('/api/ai/ping').then((r) => r.json()).then((p) => {
   caps.llm = !!p.available;
   document.body.classList.toggle('has-llm', caps.llm);
   if (caps.llm && current) rerenderActive();
+}).catch(() => {});
+
+// Detect the local PlantUML render lane (brew install plantuml). When present, stored
+// diagrams render inline and the graph→diagram / ai-diagram affordances light up.
+fetch('/api/diagram/ping').then((r) => r.json()).then((p) => {
+  caps.diagram = !!p.available;
+  document.body.classList.toggle('has-diagram', caps.diagram);
+  if (caps.diagram && current) {
+    rerenderActive();
+    if (current.signals.puml && !current.data.diagram) renderPuml(current.signals.puml);
+  }
 }).catch(() => {});
 
 // ── Guided tour (#14) → lib/tour-ui.js (self-contained: reads window.__focus, drives the DOM) ──

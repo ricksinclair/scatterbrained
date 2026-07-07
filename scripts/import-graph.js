@@ -2,8 +2,8 @@
 // Restore the graph from an export file produced by export-graph.js.
 //
 // Usage:
-//   node scripts/import-graph.js --input backups/graph-2026-06-12.json
-//   node scripts/import-graph.js --input backups/graph-2026-06-12.json --dry-run
+//   node scripts/import-graph.js --input backups/graph.json
+//   node scripts/import-graph.js --input backups/graph.json --dry-run
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

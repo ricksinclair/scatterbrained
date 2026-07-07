@@ -29,15 +29,22 @@ export const SOURCE_KINDS = {
   // — Spreadsheet/tabular lane — VALID kinds the Scatterbrained Studio sheet/chart viewers
   //   render (public/lib/csv.js + lib/xlsx.js, both shipped), but NOT auto-ingested by
   //   document-index.js. They reach the graph by hand or via the Studio (test fixtures use
-  //   them today); auto-ingestion is queued (not yet automated).
+  //   them today); auto-ingestion is queued, see scatterbrained-studio ROADMAP Open #10.
   csv: 'A comma/tab-separated spreadsheet (.csv/.tsv) — rendered as a table + chart by the Studio.',
   xlsx: 'An Excel spreadsheet (.xlsx) — rendered as a table by the Studio.',
 
-  // — Agent lane (set by the Studio's POST /api/agent/capture) —
-  // An agent-terminal session captured back into the graph: the Source holds metadata +
-  // file_path to the transcript .log; the transcript text itself stays on disk, never in
-  // the graph.
-  agent_session: 'A captured agent-terminal session (transcript .log on disk).',
+  // — Agent lane (set by Scatterbrained Studio's POST /api/agent/capture) —
+  // A Slipway agent-terminal session captured back into the graph: the Source holds
+  // metadata + file_path to the transcript (~/.claude-code-router/terminals/<sid>.log);
+  // the transcript text itself stays on disk, never in the graph.
+  agent_session: 'A captured Slipway agent-terminal session (transcript .log on disk).',
+
+  // — Voice lane (set by Scatterbrained Studio's POST /api/voice/capture, VOICE Phase 6) —
+  // An assistant conversation the user explicitly saved (never auto-captured — throwaway
+  // "what's due?" exchanges must not pollute the graph). Same posture as agent_session:
+  // metadata + file_path to the transcript (~/.scatterbrained/voice-sessions/<id>.md);
+  // INFORMS edges go to the nodes the conversation touched (navigated/noted/scheduled).
+  voice_session: 'A saved Studio voice-assistant conversation (transcript .md on disk).',
 
   // — Curated / manually-added artifacts (set by hand during a session) —
   claude_memory: 'A Claude memory file (~/.claude/.../memory/*.md).',
@@ -47,14 +54,24 @@ export const SOURCE_KINDS = {
   skill: 'A Claude skill (SKILL.md).',
   protocol: 'A collaboration/operating protocol document.',
   live_demo: 'A deployed/live site or demo (referenced by URL).',
+  mockup: 'A visual design mockup or prototype (design-tool canvas/HTML export, image, or Figma frame) — a static design reference, distinct from a deployed live_demo.',
   github_issue: 'A GitHub issue or pull request (referenced by URL).',
+  web: 'An external web page or article referenced as a source (by URL).',
+
+  // — Diagram lane (set by Scatterbrained Studio's POST /api/diagram/save, the
+  //   create_diagram MCP tool, and the project-diagrams skill) —
+  // A PlantUML diagram: the source lives in the node's `puml` property (rendered
+  // live by the Studio's local plantuml lane); optionally file-backed (file_path)
+  // when it also exists in a repo (docs/diagrams/*.puml). Deliberately NOT in
+  // FILE_BACKED_KINDS — in-app-generated diagrams have no file, and that's fine.
+  diagram: 'A PlantUML diagram (source in the puml property; optionally file-backed when it lives in a repo).',
 };
 
 export const SOURCE_KIND_LIST = Object.keys(SOURCE_KINDS);
 
 // Kinds that originate from a file on disk, so they MUST carry a file_path.
 // (Used by lint to flag document-lane Sources that lost their absolute path.)
-export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'csv', 'xlsx', 'claude_memory', 'agent_session'];
+export const FILE_BACKED_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx', 'csv', 'xlsx', 'claude_memory', 'agent_session', 'voice_session'];
 
 export function isValidSourceKind(k) {
   return typeof k === 'string' && Object.prototype.hasOwnProperty.call(SOURCE_KINDS, k);
@@ -113,10 +130,10 @@ export function isKnownRelType(t) {
 // source) gets caught instead of landing silently. Legacy types are not shape-checked.
 export const REL_SHAPES = {
   // Review>Project: a Studio code-review is ABOUT the Project whose repo it pins —
-  // materialized by createReview via lib/review-project.js (conservative resolver:
-  // no/ambiguous match → no edge). Enumerated here even though Review is
-  // RELSHAPE_EXEMPT, so the shape stays documented+legal if the exemption ever
-  // narrows. Added 2026-07-02.
+  // materialized by createReview via scatterbrained-studio/lib/review-project.js
+  // (conservative resolver: no/ambiguous match → no edge). Enumerated here even though
+  // Review is RELSHAPE_EXEMPT, so the shape stays documented+legal if the exemption
+  // ever narrows. Added 2026-07-02.
   ABOUT: ['Insight>Project', 'Insight>Idea', 'Insight>Goal', 'Insight>Organization', 'Insight>Skill', 'Idea>Project', 'Idea>Idea', 'Skill>Project', 'Review>Project'],
   ACHIEVED_BY: ['Goal>Project'],
   ADVISED_ON: ['Person>Rule', 'Person>Idea'],
@@ -124,7 +141,7 @@ export const REL_SHAPES = {
   BLOCKED_BY: ['Goal>Idea', 'Idea>Rule', 'Idea>Idea'],
   COLLABORATES_ON: ['Person>Project'],
   // Rule→X is the core form; Organization>Project covers a regulator/agency constraining a
-  // project (e.g. a regulator → a regulated project), Idea>Idea a design constraint-idea bounding
+  // project (e.g. VI Taxicab Commission → Casey), Idea>Idea a design constraint-idea bounding
   // another idea (e.g. "protected key-facts" → "demo dataset"). Both added 2026-06-18.
   CONSTRAINS: ['Rule>Project', 'Rule>Idea', 'Organization>Project', 'Idea>Idea'],
   CONTAINS: ['Project>Idea'],
@@ -136,7 +153,7 @@ export const REL_SHAPES = {
   INFORMED_BY: ['Project>Source'],
   INFORMS: ['Source>Project', 'Source>Idea', 'Source>Rule', 'Source>Insight', 'Source>Organization', 'Source>Skill', 'Source>Resource', 'Source>Person', 'Source>Goal', 'Source>Source'],
   // Promoted from REL_TYPES_LEGACY 2026-06-18: a person or resource (a namesake, a book, a
-  // place, prior art) that inspired a project or idea — e.g. a namesake → the app named for it.
+  // place, prior art) that inspired a project or idea — e.g. Casey Joe → the Casey taxi app.
   // Distinct from COLLABORATES_ON (active work); captures legacy/namesake/inspiration.
   INSPIRED: ['Person>Project', 'Person>Idea', 'Resource>Project', 'Resource>Idea'],
   PART_OF: ['Idea>Project', 'Idea>Idea', 'Project>Project'],
@@ -162,7 +179,11 @@ export const REL_SHAPE_LIST = Object.entries(REL_SHAPES).flatMap(([t, shapes]) =
 // A `Note` can be ABOUT *any* node (node-notes) or PART_OF a `Review`; a `Review` is a
 // Studio code-review artifact; a `ProtectedFact` is a protected-fact node ABOUT any node (#23).
 // Edges touching these are not shape-constrained.
-export const RELSHAPE_EXEMPT_LABELS = ['Note', 'Review', 'ProtectedFact'];
+// Lens (added 2026-07-04): a saved live-query view (Scatterbrained Studio) — a stored Cypher +
+// chart spec that re-runs against the graph on open. Like Review, it's a standalone Studio
+// artifact that MAY link ABOUT the node/project it concerns but doesn't require it, so it's
+// shape-exempt and orphan-whitelisted rather than a semantic knowledge entity.
+export const RELSHAPE_EXEMPT_LABELS = ['Note', 'Review', 'ProtectedFact', 'Lens'];
 
 // Is (sourceLabel)-[:type]->(targetLabel) a recognized shape? Canonical types only
 // (legacy types are not shape-constrained). Edges touching an annotation/meta label are

@@ -47,6 +47,10 @@ export function initTheme(ctx) {
     r.setProperty('--ink', v.ink); r.setProperty('--ink-dim', v.inkDim); r.setProperty('--ink-faint', v.inkFaint);
     r.setProperty('--line', v.line); r.setProperty('--panel', v.panel); r.setProperty('--surface', v.surface); r.setProperty('--surface-2', v.surface2);
     r.setProperty('--accent', v.accent); r.setProperty('--accent-contrast', v.accentContrast); r.setProperty('--accent-soft', v.accentSoft); r.setProperty('--warn', v.warn); r.setProperty('--ok', v.ok);
+    // Node palette + edge as CSS vars — consumed by sentinel-rewritten diagram SVGs
+    // (public/lib/diagram-svg.js), so rendered diagrams re-theme with zero re-renders.
+    for (const l in v.palette) r.setProperty('--node-' + l.toLowerCase(), `rgb(${v.palette[l].join(',')})`);
+    r.setProperty('--edge-rgb', v.edge.join(','));
     // Syntax-highlight palette (code review viewer) — editor-grade, mode-aware: One Dark
     // for dark, One Light for light. Driven here (not CSS) since mode is JS-applied.
     const hl = SYNTAX[state.mode] || SYNTAX.dark;

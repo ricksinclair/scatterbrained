@@ -652,3 +652,51 @@ describe('dueLabel + goal-progress target date', () => {
     expect(html).toContain('value="2026-12-31"');
   });
 });
+
+describe('diagram component (registry)', () => {
+  const ctx = { esc: (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])), trunc: (s, n) => String(s).slice(0, n), caps: {} };
+  const render = (node, data) => REGISTRY.diagram.render(node, data, ctx);
+  it('renders states: loading → svg → error(with source) → on-ramp', () => {
+    expect(render({}, { diagram: { loading: true } })).toContain('rendering diagram');
+    const svg = render({ }, { diagram: { svg: '<svg class="sb-diagram"></svg>', puml: 'A->B' } });
+    expect(svg).toContain('sb-diagram');
+    expect(svg).toContain('data-diagram="copy"');
+    expect(svg).toContain('data-diagram="save"');       // unsaved (no node.puml) offers save
+    const err = render({ puml: 'A->>' }, { diagram: { error: 'Syntax Error', puml: 'A->>' } });
+    expect(err).toContain('Syntax Error');
+    expect(err).toContain('dg-src');                     // honest failure shows the source
+    expect(render({}, {})).toContain('map-mindmap');     // on-ramp
+  });
+  it('stored diagrams do not offer save-to-graph (already in the graph)', () => {
+    const out = render({ sourceKind: 'diagram' }, { diagram: { svg: '<svg/>', puml: 'A->B' } });
+    expect(out).not.toContain('data-diagram="save"');
+  });
+  it('escapes error text and source (XSS)', () => {
+    const out = render({}, { diagram: { error: '<img onerror=x>', puml: '<script>' } });
+    expect(out).not.toContain('<img');
+    expect(out).not.toContain('<script>');
+  });
+});
+
+describe('ai-diagram component (registry)', () => {
+  const ctx = { esc: (s) => String(s == null ? '' : s), trunc: (s, n) => String(s).slice(0, n), caps: {} };
+  const render = (node, data) => REGISTRY['ai-diagram'].render(node, data, ctx);
+  it('idle offers ✦ diagram this with a kind select', () => {
+    const out = render({}, {});
+    expect(out).toContain('diagram this');
+    expect(out).toContain('ai-dg-kind');
+    expect(out).toContain('mindmap');
+  });
+  it('result shows the SVG, the model badge, attempts, save + regenerate', () => {
+    const out = render({}, { ai: { diagram: { svg: '<svg/>', model: 'qwen', attempts: 2, kind: 'component' } } });
+    expect(out).toContain('qwen');
+    expect(out).toContain('attempt 2');
+    expect(out).toContain('data-diagram="save-ai"');
+    expect(out).toContain('regenerate');
+  });
+  it('failure is honest: error + source + retry', () => {
+    const out = render({}, { ai: { diagram: { error: 'gave up after 2 attempts', puml: '@startuml…' } } });
+    expect(out).toContain('gave up');
+    expect(out).toContain('retry');
+  });
+});

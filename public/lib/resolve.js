@@ -12,8 +12,8 @@
 import { isVideoUrl, isWebUrl } from './links.js';
 
 export const COMPONENTS = [
-  'markdown', 'excerpt', 'chart', 'text', 'timeline', 'resurface', 'flashcard',
-  'provenance', 'relations', 'confidence', 'goal-progress', 'map', 'keyvalue', 'ai-summary', 'ai-qa',
+  'markdown', 'excerpt', 'chart', 'diagram', 'text', 'timeline', 'resurface', 'flashcard',
+  'provenance', 'relations', 'confidence', 'goal-progress', 'map', 'keyvalue', 'ai-summary', 'ai-qa', 'ai-diagram',
   'protected-facts', 'notes', 'acceptance',
   'video', 'link',
 ];
@@ -22,7 +22,12 @@ export const COMPONENTS = [
 const DURABLE = ['Insight', 'Goal', 'Project', 'Idea'];
 
 // components that require a capability to be useful
-const REQUIRES = { 'ai-summary': (caps) => !!caps.llm, 'ai-qa': (caps) => !!caps.llm };
+const REQUIRES = {
+  'ai-summary': (caps) => !!caps.llm,
+  'ai-qa': (caps) => !!caps.llm,
+  'diagram': (caps) => !!caps.diagram,                       // local plantuml installed
+  'ai-diagram': (caps) => !!caps.llm && !!caps.diagram,      // needs both lanes
+};
 
 export function resolveLayout(node = {}, caps = {}) {
   const out = [];
@@ -38,6 +43,11 @@ export function resolveLayout(node = {}, caps = {}) {
   (node.tags || []).forEach((t) => { if (typeof t === 'string' && t.startsWith('ui:')) add(t.slice(3)); });
 
   // 2. content-type body
+  // A saved Lens IS a chart of live graph data (its stored Cypher re-run) — lead with it.
+  if (node.label === 'Lens') add('chart');
+  // A diagram node (stored puml, or a Source of kind 'diagram') leads with the rendered
+  // SVG; a well-connected node (>=3 edges) gets the "map neighborhood" on-ramp instead.
+  if (node.puml || node.sourceKind === 'diagram' || (node.edgeCount || 0) >= 3) add('diagram');
   if (['markdown', 'text'].includes(node.sourceKind) && node.hasText) add('markdown');
   else if (node.sourceKind === 'csv' || node.isTabular) add('chart');
   // NOTE: a relation-distribution "connections by type" chart was previously added here for any
@@ -69,6 +79,7 @@ export function resolveLayout(node = {}, caps = {}) {
   // 5. AI enhancers (only when a local model is connected; gated by REQUIRES)
   add('ai-summary');
   add('ai-qa');
+  if (node.hasText) add('ai-diagram');   // "diagram this" — brainstorm from the node's text
 
   // 6. the raw property inspector — always offered (collapsed by default in the UI)
   //    so every node exposes its full property bag, not just the curated components.

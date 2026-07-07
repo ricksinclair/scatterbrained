@@ -3,8 +3,8 @@ import { buildOptions, nextIndex, optionAt } from '../public/lib/typeahead.js';
 
 describe('typeahead — buildOptions', () => {
   const results = [
-    { id: 'a', name: 'Northwind', label: 'Project', superseded: false },
-    { id: 'b', name: 'Ship Northwind MVP', label: 'Goal', superseded: false },
+    { id: 'a', name: 'Atlas', label: 'Project', superseded: false },
+    { id: 'b', name: 'Ship Atlas MVP', label: 'Goal', superseded: false },
     { id: 'c', name: 'Old fact', label: 'Insight', superseded: true },
   ];
 
@@ -12,7 +12,7 @@ describe('typeahead — buildOptions', () => {
     const opts = buildOptions(results, 'coop');
     expect(opts.map((o) => o.id)).toEqual(['a', 'b', 'c']);
     expect(opts.every((o) => o.kind === 'pick')).toBe(true);
-    expect(opts[0]).toMatchObject({ id: 'a', name: 'Northwind', label: 'Project' });
+    expect(opts[0]).toMatchObject({ id: 'a', name: 'Atlas', label: 'Project' });
     expect(opts[2].superseded).toBe(true);
   });
 
@@ -29,7 +29,7 @@ describe('typeahead — buildOptions', () => {
   });
 
   it('de-dupes by id and drops blank/nameless rows', () => {
-    const dupes = [...results, { id: 'a', name: 'Northwind' }, { id: 'd', name: '  ' }, null];
+    const dupes = [...results, { id: 'a', name: 'Atlas' }, { id: 'd', name: '  ' }, null];
     const opts = buildOptions(dupes, 'x');
     expect(opts.map((o) => o.id)).toEqual(['a', 'b', 'c']);
   });
@@ -54,7 +54,7 @@ describe('typeahead — buildOptions', () => {
     const novel = buildOptions(results, 'Brand new thing', { allowCreate: true });
     expect(novel[novel.length - 1]).toEqual({ kind: 'create', name: 'Brand new thing' });
 
-    const exact = buildOptions(results, 'northwind', { allowCreate: true }); // case-insensitive match → no create row
+    const exact = buildOptions(results, 'atlas', { allowCreate: true }); // case-insensitive match → no create row
     expect(exact.some((o) => o.kind === 'create')).toBe(false);
 
     const blank = buildOptions(results, '   ', { allowCreate: true }); // empty query → no create row

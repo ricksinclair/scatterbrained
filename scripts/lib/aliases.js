@@ -53,8 +53,8 @@ export const ALLOWED_FIELDS = new Set([
 
 // A retired token is BRAND DRIFT only when it appears as a standalone brand word.
 // Three classes are deliberately NOT drift and must survive a rename untouched:
-//   1. kebab/path identifiers — engram-kg, sync-engram.sh
-//      (real on-disk names): guarded by the trailing (?![-/.]).
+//   1. kebab/path identifiers — e.g. the published npm name engram-kg
+//      (a real frozen identifier): guarded by the trailing (?![-/.]).
 //   2. repo/path segments — ly-wang19/engram (the prior-art that forced the
 //      rename!): guarded by a leading (?<![/-]).
 //   3. historical narration — "formerly Engram", "drafted as Engram",

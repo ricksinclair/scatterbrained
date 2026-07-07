@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { REL_TYPES, REL_TYPES_LEGACY, REL_TYPES_KNOWN, isValidRelType, isKnownRelType, isValidRelShape, REL_SHAPE_LIST, PROVENANCE_REL_TYPES, isProvenanceRelType } from '../scripts/lib/vocab.js';
+import { REL_TYPES, REL_TYPES_LEGACY, REL_TYPES_KNOWN, isValidRelType, isKnownRelType, isValidRelShape, REL_SHAPE_LIST, PROVENANCE_REL_TYPES, isProvenanceRelType } from '../../scripts/lib/vocab.js';
 
 // The inline associate control (#29) writes edges; this guards that the closed
 // relationship-type vocab the UI offers stays exactly the schema's set — no ad-hoc
