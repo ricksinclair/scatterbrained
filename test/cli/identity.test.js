@@ -7,7 +7,7 @@ import {
   candidateSignals,
   normalizeKey,
   keysLookAlike,
-} from '../../scripts/lib/identity.js';
+} from '../scripts/lib/identity.js';
 
 test('every identity signal list is a non-empty array of strings', () => {
   for (const [label, props] of Object.entries(IDENTITY_SIGNALS)) {

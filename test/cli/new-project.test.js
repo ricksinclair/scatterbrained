@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { claudeMd, mergeManifest, agentConfigFiles, mergeSettings, writeAgentConfig } from '../../scripts/new-project.js';
-import { formatReport, HUMAN_SURFACES, CYPHER as UNDOC_CYPHER } from '../../scripts/review-undocumented-decisions.js';
+import { claudeMd, mergeManifest, agentConfigFiles, mergeSettings, writeAgentConfig } from '../scripts/new-project.js';
+import { formatReport, HUMAN_SURFACES, CYPHER as UNDOC_CYPHER } from '../scripts/review-undocumented-decisions.js';
 
 test('claudeMd fills the project name, workspace url, and lists only scaffolded data sources', () => {
   const md = claudeMd('Acme', 'https://ws', {

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateStructural, flatten } from '../../scripts/check-notion.js';
+import { validateStructural, flatten } from '../scripts/check-notion.js';
 
 const valid = { projects: { Acme: { entries: {
   Tracker: { kind: 'data_source', id: '78ff3733-454e-4cfc-bc08-00b4f523a91e' },
