@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rrfFuse } from '../scripts/search.js';
+import { rrfFuse } from '../../scripts/search.js';
 
 test('rrfFuse ranks a both-lanes hit above any single-lane hit', () => {
   const keyword = [{ eid: 'A' }, { eid: 'B' }];

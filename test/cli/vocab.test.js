@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SOURCE_KINDS, SOURCE_KIND_LIST, FILE_BACKED_KINDS, isValidSourceKind } from '../scripts/lib/vocab.js';
+import { SOURCE_KINDS, SOURCE_KIND_LIST, FILE_BACKED_KINDS, isValidSourceKind } from '../../scripts/lib/vocab.js';
 
 test('source_kind vocabulary is a non-empty closed set', () => {
   assert.ok(SOURCE_KIND_LIST.length > 0);

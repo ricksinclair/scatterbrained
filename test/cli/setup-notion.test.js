@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { databases, manifestBlock, createWorkspace } from '../scripts/setup-notion.js';
+import { databases, manifestBlock, createWorkspace } from '../../scripts/setup-notion.js';
 
 test('databases() returns the 4 default databases (Problem Tests is opt-in), each with one title + a description', () => {
   const dbs = databases(['Backend', 'Frontend']);

@@ -4,7 +4,7 @@ import {
   toCandidate,
   buildChangelogProperties,
   changelogId,
-} from '../scripts/write-back-decisions.js';
+} from '../../scripts/write-back-decisions.js';
 
 test('toCandidate seeds description with full_text (the prose seed to rewrite)', () => {
   const c = toCandidate(
