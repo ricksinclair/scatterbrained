@@ -52,11 +52,12 @@ jobs:
         run: |
           for f in scripts/*.js scripts/lib/*.js server.js lib/*.js public/lib/*.js bin/*.js bin/*.mjs studio-scripts/*.mjs; do node --check "$f"; done
           for j in package.json examples/*.json; do node -e "JSON.parse(require('fs').readFileSync('$j','utf8'))"; done
-          for p in bin/*.py; do python3 -m py_compile "$p"; done   # VOICE STT/TTS helpers ship here; node can't --check them
-      - name: Unit tests — toolkit (node:test) + Studio (vitest)
+          for p in bin/*.py slipway/server.py slipway/tests/*.py; do python3 -m py_compile "$p"; done   # VOICE helpers + the bundled Slipway runtime; node can't --check them
+      - name: Unit tests — toolkit (node:test) + Studio (vitest) + bundled Slipway (unittest)
         run: |
           npm test               # methodology pure-function suite; no DB or network needed
           npm run test:studio    # Studio pure-function suite
+          ( cd slipway && python3 -m unittest discover tests )   # bundled Slipway runtime (incl. the load-deadlock regression)
       - name: Start Neo4j
         run: |
           docker run -d --rm --name neo4j -p 7687:7687 -p 7474:7474 \
