@@ -141,7 +141,7 @@ export const REL_SHAPES = {
   BLOCKED_BY: ['Goal>Idea', 'Idea>Rule', 'Idea>Idea'],
   COLLABORATES_ON: ['Person>Project'],
   // Rule→X is the core form; Organization>Project covers a regulator/agency constraining a
-  // project (e.g. VI Taxicab Commission → Casey), Idea>Idea a design constraint-idea bounding
+  // project (e.g. a regulator → a regulated app), Idea>Idea a design constraint-idea bounding
   // another idea (e.g. "protected key-facts" → "demo dataset"). Both added 2026-06-18.
   CONSTRAINS: ['Rule>Project', 'Rule>Idea', 'Organization>Project', 'Idea>Idea'],
   CONTAINS: ['Project>Idea'],
@@ -153,7 +153,7 @@ export const REL_SHAPES = {
   INFORMED_BY: ['Project>Source'],
   INFORMS: ['Source>Project', 'Source>Idea', 'Source>Rule', 'Source>Insight', 'Source>Organization', 'Source>Skill', 'Source>Resource', 'Source>Person', 'Source>Goal', 'Source>Source'],
   // Promoted from REL_TYPES_LEGACY 2026-06-18: a person or resource (a namesake, a book, a
-  // place, prior art) that inspired a project or idea — e.g. Casey Joe → the Casey taxi app.
+  // place, prior art) that inspired a project or idea — e.g. a mentor → an app named in their honor.
   // Distinct from COLLABORATES_ON (active work); captures legacy/namesake/inspiration.
   INSPIRED: ['Person>Project', 'Person>Idea', 'Resource>Project', 'Resource>Idea'],
   PART_OF: ['Idea>Project', 'Idea>Idea', 'Project>Project'],

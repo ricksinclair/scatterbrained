@@ -103,7 +103,7 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 // (Person)-[:RECOMMENDED]->(Organization)
 // (Person)-[:RECOMMENDED]->(Resource)
 // (Person)-[:COLLABORATES_ON]->(Project)
-// (Person)-[:INSPIRED]->(Project)        // namesake/legacy/inspiration (e.g. Casey Joe → Casey)
+// (Person)-[:INSPIRED]->(Project)        // namesake/legacy/inspiration (e.g. a mentor → a project named for them)
 // (Person)-[:INSPIRED]->(Idea)
 // (Resource)-[:INSPIRED]->(Project)
 // (Resource)-[:INSPIRED]->(Idea)
