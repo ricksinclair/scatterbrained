@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
-import { autostartDecision, slipwayCommand } from './lib/slipway-boot.js';
+import { autostartDecision, slipwayCommand, slipwayDirCandidates } from './lib/slipway-boot.js';
 import neo4j from 'neo4j-driver';
 import { acquire as lockAcquire, release as lockRelease, status as lockStatus, prune as lockPrune, HOLDER_STUDIO } from './lib/filelock.js';
 import { hashText, validateSave, gitArgs, parseLog, commitMessage } from './lib/save.js';
@@ -2784,14 +2784,17 @@ server.listen(PORT, '127.0.0.1', () => {
 
 // ── Slipway autostart ────────────────────────────────────────────────────────
 // Bring the local-model runtime up WITH the Studio (models are not loaded by default, so
-// an idle Slipway costs ~nothing). Opt out with SLIPWAY_AUTOSTART=0; point SLIPWAY_DIR at
-// a non-default checkout. Never loads a model — that stays an explicit user action.
+// an idle Slipway costs ~nothing). Opt out with SLIPWAY_AUTOSTART=0. Runs the copy bundled
+// at ./slipway/ in a release; SLIPWAY_DIR or a ~/Projects/mlx-control dev checkout override
+// it. Never loads a model — that stays an explicit user action.
 async function ensureSlipway() {
   const decision = autostartDecision({ env: process.env, pingOk: await slipwayPing() });
   if (decision === 'disabled') return;
   if (decision === 'already-running') { console.log('  ▸ Slipway: already running'); return; }
-  const { cmd, args, cwd, serverPy } = slipwayCommand({ env: process.env, home: os.homedir() });
-  if (!fs.existsSync(serverPy)) { console.log(`  ▸ Slipway: not found at ${serverPy} — skipping autostart`); return; }
+  const dir = slipwayDirCandidates({ env: process.env, home: os.homedir(), root: __dirname })
+    .find((d) => fs.existsSync(path.join(d, 'server.py')));
+  if (!dir) { console.log('  ▸ Slipway: server.py not found (bundled slipway/ or SLIPWAY_DIR) — skipping autostart'); return; }
+  const { cmd, args, cwd, serverPy } = slipwayCommand({ env: process.env, dir });
   const logPath = path.join(os.homedir(), '.scatterbrained', 'slipway.log');
   fs.mkdirSync(path.dirname(logPath), { recursive: true });
   const log = fs.openSync(logPath, 'a');

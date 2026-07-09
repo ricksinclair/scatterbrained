@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# Launch whichever agent CLI (Claude Code / OpenCode / Hermes Agent) the control
+# panel has selected, against whatever local/cloud model is currently active.
+# Reads ~/.claude-code-router/current-model.json (model + backend + launcher).
+set -euo pipefail
+
+STATE="$HOME/.claude-code-router/current-model.json"
+LOG="$HOME/.claude-code-router/mlx-server.log"
+CLOUD="$HOME/.claude-code-router/cloud-providers.json"
+MLX_PORT=8080
+OLLAMA_PORT=11434
+
+# Defaults if the panel has never run.
+MODEL="mlx-community/Qwen3.6-35B-A3B-4bit-DWQ"
+BACKEND="mlx"
+PROVIDER=""
+LAUNCHER="claude"
+if [ -f "$STATE" ]; then
+  MODEL=$(python3 -c "import json;print(json.load(open('$STATE'))['model'])" 2>/dev/null || echo "$MODEL")
+  BACKEND=$(python3 -c "import json;print(json.load(open('$STATE'))['backend'])" 2>/dev/null || echo "$BACKEND")
+  PROVIDER=$(python3 -c "import json;print(json.load(open('$STATE')).get('provider',''))" 2>/dev/null || echo "")
+  LAUNCHER=$(python3 -c "import json;print(json.load(open('$STATE')).get('launcher','claude'))" 2>/dev/null || echo "claude")
+fi
+# Per-project preset: a .slipway.json in the working directory overrides the global selection
+# (model / backend / provider / launcher — each field optional). Lets a repo pin its own model.
+PRESET="$PWD/.slipway.json"
+if [ -f "$PRESET" ]; then
+  MODEL=$(python3 -c "import json;print(json.load(open('$PRESET')).get('model','$MODEL'))" 2>/dev/null || echo "$MODEL")
+  BACKEND=$(python3 -c "import json;print(json.load(open('$PRESET')).get('backend','$BACKEND'))" 2>/dev/null || echo "$BACKEND")
+  PROVIDER=$(python3 -c "import json;print(json.load(open('$PRESET')).get('provider','$PROVIDER'))" 2>/dev/null || echo "$PROVIDER")
+  LAUNCHER=$(python3 -c "import json;print(json.load(open('$PRESET')).get('launcher','$LAUNCHER'))" 2>/dev/null || echo "$LAUNCHER")
+  echo "[claude-local] project preset: $PRESET"
+fi
+# Per-session launcher override (e.g. Slipway's terminal launcher dropdown) wins over everything.
+LAUNCHER="${SLIPWAY_LAUNCHER:-$LAUNCHER}"
+
+# Dry run: print the resolved selection and exit (used by tests / for debugging).
+if [ -n "${SLIPWAY_DRYRUN:-}" ]; then
+  echo "model=$MODEL backend=$BACKEND provider=$PROVIDER launcher=$LAUNCHER"
+  exit 0
+fi
+
+# Slipway "Open agent here" (Scatterbrained Act plane): if a graph brief was written into the working
+# directory, we load it as the agent's opening *system* context — Claude Code only (it's the only
+# launcher with a system-prompt flag). SEED is the --append-system-prompt args, or empty.
+# `${SEED[@]+"${SEED[@]}"}` expands to the args or to nothing (bash 3.2 / set -u safe on an empty array).
+BRIEF="$PWD/SLIPWAY_BRIEF.md"
+SEED=()
+if [ -f "$BRIEF" ]; then
+  SEED=(--append-system-prompt "You were opened here from Scatterbrained's knowledge graph to work in this directory. The brief below is a point-in-time snapshot of what this project is, its goals, and what's now / next / blocked. Treat it as background context, then wait for the user's task.
+
+$(cat "$BRIEF")")
+fi
+
+ready_mlx() { curl -sf "http://127.0.0.1:${MLX_PORT}/v1/models" >/dev/null 2>&1; }
+ready_ollama() { curl -sf "http://127.0.0.1:${OLLAMA_PORT}/api/tags" >/dev/null 2>&1; }
+
+# Starts+warms the currently-selected LOCAL backend (mlx/ollama). No-op for cloud.
+ensure_local_server() {
+  if [ "$BACKEND" = "ollama" ]; then
+    if ! ready_ollama; then
+      echo "[claude-local] starting ollama daemon…"
+      nohup ollama serve >"$LOG" 2>&1 &
+      for i in $(seq 1 20); do ready_ollama && break; sleep 0.3; done
+    fi
+    echo "[claude-local] warming ${MODEL} (Ollama)…"
+    curl -sf "http://127.0.0.1:${OLLAMA_PORT}/api/generate" \
+      -d "{\"model\":\"${MODEL}\",\"prompt\":\".\",\"stream\":false,\"keep_alive\":\"30m\",\"options\":{\"num_predict\":1}}" \
+      >/dev/null 2>&1 || true
+  elif [ "$BACKEND" = "mlx" ]; then
+    if ! ready_mlx; then
+      echo "[claude-local] starting vllm-mlx for ${MODEL} (loading weights, ~15-60s)…"
+      nohup vllm-mlx serve "$MODEL" --port "$MLX_PORT" --continuous-batching >"$LOG" 2>&1 &
+      for i in $(seq 1 120); do ready_mlx && break; sleep 1; done
+      if ! ready_mlx; then
+        echo "[claude-local] vllm-mlx failed to start. Last log:" >&2; tail -20 "$LOG" >&2; exit 1
+      fi
+    fi
+  fi
+}
+
+local_base_url() {
+  [ "$BACKEND" = "ollama" ] && echo "http://127.0.0.1:${OLLAMA_PORT}/v1" || echo "http://127.0.0.1:${MLX_PORT}/v1"
+}
+
+# ---------------- OpenCode ----------------
+if [ "$LAUNCHER" = "opencode" ]; then
+  if [ "$BACKEND" = "cloud" ]; then
+    echo "[claude-local] OpenCode + cloud isn't wired up yet — run 'opencode auth login' manually, or switch launcher to Claude Code." >&2
+    exit 1
+  fi
+  OPENCODE_BIN=$(command -v opencode || echo "$HOME/.opencode/bin/opencode")
+  if [ ! -x "$OPENCODE_BIN" ] && ! command -v opencode >/dev/null 2>&1; then
+    echo "[claude-local] OpenCode isn't installed. Install it from the panel (🚀 Launcher) or: npm i -g opencode-ai" >&2
+    exit 1
+  fi
+  ensure_local_server
+  BASE=$(local_base_url)
+  mkdir -p "$HOME/.config/opencode"
+  python3 - "$MODEL" "$BASE" <<'PY'
+import json, sys, os
+model, base = sys.argv[1], sys.argv[2]
+path = os.path.expanduser("~/.config/opencode/opencode.json")
+cfg = {"$schema": "https://opencode.ai/config.json",
+       "provider": {"local": {"npm": "@ai-sdk/openai-compatible", "name": "Local",
+                               "options": {"baseURL": base},
+                               "models": {model: {"name": model}}}},
+       "model": f"local/{model}"}
+with open(path, "w") as f:
+    json.dump(cfg, f, indent=2)
+print(f"[claude-local] wrote {path}")
+PY
+  echo "[claude-local] launching OpenCode → ${MODEL} via ${BASE}"
+  [ -f "$BRIEF" ] && echo "[claude-local] note: SLIPWAY_BRIEF.md is in $PWD — OpenCode has no system-prompt flag, so read it in-session for graph context."
+  exec "$OPENCODE_BIN" "$@"
+fi
+
+# ---------------- Hermes Agent ----------------
+if [ "$LAUNCHER" = "hermes" ]; then
+  if [ "$BACKEND" = "cloud" ]; then
+    echo "[claude-local] Hermes Agent + cloud isn't wired up yet — run 'hermes model' manually, or switch launcher to Claude Code." >&2
+    exit 1
+  fi
+  HERMES_BIN=$(command -v hermes || true)
+  [ -z "$HERMES_BIN" ] && [ -x "$HOME/.hermes/bin/hermes" ] && HERMES_BIN="$HOME/.hermes/bin/hermes"
+  if [ -z "${HERMES_BIN:-}" ]; then
+    echo "[claude-local] Hermes Agent isn't installed. Install it from the panel (🚀 Launcher) or:" >&2
+    echo "  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash" >&2
+    exit 1
+  fi
+  ensure_local_server
+  BASE=$(local_base_url)
+  KEY="local"; [ "$BACKEND" = "ollama" ] && KEY="ollama"
+  mkdir -p "$HOME/.hermes"
+  cat > "$HOME/.hermes/config.yaml" <<EOF
+model:
+  provider: custom
+  default: ${MODEL}
+  base_url: ${BASE}
+EOF
+  ENV_FILE="$HOME/.hermes/.env"
+  touch "$ENV_FILE"
+  grep -v '^OPENAI_API_KEY=' "$ENV_FILE" > "${ENV_FILE}.tmp" 2>/dev/null || true
+  echo "OPENAI_API_KEY=${KEY}" >> "${ENV_FILE}.tmp"
+  mv "${ENV_FILE}.tmp" "$ENV_FILE"
+  echo "[claude-local] launching Hermes Agent → ${MODEL} via ${BASE}"
+  [ -f "$BRIEF" ] && echo "[claude-local] note: SLIPWAY_BRIEF.md is in $PWD — Hermes has no system-prompt flag, so read it in-session for graph context."
+  exec "$HERMES_BIN" "$@"
+fi
+
+# ---------------- Claude Code (default) ----------------
+# Graph-opened session (brief present) with NO project preset → hosted Claude Code SUBSCRIPTION:
+# strip any ANTHROPIC_* redirect so it uses your logged-in Claude (best quality), plus the brief.
+# This is the "else hosted" half of "preset else hosted"; a repo WITH .slipway.json falls through
+# and uses its pinned model below.
+if [ -f "$BRIEF" ] && [ ! -f "$PRESET" ]; then
+  echo "[claude-local] 📋 hosted Claude Code (subscription) · graph brief loaded as context"
+  unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_MODEL ANTHROPIC_SMALL_FAST_MODEL
+  exec claude ${SEED[@]+"${SEED[@]}"} "$@"
+fi
+
+if [ "$BACKEND" = "cloud" ]; then
+  if [ "$PROVIDER" = "anthropic" ]; then
+    # Hosted Claude — Claude Code talks to Anthropic directly, no router.
+    KEY=$(python3 -c "import json;print(json.load(open('$CLOUD'))['anthropic'].get('key',''))" 2>/dev/null || echo "")
+    echo "[claude-local] hosted Anthropic · ${MODEL}"
+    [ -f "$BRIEF" ] && echo "[claude-local] 📋 graph brief loaded as opening context"
+    unset ANTHROPIC_BASE_URL
+    export ANTHROPIC_API_KEY="$KEY"
+    export ANTHROPIC_MODEL="$MODEL"
+    exec claude --model "$MODEL" ${SEED[@]+"${SEED[@]}"} "$@"
+  fi
+  # OpenRouter / DeepSeek / Nous → via claude-code-router (config already written by the panel).
+  echo "[claude-local] cloud · ${PROVIDER} · ${MODEL} (via router)"
+  [ -f "$BRIEF" ] && echo "[claude-local] note: SLIPWAY_BRIEF.md is in $PWD — the router (ccr) has no system-prompt flag, so read it in-session for graph context."
+  exec ccr code "$@"
+fi
+
+ensure_local_server
+if [ "$BACKEND" = "ollama" ]; then
+  echo "[claude-local] Ollama ready (${MODEL}) — native Anthropic endpoint, no router"
+  export ANTHROPIC_BASE_URL="http://127.0.0.1:${OLLAMA_PORT}"
+  export ANTHROPIC_AUTH_TOKEN="ollama"
+  export ANTHROPIC_API_KEY=""
+else
+  echo "[claude-local] vllm-mlx ready on :${MLX_PORT} (${MODEL}) — native Anthropic, no router"
+  export ANTHROPIC_BASE_URL="http://127.0.0.1:${MLX_PORT}"
+  export ANTHROPIC_AUTH_TOKEN="local"
+  export ANTHROPIC_API_KEY=""
+fi
+export ANTHROPIC_MODEL="$MODEL"
+export ANTHROPIC_SMALL_FAST_MODEL="$MODEL"
+[ -f "$BRIEF" ] && echo "[claude-local] 📋 graph brief loaded as opening context"
+exec claude --model "$MODEL" ${SEED[@]+"${SEED[@]}"} "$@"

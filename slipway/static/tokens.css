@@ -1,0 +1,70 @@
+/* vendored from rick-knowledge/scatterbrained-studio/public/styles/tokens.css — do not hand-edit; copy over to sync */
+/* ============================================================================
+   Scatterbrained Studio — design tokens (the shared token layer).
+   Loaded BEFORE styles.css. The color vars are the Observatory·dark defaults;
+   lib/theme-ui.js overrides them on <html> at runtime (6 themes × light/dark).
+   This file is also vendored by Slipway (mlx-control/static/tokens.css) —
+   change it here first, then re-vendor; keep the two copies in sync.
+   ========================================================================== */
+:root {
+  /* ── color (runtime-themed) ─────────────────────────────────────────── */
+  --bg0: #04050c;
+  --bg1: #0b0f22;
+  --ink: #dfe4ff;
+  --ink-dim: #8b93c8;
+  --ink-faint: #6b73a0;
+  --line: rgba(140, 150, 220, 0.3);
+  --panel: rgba(12, 16, 34, 0.92);
+  --surface: rgba(7, 9, 18, 0.92);
+  --surface-2: rgba(20, 24, 46, 0.65);
+  --accent: #8c97ff;
+  --accent-soft: rgba(90, 105, 220, 0.32);
+  --warn: #f0a35a;
+  --ok: #7fe0b8;
+
+  /* ── UI scale (S/M/L setting drives this; 1 = medium) ───────────────── */
+  --ui-scale: 1;
+
+  /* ── type scale (× --ui-scale; nothing readable below --fs-xs) ──────── */
+  --fs-2xs: calc(11px * var(--ui-scale));
+  --fs-xs: calc(12px * var(--ui-scale));
+  --fs-sm: calc(13px * var(--ui-scale));
+  --fs-md: calc(14px * var(--ui-scale));
+  --fs-lg: calc(16px * var(--ui-scale));
+  --fs-xl: calc(18px * var(--ui-scale));
+  --fs-2xl: calc(22px * var(--ui-scale));
+
+  /* ── fonts: display = titles only, ui = body, mono = data + eyebrows ── */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  /* ── control heights (buttons/inputs) + icon sizes ──────────────────── */
+  --ctl-sm: calc(28px * var(--ui-scale));
+  --ctl-md: calc(36px * var(--ui-scale));
+  --ctl-lg: calc(44px * var(--ui-scale));
+  --icon-sm: 16px;
+  --icon-md: 20px;
+  --icon-lg: 24px;
+
+  /* ── spacing ─────────────────────────────────────────────────────────── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* ── radius ──────────────────────────────────────────────────────────── */
+  --r-xs: 4px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-full: 999px;
+
+  /* ── motion ──────────────────────────────────────────────────────────── */
+  --t-fast: 120ms;
+  --t-med: 220ms;
+  --ease: cubic-bezier(.2, .7, .3, 1);
+}

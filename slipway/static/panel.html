@@ -1,0 +1,267 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local LLM Control</title>
+<link rel="stylesheet" href="/static/fonts/fonts.css?v=__V__">
+<link rel="stylesheet" href="/static/tokens.css?v=__V__"><link rel="stylesheet" href="/static/panel.css?v=__V__">
+<link rel="stylesheet" href="/vendor/xterm/xterm.css">
+<script src="/vendor/xterm/xterm.js"></script>
+<script src="/vendor/xterm/addon-fit.js"></script>
+</head><body><div class="wrap">
+
+  <div class="top">
+    <div class="apptitle"><h1>Local LLM Control</h1><p class="sub">Backs <code>claude-local</code></p></div>
+    <div class="topbtns" style="display:flex;gap:8px">
+      <button class="ghost topbtn-terms" onclick="openTerms()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M8 9l3 3l-3 3"/><path d="M14 15l3 0"/></svg> Terminals</button>
+      <button class="ghost topbtn-unload" onclick="unloadAll()" title="Free all model RAM — stop the MLX server and unload every Ollama model"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l7 -8l7 8z"/><path d="M5 17h14"/></svg> Unload all</button>
+      <button class="ghost topbtn-docs" onclick="openDocs()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 4v16h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12z"/><path d="M19 16h-12a2 2 0 0 0 -2 2"/><path d="M9 8h6"/></svg> Docs</button>
+      <button class="ghost topbtn-quit" onclick="openQuit()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 6a7.75 7.75 0 1 0 10 0"/><path d="M12 4l0 8"/></svg> Quit panel</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-eyebrow">Server</div>
+    <div class="row">
+      <span class="pill"><span id="dot" class="dot off"></span><span id="state">checking…</span></span>
+      <span id="backendBadge" class="badge mlx">mlx</span>
+    </div>
+    <div class="meta">
+      <div><span class="k">Model</span><br><span id="model">—</span></div>
+      <div><span class="k">Port</span><br><span id="port">—</span></div>
+      <div class="m-pid"><span class="k">PID</span><br><span id="pid">—</span></div>
+      <div><span class="k">Memory</span><br><span id="ram">—</span></div>
+    </div>
+    <div class="btns">
+      <button id="btnStart" class="act start" onclick="act('start')"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16l13 -8z"/></svg> Start</button>
+      <button id="btnStop" class="act stop" onclick="act('stop')"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5m0 2a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z"/></svg> Stop</button>
+      <button id="btnRestart" class="act restart" onclick="act('restart')"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/></svg> Restart</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-eyebrow">Launcher</div>
+    <div class="modelbar">
+      <div class="now"><span class="nowlbl">Launcher: </span><b id="activeLauncher">—</b></div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" onclick="openLauncher()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 0 1 7 7a6 6 0 0 0 3 -5a9 9 0 0 0 6 -8a3 3 0 0 0 -3 -3a9 9 0 0 0 -8 6a6 6 0 0 0 -5 3"/><path d="M7 14a6 6 0 0 0 -3 6a6 6 0 0 0 6 -3"/><path d="M15 9m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg> Change…</button>
+        <button class="primary" onclick="launchTerminal()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16l13 -8z"/></svg> Launch</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="sec-eyebrow">Model</div>
+    <div class="modelbar">
+      <div class="now"><span class="nowlbl">Active model: </span><b id="activeModel">—</b></div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" onclick="openCloud()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.657 18c-2.572 0 -4.657 -2.007 -4.657 -4.483c0 -2.475 2.085 -4.482 4.657 -4.482c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 1c1.488 1.19 2.162 3.007 1.77 4.769h.99c1.913 0 3.464 1.56 3.464 3.486c0 1.927 -1.551 3.487 -3.465 3.487h-11.878"/></svg> Cloud</button>
+        <button class="ghost" onclick="openBrowse()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></svg> Browse HF</button>
+        <button class="primary" onclick="openSwap()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 3l4 4l-4 4"/><path d="M10 7l10 0"/><path d="M8 13l-4 4l4 4"/><path d="M4 17l10 0"/></svg> Change model…</button>
+      </div>
+    </div>
+  </div>
+
+  <details id="logcard" class="card" open>
+    <summary class="loghdr"><span class="logchev" aria-hidden="true">▸</span><h2>Activity</h2><span id="logpeek" class="logpeek"></span><span id="logstamp" class="logstamp"></span></summary>
+    <pre id="log">loading…</pre>
+  </details>
+</div>
+
+<!-- swap dialog -->
+<div id="swapOverlay" class="overlay"><div class="modal">
+  <h3>Choose a model</h3>
+  <p class="hint">Pick a locally-available model. Switching restarts the server to load it.</p>
+  <div id="swapWarn" class="warn">⚠ The server is running — applying will stop it and load the new model (can take 30–60s).</div>
+  <div id="modelList">loading…</div>
+  <div class="foot">
+    <button class="ghost" onclick="closeSwap()">Cancel</button>
+    <button id="applyBtn" class="primary" onclick="applySwap()" disabled>Apply</button>
+  </div>
+</div></div>
+
+<!-- quit dialog -->
+<div id="quitOverlay" class="overlay"><div class="modal">
+  <h3>Quit control panel?</h3>
+  <p class="hint">Closing the panel doesn't affect Claude. Choose what to do with the model server.</p>
+  <div class="foot" style="justify-content:space-between">
+    <button class="ghost" onclick="closeQuit()">Cancel</button>
+    <div style="display:flex;gap:10px">
+      <button class="ghost" onclick="doQuit(false)">Quit panel only</button>
+      <button class="primary btn-danger" onclick="doQuit(true)">Stop server &amp; quit</button>
+    </div>
+  </div>
+</div></div>
+
+<!-- launcher dialog -->
+<div id="launcherOverlay" class="overlay"><div class="modal" style="max-width:560px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <h3 style="margin:0"><svg class="ti-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 13a8 8 0 0 1 7 7a6 6 0 0 0 3 -5a9 9 0 0 0 6 -8a3 3 0 0 0 -3 -3a9 9 0 0 0 -8 6a6 6 0 0 0 -5 3"/><path d="M7 14a6 6 0 0 0 -3 6a6 6 0 0 0 6 -3"/><path d="M15 9m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/></svg> Launcher</h3>
+    <button class="ghost" onclick="closeLauncher()">Close</button>
+  </div>
+  <p class="hint">Which agent CLI to run against your selected model. <code>claude-local</code> respects
+    whichever one is picked here.</p>
+  <div id="launcherList">loading…</div>
+</div></div>
+
+<!-- cloud providers dialog -->
+<div id="cloudOverlay" class="overlay"><div class="modal" style="max-width:600px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <h3 style="margin:0"><svg class="ti-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.657 18c-2.572 0 -4.657 -2.007 -4.657 -4.483c0 -2.475 2.085 -4.482 4.657 -4.482c.393 -1.762 1.794 -3.2 3.675 -3.773c1.88 -.572 3.956 -.193 5.444 1c1.488 1.19 2.162 3.007 1.77 4.769h.99c1.913 0 3.464 1.56 3.464 3.486c0 1.927 -1.551 3.487 -3.465 3.487h-11.878"/></svg> Cloud providers</h3>
+    <button class="ghost" onclick="closeCloud()">Close</button>
+  </div>
+  <p class="hint">Add API keys to use remote models. Keys are stored locally in
+    <code>~/.claude-code-router/cloud-providers.json</code> (chmod 600) and never leave this machine.
+    Enabled providers' models appear in “Change model”.</p>
+  <div id="cloudList">loading…</div>
+</div></div>
+
+<!-- browse huggingface dialog -->
+<div id="browseOverlay" class="overlay"><div class="modal" style="max-width:600px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <h3 style="margin:0"><svg class="ti-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/></svg> Browse HuggingFace</h3>
+    <button class="ghost" onclick="closeBrowse()">Close</button>
+  </div>
+  <p class="hint">Search MLX-ready models and download them. They appear in “Change model” when done.</p>
+  <div id="dlActive"></div>
+  <div style="display:flex;gap:8px;margin-bottom:6px">
+    <input id="hfq" class="hfsearch" placeholder="search e.g. qwen coder, llama, gemma…" autocomplete="off"
+      onkeydown="if(event.key==='Enter')doSearch()">
+    <button class="primary" onclick="doSearch()">Search</button>
+  </div>
+  <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--mut);margin-bottom:12px;cursor:pointer">
+    <input type="checkbox" id="mlxOnly" checked> MLX-ready only (runs with no conversion)
+  </label>
+  <div id="hfResults" style="max-height:46vh;overflow:auto"></div>
+</div></div>
+
+<!-- docs dialog -->
+<div id="docsOverlay" class="overlay"><div class="modal" style="max-width:640px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+    <h3 style="margin:0"><svg class="ti-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 4v16h-12a2 2 0 0 1 -2 -2v-12a2 2 0 0 1 2 -2h12z"/><path d="M19 16h-12a2 2 0 0 0 -2 2"/><path d="M9 8h6"/></svg> Documentation</h3>
+    <button class="ghost" onclick="closeDocs()">Close</button>
+  </div>
+  <div class="docs">
+    <h4>What this is</h4>
+    <p>A control panel for running an <b>agent CLI against a local LLM</b> on this Mac — start/stop
+       models, swap models, and now swap which <b>agent</b> (Claude Code, OpenCode, Hermes Agent) runs
+       them, all from one place.</p>
+
+    <h4>The two commands</h4>
+    <table>
+      <tr><td><code>claude-local</code></td><td>Launches whichever <b>launcher</b> is selected (the Launcher dialog), against whichever <b>model</b> is selected. Starts the model server for you if needed. The name stuck around from before launchers existed — it now dispatches to Claude Code, OpenCode, or Hermes Agent.</td></tr>
+      <tr><td><code>mlx-control</code></td><td>Opens this control panel in your browser.</td></tr>
+    </table>
+
+    <h4>Launchers</h4>
+    <table>
+      <tr><td><b>Claude Code</b></td><td>Anthropic's CLI. Works with local + cloud models. The default.</td></tr>
+      <tr><td><b>OpenCode</b></td><td>MIT, multi-provider agent CLI. <b>Local models only</b> here — writes <code>~/.config/opencode/opencode.json</code> pointing at whatever local server is active.</td></tr>
+      <tr><td><b>Hermes Agent</b></td><td>NousResearch's agent CLI. <b>Local models only</b> here — writes <code>~/.hermes/config.yaml</code> + <code>.env</code>. Install from the Launcher dialog (runs the official installer, ~3–5 min) or manually: <code>curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash</code>.</td></tr>
+    </table>
+    <p>Cloud models currently only work through Claude Code — OpenCode/Hermes + Cloud isn't wired up yet
+       (each has its own native cloud-provider system that's out of scope for now).</p>
+
+    <h4>How the pieces fit</h4>
+    <pre class="flow">Claude Code ──▶ <b>MLX</b>    (local) : via vllm-mlx — Anthropic-native, no router
+Claude Code ──▶ <b>Ollama</b> (local) : direct — Anthropic-native, no router
+Claude Code ──▶ <b>Cloud</b>  (OpenRouter/DeepSeek/Nous) : via claude-code-router
+Claude Code ──▶ <b>Cloud</b>  (Anthropic) : direct, with your API key</pre>
+
+    <h4>Two backends</h4>
+    <table>
+      <tr><td><span class="badge mlx">mlx</span></td><td><code>vllm-mlx</code> serves a model from your HuggingFace cache on port <code>8080</code>, speaking the Anthropic API <b>natively</b> (no router). Used for your exact <code>Qwen3.6-35B-A3B</code>. Loads in ~15–60s, ~19&nbsp;GB RAM.</td></tr>
+      <tr><td><span class="badge ollama">ollama</span></td><td>The Ollama daemon on port <code>11434</code> loads/unloads models on demand. Many models available; snappier to switch.</td></tr>
+    </table>
+
+    <h4>Using the panel</h4>
+    <ul>
+      <li><b>Start / Stop / Restart</b> — control the active model's server. Memory & PID show live while running.</li>
+      <li><b>Change model</b> — pick any local model. If a server is running it restarts to load the new one; if stopped it just selects. The choice is saved so <code>claude-local</code> follows it. Each non-active model has a <b>🗑</b> to delete it and free disk (the active model is protected — switch away first).</li>
+      <li><b>Cloud</b> — add API keys for OpenRouter, Anthropic, DeepSeek, or Nous/Hermes. Keys are stored locally in <code>cloud-providers.json</code> (chmod 600), shown masked, never logged. Enabled providers' models join the picker under <b>Cloud</b>; selecting one routes remotely (no local server, no RAM). OpenRouter alone covers most models (Hermes, Claude, DeepSeek, …) with one key.</li>
+      <li><b>Quit panel</b> — closes this web app. Choose <i>Quit panel only</i> (model keeps running) or <i>Stop server &amp; quit</i> (frees RAM).</li>
+    </ul>
+
+    <h4>Adding more models</h4>
+    <ul>
+      <li><b>Browse HF</b> (in the model card) — search HuggingFace for MLX-ready models and download
+          them in-app. It shows each model's size and checks it against free disk <i>before</i>
+          downloading (keeps a 10&nbsp;GB buffer), with a live progress bar. Done downloads appear in
+          “Change model” automatically.</li>
+      <li><b>Ollama</b> — <code>ollama pull &lt;name&gt;</code> in a terminal; it shows up in the picker too.</li>
+    </ul>
+
+    <h4>Where things live</h4>
+    <table>
+      <tr><td><code>~/.local/bin/claude-local</code></td><td>launcher</td></tr>
+      <tr><td><code>~/.local/bin/mlx-control</code></td><td>panel launcher</td></tr>
+      <tr><td><code>~/Projects/mlx-control/server.py</code></td><td>this panel (stdlib only)</td></tr>
+      <tr><td><code>~/.claude-code-router/current-model.json</code></td><td>selected model + backend</td></tr>
+      <tr><td><code>~/.claude-code-router/config.json</code></td><td>router config (MLX path)</td></tr>
+      <tr><td><code>~/.claude-code-router/mlx-server.log</code></td><td>MLX server log</td></tr>
+    </table>
+
+    <h4>Troubleshooting</h4>
+    <ul>
+      <li><b>Stuck on "Starting…"</b> — big MLX models take 30–60s. Check the Activity log for errors.</li>
+      <li><b>Free memory now</b> — Stop in the panel, or <code>pkill -f "vllm-mlx serve"</code> / <code>ollama stop &lt;model&gt;</code>.</li>
+      <li><b>Go back to real Claude</b> — just run <code>claude</code>. This setup never touches it.</li>
+      <li><b>Panel won't reopen</b> — <code>pkill -f mlx-control/server.py</code> then <code>mlx-control</code>.</li>
+    </ul>
+
+    <h4>Caveats</h4>
+    <p>Local models — especially 4-bit quantized ones — are slower and noticeably weaker at agentic
+       tool-use than hosted Claude. Great for chat and simple edits; rough for complex multi-step work.
+       The <code>llama3.1:8b</code> and <code>qwen2.5-coder:1.5b</code> models are the quick ones.</p>
+
+    <p class="credits">Built on open components: <b>Ollama</b> (MIT), <b>vllm-mlx</b> (Apache-2.0),
+       <b>claude-code-router</b> (MIT, kept for cloud providers). Full write-up in
+       <code>~/Projects/mlx-control/README.md</code>.</p>
+  </div>
+</div></div>
+
+<!-- terminals dialog -->
+<div id="termOverlay" class="overlay"><div class="modal termmodal">
+  <div class="termhdr">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h3 style="margin:0"><svg class="ti-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M8 9l3 3l-3 3"/><path d="M14 15l3 0"/></svg> Terminals</h3>
+      <select id="termLauncherSel" class="ghost sm" title="Which agent CLI to launch"></select>
+      <input id="termCwd" class="ghost sm" style="width:190px" placeholder="working dir (optional)" title="Launch in this project dir — picks up its .slipway.json preset" autocomplete="off">
+      <button class="mini" onclick="launchSelected()">+ Launch</button>
+      <button class="mini" onclick="termLaunch('shell')">+ Shell</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px" class="termctl">
+      <button class="ghost sm" onclick="termFont(-1)">A−</button>
+      <button class="ghost sm" onclick="termFont(1)">A+</button>
+      <select id="termScroll" class="ghost sm" onchange="termSetScroll()">
+        <option value="1000">1k</option><option value="5000" selected>5k</option><option value="20000">20k</option>
+      </select>
+      <button class="ghost sm" onclick="termToggleTheme()" id="termThemeBtn"><svg class="ti-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/></svg> Theme</button>
+      <button class="ghost sm" onclick="toggleHistory()" id="termHistBtn"><svg class="ti-svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8l0 4l2 2"/><path d="M3.05 11a9 9 0 1 1 .5 4m-.5 5v-5h5"/></svg> History</button>
+      <button class="ghost" id="termCloseBtn" onclick="closeTerms()">Close</button>
+    </div>
+  </div>
+  <div id="termTabs" class="termtabs"></div>
+  <div id="termPanes" class="termpanes"></div>
+  <div id="termHistory" class="termhistory" hidden></div>
+  <div id="termEmpty" class="termempty">No terminal sessions. Pick an agent CLI and click
+    <b>+ Launch</b> to run it against the selected model, or <b>+ Shell</b> for a plain shell.
+    <div class="st" style="margin-top:8px">Sessions end when you quit the panel.</div></div>
+</div></div>
+
+<div id="toast" class="toast"></div>
+<script src="/static/panel.js?v=__V__"></script>
+<script>
+/* Dead-handler guard (deliberately ES5 — must run even where panel.js won't parse):
+   if panel.js failed to load or parse, every onclick above is silently dead. Say so. */
+if (typeof openSwap !== 'function') {
+  // fully self-styled: when this fires the page may have NO stylesheet either,
+  // so it must read intentional over raw serif-fallback content
+  var _b = document.createElement('div');
+  _b.setAttribute('role', 'alert');
+  _b.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99;box-sizing:border-box;' +
+    'background:#7f1d1d;color:#fff;padding:12px 18px;text-align:center;letter-spacing:.2px;' +
+    'font:600 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;' +
+    'border-bottom:1px solid rgba(255,255,255,.25);box-shadow:0 2px 12px rgba(0,0,0,.35)';
+  _b.textContent = '⚠️ Panel out of date or script failed to load — hard-refresh this tab (⌘⇧R).';
+  document.body.appendChild(_b);
+}
+</script></body></html>

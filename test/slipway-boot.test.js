@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { autostartDecision, slipwayCommand } from '../lib/slipway-boot.js';
+import { autostartDecision, slipwayCommand, slipwayDirCandidates } from '../lib/slipway-boot.js';
 
 // Slipway autostart decision logic — server.js owns the I/O (ping, spawn, readiness poll);
 // these cover the pure decision + command resolution so the boot path can't regress silently.
@@ -42,5 +42,25 @@ describe('slipwayCommand', () => {
     expect(args[1]).toContain("'/opt/slipway/server.py'");
     expect(serverPy).toBe('/opt/slipway/server.py');
     expect(cwd).toBe('/opt/slipway');
+  });
+  it('an explicit dir wins over env/home (used by the candidate resolver)', () => {
+    const { serverPy, cwd } = slipwayCommand({ env: { SLIPWAY_DIR: '/opt/x' }, home: '/Users/alice', dir: '/app/slipway' });
+    expect(serverPy).toBe('/app/slipway/server.py');
+    expect(cwd).toBe('/app/slipway');
+  });
+});
+
+describe('slipwayDirCandidates', () => {
+  it('prefers the bundled slipway/ under root, then the dev checkout', () => {
+    expect(slipwayDirCandidates({ env: {}, home: '/Users/alice', root: '/app' }))
+      .toEqual(['/app/slipway', '/Users/alice/Projects/mlx-control']);
+  });
+  it('puts SLIPWAY_DIR first when set', () => {
+    expect(slipwayDirCandidates({ env: { SLIPWAY_DIR: '/opt/x' }, home: '/Users/alice', root: '/app' }))
+      .toEqual(['/opt/x', '/app/slipway', '/Users/alice/Projects/mlx-control']);
+  });
+  it('omits the bundled candidate when no root is given (dev tree)', () => {
+    expect(slipwayDirCandidates({ env: {}, home: '/Users/alice' }))
+      .toEqual(['/Users/alice/Projects/mlx-control']);
   });
 });
