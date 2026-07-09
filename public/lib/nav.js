@@ -3,7 +3,7 @@
 // location.hash); this module owns WHAT the states and transitions are, so "where am I"
 // is one testable value {lens, tab} instead of six overlays' hidden flags.
 
-export const LENSES = ['graph', 'time', 'code', 'agents'];
+export const LENSES = ['graph', 'time', 'code', 'agents', 'docs'];
 export const TABS = { time: ['agenda', 'roadmap'], code: ['map', 'review'] };
 const DEFAULT_TAB = { time: 'agenda', code: 'map' };
 

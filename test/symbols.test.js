@@ -1,5 +1,47 @@
 import { describe, it, expect } from 'vitest';
-import { parseImportBindings, functionRanges, enclosingFunction, findUsages, callSites, blankLiterals } from '../public/lib/symbols.js';
+import { parseImportBindings, functionRanges, enclosingFunction, findUsages, callSites, blankLiterals, scanText } from '../public/lib/symbols.js';
+
+// Template-interpolation visibility (gap closed 2026-07-07): `${…}` holds real code, so the
+// usage scan sees it — while functionRanges keeps the fully-blanked skeleton, so interpolation
+// braces still never corrupt brace-matching. voice-ui's esc() (used ONLY inside template HTML)
+// was invisible to the code map before this.
+describe('scanText — calls inside template interpolations count', () => {
+  it('finds a call that exists only inside ${…}, at the right line', () => {
+    const src = 'function render() {\n  return `<b>${esc(name)}</b>`;\n}';
+    expect(findUsages(src, ['esc'])).toEqual([{ name: 'esc', line: 2 }]);
+  });
+  it('attributes the interpolation call to its enclosing function via callSites', () => {
+    const src = "import { esc } from './dom.js';\nfunction row(x) {\n  return `<td>${esc(x)}</td>`;\n}";
+    const sites = callSites(src, ['esc'], new Set([1]));
+    expect(sites).toHaveLength(1);
+    expect(sites[0].fn).toBe('row');
+    expect(sites[0].lines).toEqual([3]);
+    expect(sites[0].members).toEqual([{ name: 'esc', kind: 'call', lines: [3] }]);
+  });
+  it('a template nested inside an interpolation gets its own interpolations scanned (recursion)', () => {
+    const src = 'const h = `${rows.map((r) => `<tr>${esc(r)}</tr>`).join("")}`;';
+    expect(findUsages(src, ['esc'])).toEqual([{ name: 'esc', line: 1 }]);
+  });
+  it('a string INSIDE an interpolation still never leaks identifiers', () => {
+    const src = 'const s = `${x ? "esc(1)" : y}`;\nconst t = `${\'esc(2)\'}`;';
+    expect(findUsages(src, ['esc'])).toEqual([]);
+  });
+  it('interpolation braces still never corrupt functionRanges (skeleton stays blanked)', () => {
+    const src = 'function f() {\n  const h = `${cfg({ a: 1 })} }`;\n  done();\n}';
+    expect(functionRanges(src)).toEqual([{ name: 'f', startLine: 1, endLine: 4 }]);
+    // and the interpolation call is both found AND attributed inside f
+    expect(findUsages(src, ['cfg'])).toEqual([{ name: 'cfg', line: 2 }]);
+    expect(enclosingFunction(functionRanges(src), 2)).toBe('f');
+  });
+  it('scanText preserves length and newlines (line numbers stay 1:1)', () => {
+    const src = 'const a = `x${esc(v)}y\nz${b}`;';
+    const out = scanText(src);
+    expect(out.length).toBe(src.length);
+    expect(out.split('\n').length).toBe(src.split('\n').length);
+    expect(out).toContain('esc(v)');
+    expect(out).not.toContain('x');   // template TEXT stays blanked — only the code returns
+  });
+});
 
 describe('blankLiterals — the tokenizer that makes the rest reliable', () => {
   it('blanks strings/comments/templates/regex but keeps code + length + newlines', () => {

@@ -6,6 +6,11 @@ export const SETS = {
   evidence: ['provenance', 'relations', 'timeline'],   // Insight / claim nodes
   decision: ['rationale', 'goal-progress'],            // Decision / Goal nodes (rationale: future)
   viewers: ['excerpt', 'markdown', 'text'],            // a node with a primary file
+  // VOICE Phase 5: the closed vocabulary the assistant's show_panel tool may compose —
+  // the injection-safety boundary (the model names component ids, never HTML). Everything
+  // form-bearing, capability-gated, or data-heavy (ai-*, chart, flashcard, notes, viewers)
+  // stays out until a real need appears.
+  'voice-panel': ['markdown', 'relations', 'timeline', 'provenance', 'goal-progress', 'acceptance', 'keyvalue'],
 };
 
 // The default set a view leads with (the rest of the resolved layout follows).

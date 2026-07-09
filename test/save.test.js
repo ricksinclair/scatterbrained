@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import crypto from 'node:crypto';
 import { hashText, validateSave, gitArgs, parseLog, commitMessage } from '../lib/save.js';
 
-const ROOTS = ['/Users/demo/Projects/notes'];
+const ROOTS = ['/Users/rick/Projects/notes'];
 
 describe('save — hashText matches document-index.js', () => {
   it('is sha256 over the exact UTF-8 bytes (no newline munging)', () => {
@@ -16,12 +16,12 @@ describe('save — hashText matches document-index.js', () => {
 });
 
 describe('save — validateSave matrix', () => {
-  const base = { path: '/Users/demo/Projects/notes/x.md', text: 'hi', roots: ROOTS, maxBytes: 1000 };
+  const base = { path: '/Users/rick/Projects/notes/x.md', text: 'hi', roots: ROOTS, maxBytes: 1000 };
   it('accepts a markdown file inside a root', () => expect(validateSave(base).ok).toBe(true));
   it('rejects a path outside the sandbox', () =>
     expect(validateSave({ ...base, path: '/etc/passwd.md' }).error).toMatch(/sandbox/));
   it('rejects non-markdown (markdown-only scope)', () =>
-    expect(validateSave({ ...base, path: '/Users/demo/Projects/notes/x.txt' }).error).toMatch(/markdown/));
+    expect(validateSave({ ...base, path: '/Users/rick/Projects/notes/x.txt' }).error).toMatch(/markdown/));
   it('rejects oversize content', () =>
     expect(validateSave({ ...base, text: 'x'.repeat(2000), maxBytes: 1000 }).error).toMatch(/too large/));
   it('rejects a non-string body', () => expect(validateSave({ ...base, text: null }).error).toMatch(/text required/));

@@ -59,7 +59,7 @@ export function unavailableHtml() {
     body: 'The Agents surface runs Slipway — an optional local model & agent runtime ' +
       '(Apple-Silicon macOS for MLX; Ollama also works on Linux). It isn’t part of the core Scatterbrained install.',
     action: { label: 'Slipway docs ↗', href: 'https://ulrictodman.com/scatterbrained/' },
-  }) + `<p>Start it on this machine (serving <code>localhost:8765</code>), then
+  }) + `<p>Start it on this machine (<code>mlx-control</code>, serving <code>localhost:8765</code>), then
        <button class="au-retry" id="agents-retry" type="button">retry</button>.</p>
   </div>`;
 }

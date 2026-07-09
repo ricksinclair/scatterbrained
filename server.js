@@ -15,8 +15,8 @@
 //
 // Run:  npm run studio   (then open http://localhost:4317)
 //
-// A no-build node:http BFF over the Neo4j driver. Connection is env-driven
-// (NEO4J_URI/USER/PASSWORD) — point it at your own graph; see .env.example.
+// This is the canonical (private-workspace) build. The sanitized, generic version
+// ports to the public Scatterbrained mirror via scripts/sync-scatterbrained.sh.
 // ============================================================================
 import http from 'node:http';
 import fs from 'node:fs';
@@ -24,7 +24,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { autostartDecision, slipwayCommand } from './lib/slipway-boot.js';
 import neo4j from 'neo4j-driver';
 import { acquire as lockAcquire, release as lockRelease, status as lockStatus, prune as lockPrune, HOLDER_STUDIO } from './lib/filelock.js';
 import { hashText, validateSave, gitArgs, parseLog, commitMessage } from './lib/save.js';
@@ -39,7 +40,21 @@ import { NOTE_CYCLE_STATES } from './public/lib/docnotes.js';
 import { VERIFY_STATES, shapeCriteriaLane } from './public/lib/criteria.js';
 import { isWebUrl, isVideoUrl } from './public/lib/links.js';
 import { buildBriefMarkdown, deriveBriefInput, cwdHint } from './public/lib/brief.js';
-import { resolveProvider, generate } from './lib/inference.js';
+import { resolveProvider, resolveProviderDetailed, generate, unloadModel } from './lib/inference.js';
+import { available as pumlAvailable, render as pumlRender } from './lib/plantuml.js';
+import { prepareSvg } from './public/lib/diagram-svg.js';
+import { toPlantuml } from './public/lib/graph-puml.js';
+import { aiDiagram as aiDiagramLane } from './lib/ai-diagram.js';
+import { buildDocTree } from './public/lib/docsite.js';
+import { buildLocalSystemPrompt, digestBlock, overviewBlock, recentBlock, findingsBlock, PERSONA_BRIEF } from './lib/persona.js';
+import { fetchDigestRows } from './scripts/lib/digest-query.js';
+import { createVoiceSession, LISTEN_DEFAULT_S, LISTEN_MAX_S, LISTEN_IDLE_S } from './lib/voice-session.js';
+import { createMcp } from './lib/mcp.js';
+import { validatePanel } from './lib/panels.js';
+import { recommendChartFromObjects } from './public/lib/dataviz.js';
+import { validateChartSpec } from './public/lib/chart-spec.js';
+import { ttsAvailable, synth as ttsSynth, TTS_VOICES, TTS_DEFAULT } from './lib/tts.js';
+import { sttAvailable as sttLocalAvailable, transcribe as sttTranscribe, installedModels as sttInstalledModels, STT_DEFAULT } from './lib/stt.js';
 import { addSession, markCaptured, pruneSessions, sessionsView } from './lib/agent-sessions.js';
 import { resolveReviewProject } from './lib/review-project.js';
 import { cleanTranscript } from './lib/ansi.js';
@@ -154,6 +169,48 @@ async function slipwayLaunch(body, timeoutMs = 5000) {
     return await r.json();
   } catch { return { error: 'slipway unreachable' }; } finally { clearTimeout(t); }
 }
+// Model loading through Slipway — the one-click remedy for the voice panel's 'no-model'
+// empty state. GET /api/models lists what Slipway can serve; POST /api/switch loads one.
+// TRUST BOUNDARY: the browser's model string is never forwarded as-is — it must match an
+// id in Slipway's own list (local backends only; 'cloud' is never loadable from here, the
+// inference lane refuses cloud anyway).
+async function slipwayModels(timeoutMs = 4000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(SLIPWAY + '/api/models', { signal: ctrl.signal });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const models = (Array.isArray(j.models) ? j.models : []).filter((m) => m && (m.backend === 'mlx' || m.backend === 'ollama'));
+    return models;
+  } catch { return null; } finally { clearTimeout(t); }
+}
+async function slipwayLoad(model, timeoutMs = 15000) {
+  const models = await slipwayModels();
+  if (!models) return { error: 'slipway unreachable' };
+  const entry = models.find((m) => m.id === model);
+  if (!entry) return { error: 'unknown model' };          // never forward an unlisted id
+  const post = async (pathSuffix, body) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const r = await fetch(SLIPWAY + pathSuffix, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body || {}),
+      });
+      if (!r.ok) return { error: `slipway returned ${r.status}` };
+      return await r.json();
+    } catch { return { error: 'slipway unreachable' }; } finally { clearTimeout(t); }
+  };
+  // switch() only SELECTS when nothing is serving (lazy by design) — start() does the load.
+  const sw = await post('/api/switch', { model: entry.id, backend: entry.backend });
+  if (sw.error) return sw;
+  const st = await post('/api/start');
+  if (st.error) return st;
+  if (st.ok === false) return { error: st.msg || 'start refused' };
+  return st;
+}
 // Thin passthrough to Slipway's archive endpoints (source of truth = Slipway's session
 // index; the Studio never persists archive state). Same server-side, no-Origin posture as
 // slipwayLaunch — the browser can't reach :8765 cross-origin. Rail-VISIBILITY only: Slipway
@@ -262,7 +319,7 @@ async function agentLaunch(id) {
 // .log through the /api/source sandbox), INFORMS its origin node/project, and can be
 // summarized into an Insight — always user-triggered, never automatic (graph discipline).
 const AGENT_SESSIONS_PATH = path.join(os.homedir(), '.scatterbrained', 'agent-sessions.json');
-// CONTRACT with Slipway (its repo documents the federation contract): transcripts live at
+// CONTRACT with Slipway (mlx-control/CLAUDE.md "Federation contract"): transcripts live at
 // ~/.claude-code-router/terminals/<sid>.log; deep-links are #terminals / #term:<sid>.
 const SLIPWAY_TERM_DIR = path.join(os.homedir(), '.claude-code-router', 'terminals');
 const TRANSCRIPT_TAIL_BYTES = 1024 * 1024;   // capture reads at most the last 1 MB
@@ -564,7 +621,7 @@ const Q_ORPHAN_LIST = `
   RETURN coalesce(n.name,n.title,n.summary,n.id) AS name,
          head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS label LIMIT 12`;
 // Retired-brand drift: an identity node still NAMED for a renamed entity (the
-// generalized lesson from the retired-brand cleanup). Mirrors lint-graph's
+// generalized lesson from the Engram→Scatterbrained cleanup). Mirrors lint-graph's
 // `retired-alias-drift` so the cockpit shows what the linter would fail on.
 const Q_ALIAS_DRIFT = `
   MATCH (n) WHERE any(l IN labels(n) WHERE l IN $aliasLabels)
@@ -747,6 +804,7 @@ async function api(pathname, params) {
     }
     return { node };
   }
+  if (pathname === '/api/lens/run') return await runLens(params.id);   // re-run a saved Lens live → { chart, row_count }
   if (pathname === '/api/agent/ping') {
     return { available: await slipwayPing() };   // is the Slipway runtime up? (gates the launch button)
   }
@@ -775,10 +833,128 @@ async function api(pathname, params) {
     return { available: history !== null, sessions: sessionsView(map, history, stats) };
   }
   if (pathname === '/api/ai/ping') {
-    const prov = await resolveProvider();
+    // Voice-lane truth: only a RESIDENT model counts (see resolveProviderDetailed) — the
+    // orb must never wear a model name that isn't actually in memory.
+    const { provider: prov, reason, slipway } = await resolveProviderDetailed({ requireResident: true });
     return prov
       ? { available: true, provider: prov.label, model: prov.model, models: prov.models, host: prov.base }
-      : { available: false, models: [] };
+      : { available: false, models: [], reason, selected: (slipway && slipway.model) || null };
+  }
+  if (pathname === '/api/docs') {
+    // The Docs lens. No params → projects with ingested doc Sources (markdown/text with
+    // a file_path, current only). ?project= → that project's classified doc tree
+    // (docsite.js taxonomy — built entirely from what the document lane already recorded;
+    // no re-ingestion). Each doc carries `readable` (inside the granted read roots) so a
+    // blocked doc shows the grant on-ramp instead of a dead-end click.
+    if (!params.project) {
+      const recs = await run(driver, `
+        MATCH (s:Source)-[:INFORMS]->(p:Project)
+        WHERE s.source_kind IN ['markdown', 'text'] AND s.file_path IS NOT NULL
+          AND s.valid_until IS NULL
+        RETURN p.name AS name, count(DISTINCT s) AS doc_count ORDER BY doc_count DESC`);
+      return { projects: recs.map((r) => toPlain(r.toObject())) };
+    }
+    const recs = await run(driver, `
+      MATCH (s:Source)-[:INFORMS]->(p:Project {name: $project})
+      WHERE s.source_kind IN ['markdown', 'text'] AND s.file_path IS NOT NULL
+        AND s.valid_until IS NULL
+      RETURN DISTINCT elementId(s) AS id, s.title AS title, s.display_title AS display_title,
+             s.file_path AS file_path, s.source_kind AS source_kind`,
+    { project: String(params.project) });
+    const docs = recs.map((r) => toPlain(r.toObject())).map((d) => {
+      let readable = false;
+      try { readable = isWithinRoots(realOf(absSrc(d.file_path)), SOURCE_ROOTS); } catch { readable = false; }
+      return { ...d, readable };
+    });
+    return { project: String(params.project), tree: buildDocTree(docs), doc_count: docs.length };
+  }
+  if (pathname === '/api/diagram/ping') {
+    // The local PlantUML lane (brew install plantuml). Rendering is ALWAYS local —
+    // diagram text never leaves the machine (no plantuml.com fallback, by design).
+    const st = await pumlAvailable({ refresh: params.refresh === '1' });
+    return st.ok ? { available: true, version: st.version } : { available: false };
+  }
+  if (pathname === '/api/diagram/from-graph') {
+    // "Explain this cluster as a diagram": walk the node's neighborhood (depth 1|2,
+    // annotation labels skipped) → PlantUML (graph-puml.js) → local render.
+    const id = String(params.id || '');
+    const kind = params.kind === 'component' ? 'component' : 'mindmap';
+    const depth = params.depth === '2' ? 2 : 1;
+    const recs = await run(driver, `
+      MATCH (n) WHERE elementId(n) = $id
+      OPTIONAL MATCH (n)-[r]-(m)
+      WHERE none(l IN labels(m) WHERE l IN ['Note', 'ProtectedFact', 'Review'])
+      WITH n, collect({ id: elementId(m), name: coalesce(m.name, m.title, m.summary, m.id),
+                        label: head([l IN labels(m) WHERE l <> 'Embeddable'] + labels(m)),
+                        relType: type(r),
+                        dir: CASE WHEN startNode(r) = n THEN 'out' ELSE 'in' END })[0..60] AS d1
+      RETURN elementId(n) AS id, coalesce(n.name, n.title, n.summary, n.id) AS name,
+             head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS label, d1`,
+    { id });
+    const row = recs[0] ? toPlain(recs[0].toObject()) : null;
+    if (!row) return { error: 'node not found' };
+    let neighbors = (row.d1 || []).filter((x) => x.id);
+    if (depth === 2 && neighbors.length) {
+      const recs2 = await run(driver, `
+        MATCH (m) WHERE elementId(m) IN $ids
+        MATCH (m)-[r2]-(k)
+        WHERE elementId(k) <> $id AND NOT elementId(k) IN $ids
+          AND none(l IN labels(k) WHERE l IN ['Note', 'ProtectedFact', 'Review'])
+        RETURN elementId(m) AS parentId, elementId(k) AS id,
+               coalesce(k.name, k.title, k.summary, k.id) AS name,
+               head([l IN labels(k) WHERE l <> 'Embeddable'] + labels(k)) AS label,
+               type(r2) AS relType,
+               CASE WHEN startNode(r2) = m THEN 'out' ELSE 'in' END AS dir
+        LIMIT 40`,
+      { ids: neighbors.map((x) => x.id), id });
+      neighbors = neighbors.concat(recs2.map((r) => ({ ...toPlain(r.toObject()), depth: 2 })));
+    }
+    const puml = toPlantuml({ focus: { id: row.id, name: row.name, label: row.label }, neighbors }, { kind });
+    const st = await pumlAvailable();
+    if (!st.ok) return { puml, error: 'PlantUML is not installed (brew install plantuml)', unavailable: true };
+    const rendered = await pumlRender(puml, { postProcess: prepareSvg });
+    return rendered.svg
+      ? { puml, svg: rendered.svg, node_count: neighbors.length + 1, edge_count: neighbors.length }
+      : { puml, ...rendered };
+  }
+  if (pathname === '/api/slipway/models') {
+    // What could the voice panel load? (local backends only — see slipwayModels)
+    const models = await slipwayModels();
+    return models ? { available: true, models } : { available: false, models: [] };
+  }
+  if (pathname === '/api/voice/status') {
+    // The panel's brain picture: the MCP agent (if connected) + the connect command.
+    return { agent: voiceSession.status(), mcp: { url: `http://127.0.0.1:${PORT}/mcp`, token_path: MCP_TOKEN_PATH } };
+  }
+  if (pathname === '/api/digest') {
+    // The bucketed intention clock — the agenda panel + local-mode chips read this.
+    return voiceDigest(params.project ? String(params.project) : null);
+  }
+  if (pathname === '/api/voice/tts/ping') {
+    // The local-TTS lane (Kokoro-82M): available → the browser prefers it over Web Speech.
+    return { available: ttsAvailable(), voices: TTS_VOICES, default: TTS_DEFAULT };
+  }
+  if (pathname === '/api/voice/stt/ping') {
+    // The on-device recognition lane (mlx-whisper): available → the browser records WAV
+    // and transcribes here instead of shipping audio to Google/Apple.
+    return { available: sttLocalAvailable(), models: sttInstalledModels(), default: STT_DEFAULT };
+  }
+  if (pathname === '/api/ai/diagram') {
+    // "Diagram this": local model → PlantUML → VALIDATE BY RENDERING → one retry with
+    // the render error fed back → honest structured failure (never a spinner). The
+    // response carries `attempts` so criterion #4 (≤2 attempts) is directly observable.
+    const prov = await resolveProvider();
+    if (!prov) return { available: false };
+    const st = await pumlAvailable();
+    if (!st.ok) return { available: false, error: 'PlantUML is not installed' };
+    const node = rows(await run(driver, Q_NODE, { id: String(params.id || '') }))[0];
+    if (!node) return { available: true, error: 'node not found' };
+    const kind = ['mindmap', 'component', 'sequence'].includes(params.kind) ? params.kind : 'mindmap';
+    const result = await aiDiagramLane(prov, nodeText(node), kind, {
+      generateImpl: generate,
+      renderImpl: (puml) => pumlRender(puml, { postProcess: prepareSvg }),
+    });
+    return { available: true, model: prov.model, ...result };
   }
   if (pathname === '/api/ai/summary' || pathname === '/api/ai/ask') {
     const prov = await resolveProvider();
@@ -960,6 +1136,514 @@ async function api(pathname, params) {
 // The cycle set comes from the shared vocab (docnotes.js). Criterion states
 // (unverified/pass/fail) are deliberately NOT settable here — see verifyCriterion.
 const NOTE_STATES = new Set(NOTE_CYCLE_STATES);
+// VOICE Phase 1 — the built-in local chat lane. One turn in ({q, node_id?, history?, model?}),
+// grounded spoken-style reply out. Context is SERVER-INJECTED (digest + selected node), not
+// tool-called — the honest capability split: the MCP lane (Phase 3) gets real tools; this
+// lane gets reports. History arrives flattened from the browser (voice-thread's msg shape).
+let lastLocalModel = null;   // one resident chat model: switching unloads the old KV cache
+async function voiceChat({ q, node_id, history, model } = {}) {
+  const utterance = String(q || '').trim().slice(0, 2000);
+  if (!utterance) return { error: 'q required' };
+  // requireResident: a voice turn must answer in seconds — never trigger a cold multi-GB
+  // Ollama load mid-conversation. An explicit ?model= pick below is the user opting in.
+  const { provider: prov, reason, slipway } = await resolveProviderDetailed({ requireResident: !model });
+  // No provider: tell the panel WHY — 'no-slipway' (runtime down) vs 'no-model' (runtime up,
+  // nothing loaded; models are never loaded by default). selected = the model Slipway would
+  // load, so the empty state can offer one-click "Load <model>".
+  if (!prov) return { available: false, reason, selected: (slipway && slipway.model) || null };
+  if (model && prov.kind === 'ollama' && prov.models.includes(model)) prov.model = model;
+  if (prov.kind === 'ollama' && lastLocalModel && lastLocalModel !== prov.model) {
+    unloadModel(prov, lastLocalModel).catch(() => {});   // fire-and-forget; never blocks the turn
+  }
+  if (prov.kind === 'ollama') lastLocalModel = prov.model;
+  let digest = '';
+  try { digest = digestBlock(await fetchDigestRows(driver)); } catch { /* agenda-less reply beats no reply */ }
+  // Recall is INJECTED in the local lane (it has no tools): the newest captured
+  // Insights answer "what did we do recently", and a keyword pass over the utterance
+  // pulls matching nodes with a bite of their text — the stand-in for search_nodes.
+  let recent = '';
+  try { recent = recentBlock(rows(await run(driver, Q_WHATSNEW))); } catch { /* optional */ }
+  // Live aggregate counts — "how many active projects?" is answerable without tools.
+  let overview = '';
+  try {
+    overview = overviewBlock(rows(await run(driver,
+      `CALL { MATCH (p:Project) WHERE p.valid_until IS NULL RETURN 'project:' + coalesce(p.status, 'unset') AS k
+        UNION ALL MATCH (g:Goal) WHERE g.valid_until IS NULL RETURN 'goal:' + coalesce(g.status, 'unset') AS k
+        UNION ALL MATCH (i:Idea) WHERE i.valid_until IS NULL RETURN 'idea:' + coalesce(i.status, 'unset') AS k }
+       RETURN k, count(*) AS c ORDER BY k`)));
+  } catch { /* optional */ }
+  let findings = '';
+  try {
+    const q = utterance.replace(/[^\w\s'-]/g, ' ').trim().slice(0, 120);
+    if (q.length > 3) {
+      const hits = rows(await run(driver, Q_SEARCH, { q })).slice(0, 3);
+      if (hits.length) {
+        const withText = rows(await run(driver,
+          `UNWIND $ids AS id MATCH (n) WHERE elementId(n) = id
+           RETURN coalesce(n.name, n.title, n.summary) AS name,
+                  head([l IN labels(n) WHERE l <> 'Embeddable'] + labels(n)) AS label,
+                  left(coalesce(n.description, n.summary, n.full_text, ''), 400) AS text`,
+          { ids: hits.map((h) => h.id) }));
+        findings = findingsBlock(withText);
+      }
+    }
+  } catch { /* retrieval is a bonus, never a blocker */ }
+  let node = null;
+  if (node_id) {
+    const n = rows(await run(driver, Q_NODE, { id: String(node_id) }))[0];
+    if (n) node = nodeText(n);
+  }
+  const turns = Array.isArray(history)
+    ? history.slice(-8).map((m) => ({ role: m && m.role === 'assistant' ? 'assistant' : 'you', text: String((m && m.text) || '').slice(0, 1000) }))
+    : [];
+  const prompt = buildLocalSystemPrompt({ digest, overview, recent, findings, node, history: turns, utterance });
+  const out = await generate(prov, prompt, { timeoutMs: 60000, maxTokens: 256 });
+  if (out == null) return { available: true, error: 'generation failed' };
+  return { available: true, provider: prov.label, model: prov.model, text: out.trim() };
+}
+
+// ── VOICE Phase 3: the MCP lane ──────────────────────────────────────────────────────
+// The Studio is the "phone"; a connected MCP agent (the user's own Claude Code session,
+// subscription-billed — no `claude -p` spawns, no API keys) is the brain. The endpoint
+// lives in-process because the listen loop's pending promises must be shared with the
+// browser's /api/voice/* calls.
+
+// Bearer token for /mcp — generated once, 0600, shown in Settings with the connect command.
+const MCP_TOKEN_PATH = path.join(os.homedir(), '.scatterbrained', 'mcp-token');
+function loadMcpToken() {
+  try { const t = fs.readFileSync(MCP_TOKEN_PATH, 'utf8').trim(); if (t) return t; } catch { /* first run */ }
+  const t = crypto.randomBytes(24).toString('hex');
+  fs.mkdirSync(path.dirname(MCP_TOKEN_PATH), { recursive: true });
+  fs.writeFileSync(MCP_TOKEN_PATH, t + '\n', { mode: 0o600 });
+  return t;
+}
+const MCP_TOKEN = loadMcpToken();
+const mcpTokenOk = (header) => {
+  const got = Buffer.from(String(header || ''));
+  const want = Buffer.from(`Bearer ${MCP_TOKEN}`);
+  return got.length === want.length && crypto.timingSafeEqual(got, want);
+};
+
+const voiceSession = createVoiceSession({ onEvent: (name, data) => broadcast('voice-' + name, data) });
+// Staleness watchdog: an agent that stopped polling (no parked listen, quiet >60s) gets
+// its badge dimmed — the honest v1 answer to "nothing forces the agent to keep listening".
+let voiceWasStale = false;
+setInterval(() => {
+  const s = voiceSession.status();
+  const nowStale = !!(s.connected && s.stale);
+  if (nowStale && !voiceWasStale) broadcast('voice-agent', { state: 'stale', model: s.model });
+  voiceWasStale = nowStale;
+}, 15000).unref();
+
+// MCP transport sessions (issued at initialize) → the voice session bound by voice_connect.
+// A superseded agent keeps its transport session; its stale voice sessionId makes
+// voice_listen/voice_say answer {kind:'superseded'}/{error} — the honest goodbye.
+const mcpSessions = new Map();
+function newMcpSession() {
+  const id = crypto.randomUUID();
+  mcpSessions.set(id, { voiceSid: null });
+  if (mcpSessions.size > 50) mcpSessions.delete(mcpSessions.keys().next().value);
+  return id;
+}
+const voiceSidOf = (ctx) => (mcpSessions.get(ctx.sessionId) || {}).voiceSid;
+
+// VOICE Phase 6: explicit save-to-graph. The transcript lands on disk, the graph gets a
+// voice_session Source (metadata only) + INFORMS edges to the session's touched nodes —
+// the same posture and shape-gating as agentCapture above. Never automatic.
+const VOICE_SESSIONS_DIR = path.join(os.homedir(), '.scatterbrained', 'voice-sessions');
+async function voiceCapture({ transcript, model } = {}) {
+  const text = String(transcript || '').trim();
+  if (!text) return { error: 'transcript required — nothing to save' };
+  const status = voiceSession.status();
+  const modelName = String((status.connected && status.model) || model || 'assistant').slice(0, 120);
+  const sid = new Date().toISOString().slice(0, 19).replace(/[:]/g, '-');
+  fs.mkdirSync(VOICE_SESSIONS_DIR, { recursive: true });
+  const fp = path.join(VOICE_SESSIONS_DIR, sid + '.md');
+  const header = `# Voice session — ${modelName} — ${sid.slice(0, 10)}\n\n`;
+  fs.writeFileSync(fp, header + text + '\n');
+  const title = 'voice-session/' + sid;
+  await run(driver,
+    `MERGE (s:Source {title: $title})
+     SET s.created_at = coalesce(s.created_at, datetime()),
+         s.source_kind = 'voice_session', s.type = 'voice_session',
+         s.file_path = $fp, s.display_title = $dt, s.model = $model,
+         s.captured_at = datetime(), s.last_synced_at = datetime(),
+         s.content_hash = $hash, s.transcript_bytes = $bytes, s.tags = $tags
+     RETURN elementId(s) AS id`,
+    { title, fp, dt: `Voice session — ${modelName} (${sid.slice(0, 10)})`, model: modelName, hash: hashText(text), bytes: text.length, tags: ['voice-session'] });
+  // INFORMS to touched nodes, shape-gated exactly like agentCapture; labels missing on
+  // tool-side touches (capture_note/schedule pass only ids) resolve here.
+  let informs = 0;
+  for (const t of voiceSession.touchedNodes()) {
+    let label = t.label;
+    if (!label) {
+      const o = rows(await run(driver, Q_AGENT_ORIGIN_BY_ID, { id: t.id }))[0];
+      if (!o) continue;
+      label = o.label;
+    }
+    if (!INFORMS_TARGETS.has(label)) continue;
+    await run(driver, Q_AGENT_INFORMS, { title, nid: t.id });
+    informs++;
+  }
+  return { ok: true, title, file_path: fp, informs };
+}
+
+// Bucketed intention-clock digest — one implementation, two consumers: the get_briefing
+// tool and GET /api/digest (the agenda panel + local-mode chips).
+async function voiceDigest(project = null) {
+  const rowsD = await fetchDigestRows(driver, { project });
+  const buckets = { overdue: [], today: [], this_week: [], upcoming: [] };
+  const today = new Date().toISOString().slice(0, 10);
+  const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  for (const r of rowsD) {
+    const item = { name: r.name, label: r.label, kind: r.kind, date: r.date, projects: r.projects, id: r.id };
+    (r.date < today ? buckets.overdue : r.date === today ? buckets.today : r.date <= weekEnd ? buckets.this_week : buckets.upcoming).push(item);
+  }
+  return { now: today, due: buckets };
+}
+
+// Shared read-only Cypher runner (query_graph tool + show_panel kind:viz + a Lens's live re-run).
+// A READ session + executeRead makes Neo4j reject any write clause server-side; 50-row cap, 10s
+// timeout. Returns { rows, truncated } or { error } (message capped for a spoken/echoed context).
+async function runReadCypher(cypher, params) {
+  const session = driver.session({ defaultAccessMode: neo4j.session.READ });
+  try {
+    const res = await session.executeRead((tx) => tx.run(String(cypher).slice(0, 2000), params || {}), { timeout: 10000 });
+    return { rows: res.records.slice(0, 50).map((r) => toPlain(r.toObject())), truncated: res.records.length > 50 };
+  } catch (e) {
+    return { error: String((e && e.message) || 'query failed').slice(0, 300) };
+  } finally {
+    await session.close();
+  }
+}
+
+// Save a live LENS (Studio saved-query view): a stored read-only Cypher + chart spec, never the
+// data. Keyed on a UUID (l.id); may attach ABOUT the node it concerns. Re-run live via runLens.
+async function saveLens({ name, cypher, spec, about_node_id, author } = {}) {
+  const nm = String(name || '').trim().slice(0, 200);
+  const cy = String(cypher || '').trim().slice(0, 2000);
+  if (!nm || !cy) return { error: 'name and cypher are required' };
+  const v = validateChartSpec(spec || {});
+  if (v.error) return { error: v.error.message };
+  const a = (String(author || 'you').trim() || 'you').slice(0, 80);
+  const recs = await run(driver, `
+    CREATE (l:Lens {id: randomUUID()})
+    SET l.name = $name, l.cypher = $cypher, l.spec_json = $spec_json,
+        l.created_by = $author, l.created_at = datetime(), l.tags = ['scatterbrained', 'lens']
+    WITH l
+    OPTIONAL MATCH (t) WHERE $about IS NOT NULL AND elementId(t) = $about
+    FOREACH (_ IN CASE WHEN t IS NOT NULL THEN [1] ELSE [] END | MERGE (l)-[:ABOUT]->(t))
+    RETURN l.id AS id, l.name AS name`,
+  { name: nm, cypher: cy, spec_json: JSON.stringify(v.spec), author: a, about: about_node_id ? String(about_node_id) : null });
+  return { lens: toPlain(recs[0].toObject()) };
+}
+
+// Run a saved Lens live: re-execute its stored Cypher and build the chart from the FRESH rows (the
+// point of a live lens — it reflects current graph state). The stored spec provides the human title
+// and is the fallback when the fresh rows can't be auto-charted. A query error renders an honest strip.
+async function runLens(id) {
+  const recs = await run(driver, 'MATCH (l:Lens) WHERE elementId(l) = $id RETURN l.name AS name, l.cypher AS cypher, l.spec_json AS spec_json', { id: String(id || '') });
+  const lens = recs[0] ? toPlain(recs[0].toObject()) : null;
+  if (!lens) return { error: 'lens not found' };
+  const r = await runReadCypher(lens.cypher, {});
+  if (r.error) return { chart: { error: r.error, title: lens.name }, row_count: 0 };
+  let stored = null; try { stored = lens.spec_json ? JSON.parse(lens.spec_json) : null; } catch { stored = null; }
+  let chart = recommendChartFromObjects(r.rows);
+  if (chart && stored && stored.title) chart.title = stored.title;
+  if (!chart) chart = stored || { error: 'the query returned no chartable rows', title: lens.name };
+  return { chart, row_count: r.rows.length, truncated: r.truncated };
+}
+
+// Deterministic graph-statistic facets — fixed read-only Cyphers, each returning ALREADY
+// chart-shaped rows ([{label, value}]) so the agent pipes them straight into show_panel kind:viz
+// (or just narrates). The model picks a facet name; it never writes the Cypher.
+const STAT_FACETS = {
+  labels: 'MATCH (n) WITH labels(n)[0] AS label, count(*) AS c WHERE label IS NOT NULL RETURN label, c AS value ORDER BY value DESC LIMIT 20',
+  growth: "MATCH (n) WHERE n.created_at IS NOT NULL AND n.created_at >= datetime() - duration('P84D') WITH date.truncate('week', date(n.created_at)) AS wk, count(*) AS c RETURN toString(wk) AS label, c AS value ORDER BY label",
+  stale: 'MATCH (n) WITH sum(CASE WHEN n.valid_until IS NOT NULL THEN 1 ELSE 0 END) AS stale, count(*) AS total UNWIND [{l: "current", v: total - stale}, {l: "superseded", v: stale}] AS r RETURN r.l AS label, r.v AS value',
+  hubs: 'MATCH (n) WITH n, COUNT { (n)--() } AS deg ORDER BY deg DESC LIMIT 10 RETURN coalesce(n.name, n.title, n.summary, "(unnamed)") AS label, deg AS value',
+  tags: 'MATCH (n) UNWIND coalesce(n.tags, []) AS t WITH t AS label, count(*) AS c RETURN label, c AS value ORDER BY value DESC LIMIT 12',
+};
+async function graphStats(facet) {
+  const oneFacet = async (q) => {
+    const r = await runReadCypher(q, {});
+    return r.error ? [] : r.rows.map((x) => ({ label: String(x.label), value: Number(x.value) })).filter((x) => Number.isFinite(x.value));
+  };
+  if (facet && STAT_FACETS[facet]) return { facet, rows: await oneFacet(STAT_FACETS[facet]) };
+  const stats = {};
+  for (const k of Object.keys(STAT_FACETS)) stats[k] = await oneFacet(STAT_FACETS[k]);
+  return { stats };
+}
+
+const VOICE_LOOP_PROTOCOL =
+  'You are connected to Scatterbrained Studio\'s voice loop. The Studio is the phone; you are the brain. ' +
+  'FIRST call voice_connect({model: "<your exact model id>"}). Then LOOP: voice_listen() → think (use tools) → voice_say({text}) → voice_listen() again. ' +
+  'voice_listen returning {kind:"timeout"} means the user hasn\'t spoken yet — call voice_listen AGAIN immediately; this re-poll IS the heartbeat, never stop polling. ' +
+  `BUDGET DISCIPLINE: after two consecutive timeouts, pass timeout_s: ${LISTEN_IDLE_S} on every further listen (long, cache-warm waits are far cheaper than rapid re-polls); drop back to the default the moment an utterance arrives. ` +
+  '{kind:"superseded"} means another brain took over — stop gracefully. ' +
+  'A voice_say result of {interrupted:true, spoken_chars:N} means the user cut you off after N characters — your next voice_listen returns what they said instead; be brief and responsive to it. ' +
+  'Spoken replies must be SHORT (under ~3 sentences, no markdown — they are read aloud).';
+
+const MCP_TOOLS = [
+  {
+    name: 'voice_connect',
+    description: 'Join the Studio voice loop as the active assistant brain. Self-report your exact model id — it becomes the on-screen badge and picks your voice. Call this once, first.',
+    inputSchema: { type: 'object', properties: { model: { type: 'string', description: 'your exact model id, e.g. claude-fable-5' }, persona_name: { type: 'string', description: 'optional display name' } }, required: ['model'] },
+    handler: async (args, ctx) => {
+      const m = mcpSessions.get(ctx.sessionId);
+      if (!m) return { isError: true, error: 'no transport session' };
+      const { sessionId, superseded } = voiceSession.connect(args);
+      m.voiceSid = sessionId;
+      return { ok: true, session: 'connected', superseded_previous: superseded, persona_brief: PERSONA_BRIEF, hint: 'now loop: voice_listen → think → voice_say → voice_listen' };
+    },
+  },
+  {
+    name: 'voice_listen',
+    description: `Wait for the user's next utterance (spoken or typed). Long-polls up to timeout_s (default ${LISTEN_DEFAULT_S}, max ${LISTEN_MAX_S}); {kind:"timeout"} → call voice_listen again immediately (the re-poll is the heartbeat). After two consecutive timeouts, pass timeout_s: ${LISTEN_IDLE_S} — long waits are cache-warm and cheap, rapid idle polling burns your budget. The result carries ui context (the node the user is looking at) and interrupted:true when it barged in on your last voice_say.`,
+    inputSchema: { type: 'object', properties: { timeout_s: { type: 'number' } }, required: [] },
+    handler: (args, ctx) => voiceSession.listen(voiceSidOf(ctx), { timeoutS: args.timeout_s }),
+  },
+  {
+    name: 'voice_say',
+    description: 'Speak to the user (rendered in the thread + read aloud). BLOCKS until spoken: {spoken:true} = fully heard; {interrupted:true, spoken_chars:N} = user barged in after N chars (listen for what they said next); {spoken:false, reason} = rendered as text only (muted / no TTS). Keep it under ~3 sentences.',
+    inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+    handler: (args, ctx) => voiceSession.say(voiceSidOf(ctx), { text: args.text }),
+  },
+  {
+    name: 'voice_disconnect',
+    description: 'Leave the voice loop gracefully (the user said goodbye or you are done). The Studio reverts to its local brain.',
+    inputSchema: { type: 'object', properties: {}, required: [] },
+    handler: (args, ctx) => voiceSession.disconnect(voiceSidOf(ctx)),
+  },
+  // ── Phase 4: the project toolset — reports + narrow actions, nothing speculative ──
+  {
+    name: 'get_briefing',
+    description: 'The project pulse: what is overdue / due today / due this week / upcoming (30-day intention clock), review-queue counts (superseded, orphans), and what is new. Ground every spoken agenda claim in this.',
+    inputSchema: { type: 'object', properties: { project: { type: 'string', description: 'optional project-name filter' } }, required: [] },
+    handler: async (args) => {
+      const digest = await voiceDigest(args.project || null);
+      const [sup, orph, wnew] = await Promise.all([run(driver, Q_SUPERSEDED), run(driver, Q_ORPHAN_LIST), run(driver, Q_WHATSNEW)]);
+      return {
+        ...digest,
+        review: { superseded_count: rows(sup).length, orphan_count: rows(orph).length },
+        whats_new: rows(wnew).slice(0, 8).map((n) => ({ name: n.name, label: n.label, created_at: n.created_at })),
+      };
+    },
+  },
+  {
+    name: 'search_nodes',
+    description: 'Find nodes in the knowledge graph by keyword (names, descriptions, former names). Your entry point — get a node id here before get_node / capture_note / schedule / navigate_studio.',
+    inputSchema: { type: 'object', properties: { q: { type: 'string' } }, required: ['q'] },
+    handler: async (args) => {
+      const q = String(args.q || '').trim().slice(0, 200);
+      if (!q) return { results: [] };
+      return { results: rows(await run(driver, Q_SEARCH, { q })).map((r) => ({ id: r.id, name: r.name, label: r.label, superseded: r.superseded })) };
+    },
+  },
+  {
+    name: 'get_node',
+    description: 'Read one node deeply: text, status, dates, tags, and its relationships. Use the id from search_nodes.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    handler: async (args, ctx) => {
+      const node = rows(await run(driver, Q_NODE, { id: String(args.id) }))[0];
+      if (!node) return { isError: true, code: 'node_not_found', message: 'no node with that id' };
+      voiceSession.touch(node.id, { name: node.name, label: node.label });
+      return {
+        node: {
+          id: node.id, name: node.name, label: node.label, desc: node.desc, status: node.status,
+          tags: node.tags, created_at: node.created_at, due_at: node.due_at, review_at: node.review_at,
+          target_date: node.target_date, superseded: !!node.valid_until,
+          edges: (node.edges || []).slice(0, 40).map((e) => ({ type: e.type, dir: e.dir, name: e.name, label: e.label, id: e.id })),
+        },
+      };
+    },
+  },
+  {
+    name: 'capture_note',
+    description: 'Attach a note to a node (id from search_nodes) — where long content belongs instead of speech. Notes land in the user\'s review inbox attributed to you.',
+    inputSchema: { type: 'object', properties: { target: { type: 'string', description: 'node id' }, text: { type: 'string' } }, required: ['target', 'text'] },
+    handler: async (args, ctx) => {
+      const model = (voiceSession.status().model || 'agent').slice(0, 80);
+      const result = await addNote({ target: String(args.target), text: String(args.text).slice(0, 4000), author: 'agent:' + model });
+      if (result.error) return { isError: true, code: 'bad_target', message: result.error };
+      voiceSession.touch(String(args.target));
+      broadcast('graph-changed');
+      return { ok: true, note_id: result.note.id };
+    },
+  },
+  {
+    name: 'schedule',
+    description: 'Set (or clear, with an empty date) a due_at or review_at intention date on a node, optionally recurring. Confirm with the user by voice BEFORE scheduling.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' }, kind: { enum: ['due_at', 'review_at'] }, date: { type: 'string', description: 'YYYY-MM-DD, empty to clear' }, every: { enum: ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'] } }, required: ['id', 'kind'] },
+    handler: async (args) => {
+      const result = await setSchedule({ id: args.id, kind: args.kind, when: args.date || '', every: args.every || '' });
+      if (result.error) return { isError: true, code: 'bad_schedule', message: result.error };
+      voiceSession.touch(String(args.id));
+      broadcast('graph-changed');
+      return { ok: true, ...result };
+    },
+  },
+  {
+    name: 'show_panel',
+    description: 'Render a rich card inline in the conversation while you speak — show while you tell. kind:"agenda" (what\'s due, optional project filter), kind:"node" (a node id from search_nodes, optional components subset), kind:"search" (result list for q), kind:"viz" (a CHART of graph data — pass a read-only cypher to run live, OR rows you already have from query_graph/get_graph_stats; an optional spec {kind:bar|histogram|line|scatter,…} styles it, else a sensible default is chosen). Errors echo the allowed values.',
+    inputSchema: { type: 'object', properties: { kind: { enum: ['agenda', 'node', 'search', 'viz'] }, title: { type: 'string' }, node_id: { type: 'string' }, components: { type: 'array', description: 'optional subset of the voice-panel component set' }, q: { type: 'string' }, project: { type: 'string' }, cypher: { type: 'string', description: 'viz: a read-only Cypher to run for the chart data' }, rows: { type: 'array', description: 'viz: result objects to chart (instead of cypher)' }, params: { type: 'object', description: 'viz: parameters for the cypher' }, spec: { type: 'object', description: 'viz: an explicit chart spec; omit to auto-pick' } }, required: ['kind'] },
+    handler: async (args) => {
+      const v = validatePanel(args);
+      if (v.error) return { isError: true, ...v.error };
+      if (v.spec.kind === 'node') {
+        const node = rows(await run(driver, Q_NODE, { id: v.spec.node_id }))[0];
+        if (!node) return { isError: true, code: 'node_not_found', message: 'no node with that id' };
+        voiceSession.touch(node.id, { name: node.name, label: node.label });
+        v.spec.node_name = node.name;                  // the card header shows it without a refetch
+      } else if (v.spec.kind === 'viz') {
+        // Resolve to a rendered chart spec: run the cypher live, or use the given rows; then the
+        // explicit spec if provided, else a deterministic default. The card gets a ready chart —
+        // the cypher rides along so "save that" needs nothing re-sent.
+        let dataRows = v.spec.rows || [];
+        let truncated = false;
+        if (v.spec.cypher) {
+          const r = await runReadCypher(v.spec.cypher, v.spec.params);
+          if (r.error) return { isError: true, code: 'cypher_error', message: r.error };
+          dataRows = r.rows; truncated = r.truncated;
+        }
+        const chart = v.spec.spec || recommendChartFromObjects(dataRows);
+        if (!chart) return { isError: true, code: 'not_chartable', message: 'these rows have no numeric/categorical column to chart — give a spec or different rows' };
+        v.spec = { kind: 'viz', title: v.spec.title, chart, cypher: v.spec.cypher || null, row_count: dataRows.length, truncated };
+      }
+      const panel_id = crypto.randomUUID();
+      broadcast('voice-panel', { panel_id, spec: v.spec });
+      return { ok: true, panel_id };
+    },
+  },
+  {
+    name: 'query_graph',
+    description: 'Run a READ-ONLY Cypher query for aggregate/analytical questions search_nodes cannot answer — counts, groupings, status breakdowns (e.g. "how many active projects"). Writes are rejected by the database itself. Results cap at 50 rows. Labels: Person, Organization, Project, Idea, Rule, Resource, Source, Insight, Skill, Goal (+ Note, Review annotations); superseded nodes carry valid_until (filter with "WHERE n.valid_until IS NULL" for current truth). Key rel types: PART_OF, ABOUT, INFORMS, CONTAINS, REQUIRES, DEPENDS_ON, ACHIEVED_BY.',
+    inputSchema: { type: 'object', properties: { cypher: { type: 'string' }, params: { type: 'object', description: 'optional query parameters' } }, required: ['cypher'] },
+    handler: async (args) => {
+      // Added 2026-07-04 after twice being the missing capability ("how many active
+      // projects"). Enforcement is the database's, not a regex: a READ session +
+      // executeRead makes Neo4j reject any write clause server-side.
+      const r = await runReadCypher(args.cypher, args.params);
+      if (r.error) return { isError: true, code: 'cypher_error', message: r.error };
+      return { rows: r.rows, count: r.rows.length, truncated: r.truncated };
+    },
+  },
+  {
+    name: 'write_graph',
+    description: `Run a WRITE Cypher statement against the knowledge graph — full session parity for trusted agents (safety net: the graph is git-backed-up on every sync). HOUSE RULES, non-negotiable: (1) MERGE on natural keys, never bare CREATE — re-runs must not duplicate (Project/Idea/Goal/Person/Organization/Skill key on name, Resource/Source on title, Insight on id); set created_at = coalesce(n.created_at, datetime()). (2) Pass ALL text values as $parameters, never inline literals. (3) Relationship types are a CLOSED vocabulary: ${REL_TYPES.join(', ')} — anything else fails lint. (4) Connect every new node with at least one edge (orphans are invisible). (5) NEVER delete to correct — supersede: set valid_until = datetime() and superseded_by. Prefer capture_note/schedule for their cases; this is for Insights, Ideas, and structure.`,
+    inputSchema: { type: 'object', properties: { cypher: { type: 'string' }, params: { type: 'object', description: 'query parameters — all text values go here' } }, required: ['cypher'] },
+    handler: async (args) => {
+      // Added 2026-07-04 at Rick's direction: the voice-loop agent gets the same graph
+      // reach as an interactive session; backups + lint are the recovery story.
+      const session = driver.session();
+      try {
+        const res = await session.executeWrite((tx) => tx.run(String(args.cypher).slice(0, 4000), args.params || {}), { timeout: 15000 });
+        const c = res.summary.counters.updates();
+        broadcast('graph-changed');
+        return {
+          ok: true,
+          nodes_created: c.nodesCreated, nodes_deleted: c.nodesDeleted,
+          relationships_created: c.relationshipsCreated, properties_set: c.propertiesSet,
+          rows: res.records.slice(0, 20).map((r) => toPlain(r.toObject())),
+        };
+      } catch (e) {
+        return { isError: true, code: 'cypher_error', message: String((e && e.message) || 'write failed').slice(0, 300) };
+      } finally {
+        await session.close();
+      }
+    },
+  },
+  {
+    name: 'get_graph_stats',
+    description: 'Deterministic graph statistics, ALREADY chart-shaped ([{label, value}]) — pipe straight into show_panel({kind:"viz", rows, title}) to visualize, or just narrate the numbers. facet: "labels" (node counts by type), "growth" (nodes created per week, last 12 weeks), "stale" (current vs superseded), "hubs" (most-connected nodes), "tags" (most-used tags). Omit facet for a compact all-facets digest. Cheaper and safer than writing your own aggregate Cypher for these common questions.',
+    inputSchema: { type: 'object', properties: { facet: { enum: ['labels', 'growth', 'stale', 'hubs', 'tags'] } }, required: [] },
+    handler: async (args) => graphStats(args.facet),
+  },
+  {
+    name: 'save_lens',
+    description: 'Save a chart as a reusable LIVE LENS — a named node storing a read-only cypher + chart spec (never the data) that RE-RUNS against the graph whenever opened, so it always reflects current state. Use after show_panel kind:"viz" when the user says "save that" / "keep this". Confirm the name by voice first. Optionally pass about_node_id (from search_nodes) to attach it to the node/project it concerns.',
+    inputSchema: { type: 'object', properties: { name: { type: 'string' }, cypher: { type: 'string', description: 'the read-only Cypher the lens re-runs' }, spec: { type: 'object', description: 'the chart spec {kind:bar|histogram|line|scatter,…}' }, about_node_id: { type: 'string', description: 'optional node id this lens is about' } }, required: ['name', 'cypher', 'spec'] },
+    handler: async (args) => {
+      const model = (voiceSession.status().model || 'agent').slice(0, 80);
+      const result = await saveLens({ name: args.name, cypher: args.cypher, spec: args.spec, about_node_id: args.about_node_id, author: 'agent:' + model });
+      if (result.error) return { isError: true, code: 'bad_lens', message: result.error };
+      broadcast('graph-changed');
+      return { ok: true, lens_id: result.lens.id, name: result.lens.name };
+    },
+  },
+  {
+    name: 'create_diagram',
+    description: 'Create a PlantUML diagram for a node ("diagram this"): deterministic graph-neighborhood map by default (kind: mindmap | component), or brainstorm:true to have the LOCAL model draw from the node\'s text (kind also allows sequence). Renders locally and theme-matched — content never leaves the machine. save:true persists it as a diagram Source the user can reopen (give it a spoken-confirmed title). Follow with navigate_studio({node_id: source_id}) to show it.',
+    inputSchema: { type: 'object', properties: {
+      node_id: { type: 'string', description: 'the node to diagram (from search_nodes)' },
+      kind: { enum: ['mindmap', 'component', 'sequence'] },
+      brainstorm: { type: 'boolean', description: 'true = LLM from node text; default = deterministic graph walk' },
+      save: { type: 'boolean' },
+      title: { type: 'string', description: 'title for the saved Source (required when save:true)' },
+    }, required: ['node_id'] },
+    handler: async (args) => {
+      const node = rows(await run(driver, Q_NODE, { id: String(args.node_id) }))[0];
+      if (!node) return { isError: true, code: 'node_not_found', message: 'no node with that id' };
+      const st = await pumlAvailable();
+      if (!st.ok) return { isError: true, code: 'no_plantuml', message: 'PlantUML is not installed (brew install plantuml)' };
+      let puml, rendered, attempts;
+      if (args.brainstorm) {
+        const prov = await resolveProvider();
+        if (!prov) return { isError: true, code: 'no_model', message: 'no local model connected' };
+        const kind = ['mindmap', 'component', 'sequence'].includes(args.kind) ? args.kind : 'mindmap';
+        const r = await aiDiagramLane(prov, nodeText(node), kind, { generateImpl: generate, renderImpl: (p) => pumlRender(p, { postProcess: prepareSvg }) });
+        if (!r.svg) return { isError: true, code: 'generation_failed', message: r.error };
+        puml = r.puml; rendered = true; attempts = r.attempts;
+      } else {
+        const kind = args.kind === 'component' ? 'component' : 'mindmap';
+        const fg = await api('/api/diagram/from-graph', { id: String(args.node_id), kind });
+        if (fg.error && !fg.svg) return { isError: true, code: 'render_failed', message: fg.error };
+        puml = fg.puml; rendered = !!fg.svg;
+      }
+      let source_id = null;
+      if (args.save) {
+        const title = String(args.title || '').trim();
+        if (!title) return { isError: true, code: 'bad_params', message: 'title is required when save:true' };
+        const recs = await run(driver, `
+          MERGE (s:Source {title: $title})
+          SET s.source_kind = 'diagram', s.puml = $puml, s.diagram_kind = $kind,
+              s.tags = coalesce(s.tags, ['scatterbrained', 'diagram']),
+              s.last_synced_at = datetime(), s.created_at = coalesce(s.created_at, datetime())
+          WITH s MATCH (t) WHERE elementId(t) = $about
+          MERGE (s)-[:INFORMS]->(t)
+          RETURN elementId(s) AS id`,
+        { title: title.slice(0, 200), puml, kind: args.kind || 'mindmap', about: String(args.node_id) });
+        source_id = recs[0] ? toPlain(recs[0].toObject()).id : null;
+        broadcast('graph-changed');
+      }
+      return { ok: true, rendered, puml, ...(attempts ? { attempts } : {}), ...(source_id ? { source_id } : {}) };
+    },
+  },
+  {
+    name: 'navigate_studio',
+    description: 'Move the Studio UI the user is looking at: focus a node (id from search_nodes) and/or switch lens. Pairs with voice_say — show while you tell.',
+    inputSchema: { type: 'object', properties: { node_id: { type: 'string' }, lens: { enum: ['graph', 'time', 'code', 'agents'] } }, required: [] },
+    handler: async (args) => {
+      if (!args.node_id && !args.lens) return { isError: true, code: 'bad_params', message: 'node_id or lens required' };
+      if (args.node_id) {
+        const node = rows(await run(driver, Q_NODE, { id: String(args.node_id) }))[0];
+        if (!node) return { isError: true, code: 'node_not_found', message: 'no node with that id' };
+        voiceSession.touch(node.id, { name: node.name, label: node.label });
+      }
+      broadcast('voice-navigate', { node_id: args.node_id || null, lens: args.lens || null });
+      return { ok: true };
+    },
+  },
+];
+
+const mcp = createMcp({
+  serverInfo: { name: 'scatterbrained', version: '1.0.0' },
+  instructions: PERSONA_BRIEF + '\n\n' + VOICE_LOOP_PROTOCOL,
+  tools: MCP_TOOLS,
+  newSession: newMcpSession,
+  isSession: (id) => mcpSessions.has(id),
+});
+
 async function addNote({ target, filePath, text, anchor_kind, locator, snippet, author, reviewId } = {}) {
   const t = String(text || '').trim();
   if (!t || (!target && !filePath && !reviewId)) return { error: 'text and (target, filePath, or reviewId) required' };
@@ -1767,6 +2451,18 @@ const SECURITY_HEADERS = {
 // Read a request body with a hard BYTE cap. Resolves on 'end'; rejects on overflow or abort.
 // A destroyed stream never emits 'end', so we must also settle on 'close'/'error' — otherwise
 // the handler's await hangs forever and the socket leaks. Byte-counted (Buffer.length), not chars.
+// Binary twin of readBody — the audio route needs Buffers; string concat corrupts PCM.
+function readBodyBuffer(req, cap) {
+  return new Promise((resolve, reject) => {
+    const chunks = []; let len = 0, settled = false;
+    const done = (fn, v) => { if (!settled) { settled = true; fn(v); } };
+    req.on('data', (c) => { len += c.length; if (len > cap) done(reject, new Error('too large')); else if (!settled) chunks.push(c); });
+    req.on('end', () => done(resolve, Buffer.concat(chunks)));
+    req.on('close', () => done(reject, new Error('aborted')));
+    req.on('error', () => done(reject, new Error('aborted')));
+  });
+}
+
 function readBody(req, cap) {
   return new Promise((resolve, reject) => {
     let body = '', len = 0, settled = false;
@@ -1830,6 +2526,119 @@ const server = http.createServer(async (req, res) => {
       const result = await verifyCriterion(p);
       if (!result.error) broadcast('graph-changed');
       return send(res, result.error ? 400 : 200, result);
+    }
+    // Save a live Lens (Studio saved-query view) — the endpoint the save_lens tool also drives.
+    if (url.pathname === '/api/diagram/save' && req.method === 'POST') {
+      // Persist a diagram as Source {source_kind:'diagram'} — MERGE on title (hard rule 1:
+      // idempotent, re-saving updates), INFORMS the node it's about so lint never sees an
+      // orphan. The puml SOURCE is stored (not the SVG) — rendering stays live + themed.
+      let body; try { body = await readBody(req, 80 * 1024); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const title = String(p.title || '').trim().slice(0, 200);
+      const puml = String(p.puml || '').trim();
+      if (!title || !puml) return send(res, 400, { error: 'title and puml are required' });
+      if (puml.length > 64 * 1024) return send(res, 400, { error: 'diagram source too large' });
+      const recs = await run(driver, `
+        MERGE (s:Source {title: $title})
+        SET s.source_kind = 'diagram', s.puml = $puml, s.diagram_kind = $kind,
+            s.file_path = coalesce($file_path, s.file_path),
+            s.tags = coalesce(s.tags, ['scatterbrained', 'diagram']),
+            s.last_synced_at = datetime(),
+            s.created_at = coalesce(s.created_at, datetime())
+        WITH s
+        OPTIONAL MATCH (t) WHERE $about IS NOT NULL AND elementId(t) = $about
+        FOREACH (_ IN CASE WHEN t IS NOT NULL THEN [1] ELSE [] END | MERGE (s)-[:INFORMS]->(t))
+        RETURN elementId(s) AS id, s.title AS title`,
+      { title, puml, kind: String(p.kind || 'uml').slice(0, 30), file_path: p.file_path ? String(p.file_path) : null, about: p.about_id ? String(p.about_id) : null });
+      const saved = recs[0] ? toPlain(recs[0].toObject()) : null;
+      if (saved) broadcast('graph-changed');
+      return send(res, saved ? 200 : 500, saved || { error: 'save failed' });
+    }
+    if (url.pathname === '/api/diagram/render' && req.method === 'POST') {
+      // Local PlantUML render: sentinel-themed, then rewritten to CSS vars + sanitized
+      // (prepareSvg) BEFORE caching — so cached hits are ready for innerHTML and the
+      // cache stays theme-agnostic (theme switches are pure CSS, zero re-renders).
+      let body; try { body = await readBody(req, 80 * 1024); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad JSON' }); }
+      const st = await pumlAvailable();
+      if (!st.ok) return send(res, 200, { error: 'PlantUML is not installed (brew install plantuml)', unavailable: true });
+      const result = await pumlRender(String(p.puml || ''), { postProcess: prepareSvg });
+      return send(res, 200, result);
+    }
+    if (url.pathname === '/api/lens' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await saveLens(p);
+      if (!result.error) broadcast('graph-changed');
+      return send(res, result.error ? 400 : 200, result);
+    }
+    // VOICE: the built-in local chat lane (no broadcast — a conversation mutates nothing).
+    if (url.pathname === '/api/voice/chat' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 16384); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await voiceChat(p);
+      return send(res, result.error && !result.available ? 400 : 200, result);
+    }
+    // Load a model through Slipway — the empty state's one-click remedy. Validated inside
+    // slipwayLoad against Slipway's own model list; the panel then polls /api/ai/ping until
+    // the brain answers (an MLX load takes ~15-60s).
+    if (url.pathname === '/api/slipway/load' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 4096); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await slipwayLoad(String(p.model || ''));
+      return send(res, result.error ? 502 : 200, result);
+    }
+    // VOICE Phase 3: the browser side of the rendezvous — utterances in, TTS outcomes back.
+    if ((url.pathname === '/api/voice/utterance' || url.pathname === '/api/voice/say-done' || url.pathname === '/api/voice/switch-local') && req.method === 'POST') {
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = url.pathname === '/api/voice/utterance' ? voiceSession.utterance(p)
+        : url.pathname === '/api/voice/say-done' ? voiceSession.sayDone(p)
+          : voiceSession.switchLocal();
+      return send(res, 200, result);
+    }
+    // VOICE Phase 9: on-device recognition — WAV in (binary body), text out (whisper).
+    if (url.pathname === '/api/voice/stt' && req.method === 'POST') {
+      let wav; try { wav = await readBodyBuffer(req, 8 * 1024 * 1024); } catch { return send(res, 413, { error: 'request too large' }); }
+      if (!wav || wav.length < 128 || wav.toString('ascii', 0, 4) !== 'RIFF') return send(res, 400, { error: 'audio/wav body required' });
+      const out = await sttTranscribe(wav, String(url.searchParams.get('model') || ''));
+      if (!out.ok) return send(res, 503, { error: out.error });
+      return send(res, 200, { text: out.text });
+    }
+    // VOICE Phase 7: local TTS synthesis — text in, WAV out (Kokoro, warm child process).
+    if (url.pathname === '/api/voice/tts' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const text = String(p.text || '').trim();
+      if (!text) return send(res, 400, { error: 'text required' });
+      const out = await ttsSynth(text, p.voice, { speed: p.speed });
+      if (!out.ok) return send(res, 503, { error: out.error });
+      res.writeHead(200, { 'Content-Type': 'audio/wav', 'Cache-Control': 'no-store', 'X-Duration': String(out.duration || '') });
+      return res.end(out.wav);
+    }
+    // VOICE Phase 6: explicit save — the one voice write to the graph. 256KB cap: a whole
+    // conversation transcript, not a control message.
+    if (url.pathname === '/api/voice/capture' && req.method === 'POST') {
+      let body; try { body = await readBody(req, 256 * 1024); } catch { return send(res, 413, { error: 'request too large' }); }
+      let p; try { p = JSON.parse(body || '{}'); } catch { return send(res, 400, { error: 'bad json' }); }
+      const result = await voiceCapture(p);
+      if (!result.error) broadcast('graph-changed');
+      return send(res, result.error ? 400 : 200, result);
+    }
+    // The MCP endpoint (Streamable HTTP, plain-JSON responses). Guards: loopback Host
+    // (the global POST check above) + explicit non-loopback-Origin rejection (DNS
+    // rebinding) + bearer token (a hostile localhost page can't drive the tools).
+    if (url.pathname === '/mcp') {
+      if (req.method !== 'POST') return send(res, 405, { error: 'POST only' });
+      const origin = String(req.headers.origin || '');
+      if (origin && !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(origin)) return send(res, 403, { error: 'forbidden' });
+      if (!mcpTokenOk(req.headers.authorization)) return send(res, 401, { error: 'unauthorized — pass the bearer token from ~/.scatterbrained/mcp-token' });
+      let body; try { body = await readBody(req, 65536); } catch { return send(res, 413, { error: 'request too large' }); }
+      const out = await mcp.handle(body, { sessionId: String(req.headers['mcp-session-id'] || '') || undefined });
+      const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' };
+      if (out.sessionId) headers['Mcp-Session-Id'] = out.sessionId;
+      res.writeHead(out.status, headers);
+      return res.end(out.body === null ? undefined : JSON.stringify(out.body));
     }
     if ((url.pathname === '/api/note' || url.pathname === '/api/note/state') && req.method === 'POST') {
       let body; try { body = await readBody(req, 8192); } catch { return send(res, 413, { error: 'request too large' }); }
@@ -1970,7 +2779,35 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Scatterbrained Studio  ·  observatory`);
   console.log(`  ▸ http://127.0.0.1:${PORT}`);
   console.log(`  ▸ Neo4j: ${process.env.NEO4J_URI || 'bolt://localhost:7687'}\n`);
+  ensureSlipway();   // fire-and-forget; Studio never blocks on the runtime
 });
+
+// ── Slipway autostart ────────────────────────────────────────────────────────
+// Bring the local-model runtime up WITH the Studio (models are not loaded by default, so
+// an idle Slipway costs ~nothing). Opt out with SLIPWAY_AUTOSTART=0; point SLIPWAY_DIR at
+// a non-default checkout. Never loads a model — that stays an explicit user action.
+async function ensureSlipway() {
+  const decision = autostartDecision({ env: process.env, pingOk: await slipwayPing() });
+  if (decision === 'disabled') return;
+  if (decision === 'already-running') { console.log('  ▸ Slipway: already running'); return; }
+  const { cmd, args, cwd, serverPy } = slipwayCommand({ env: process.env, home: os.homedir() });
+  if (!fs.existsSync(serverPy)) { console.log(`  ▸ Slipway: not found at ${serverPy} — skipping autostart`); return; }
+  const logPath = path.join(os.homedir(), '.scatterbrained', 'slipway.log');
+  fs.mkdirSync(path.dirname(logPath), { recursive: true });
+  const log = fs.openSync(logPath, 'a');
+  try {
+    const child = spawn(cmd, args, { cwd, detached: true, stdio: ['ignore', log, log] });
+    child.unref();   // Slipway outlives the Studio — sessions keep their runtime
+  } catch (e) {
+    console.log(`  ▸ Slipway: autostart failed (${e.message}) — see ${logPath}`);
+    return;
+  } finally { fs.closeSync(log); }
+  for (let i = 0; i < 40; i++) {           // ~20s: matches bin/mlx-control's readiness window
+    await new Promise((r) => setTimeout(r, 500));
+    if (await slipwayPing(800)) { console.log('  ▸ Slipway: started (no model loaded)'); return; }
+  }
+  console.log(`  ▸ Slipway: did not answer within 20s — see ${logPath}`);
+}
 
 const bye = async () => { await driver.close(); process.exit(0); };
 process.on('SIGINT', bye);

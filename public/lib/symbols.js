@@ -17,9 +17,12 @@ const REGEX_KW = new Set(['return', 'typeof', 'instanceof', 'in', 'of', 'new', '
 
 // Return `src` with every comment / string / template / regex literal replaced by spaces
 // (newlines kept, length preserved so line numbers still map 1:1). The code skeleton — braces,
-// identifiers, operators — is left intact. Template interpolations are blanked too (a documented
-// gap: a call that appears ONLY inside `${…}` isn't counted); this keeps brace-matching correct.
-export function blankLiterals(src) {
+// identifiers, operators — is left intact. Template interpolations are blanked here too, which
+// keeps brace-matching correct — but their offsets can be captured via `interpSpans`, and
+// scanText() splices their (recursively cleaned) code back in for the USAGE scan, so a call
+// that appears only inside `${…}` still counts (closed the 2026-07-07 gap: voice-ui's esc()
+// calls live entirely in template HTML and showed zero call sites).
+export function blankLiterals(src, interpSpans = null) {
   src = String(src || '');
   const n = src.length;
   const out = src.split('');
@@ -30,7 +33,7 @@ export function blankLiterals(src) {
     if (c === '/' && d === '/') { while (i < n && src[i] !== '\n') { blank(i); i++; } continue; }
     if (c === '/' && d === '*') { blank(i); blank(i + 1); i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) { blank(i); i++; } blank(i); blank(i + 1); i += 2; prevRegexOk = true; continue; }
     if (c === '"' || c === "'") { blank(i); i++; while (i < n && src[i] !== c && src[i] !== '\n') { if (src[i] === '\\') { blank(i); blank(i + 1); i += 2; continue; } blank(i); i++; } if (i < n && src[i] === c) { blank(i); i++; } prevRegexOk = false; continue; }
-    if (c === '`') { i = blankTemplate(src, blank, i); prevRegexOk = false; continue; }
+    if (c === '`') { i = blankTemplate(src, blank, i, interpSpans); prevRegexOk = false; continue; }
     if (c === '/' && prevRegexOk) {
       blank(i); i++; let inClass = false;
       while (i < n) { const e = src[i]; if (e === '\n') break; if (e === '\\') { blank(i); blank(i + 1); i += 2; continue; } if (e === '[') inClass = true; else if (e === ']') inClass = false; else if (e === '/' && !inClass) { blank(i); i++; break; } blank(i); i++; }
@@ -45,18 +48,49 @@ export function blankLiterals(src) {
   }
   return out.join('');
 }
-function blankTemplate(src, blank, i) {
-  const n = src.length; blank(i); i++; let depth = 0;
+// `spans` (optional): collects [start, end) offsets of each DEPTH-1 `${…}` content span —
+// the interpolation CODE, exclusive of the `${` and `}` delimiters. Nested braces inside the
+// interpolation are depth-counted, so the recorded end is the interpolation's true close.
+function blankTemplate(src, blank, i, spans = null) {
+  const n = src.length; blank(i); i++; let depth = 0, spanStart = -1;
   while (i < n) {
     const c = src[i];
     if (c === '\\') { blank(i); blank(i + 1); i += 2; continue; }
     if (depth === 0 && c === '`') { blank(i); return i + 1; }
-    if (c === '$' && src[i + 1] === '{') { blank(i); blank(i + 1); depth++; i += 2; continue; }
+    if (c === '$' && src[i + 1] === '{') {
+      blank(i); blank(i + 1); depth++;
+      if (depth === 1) spanStart = i + 2;
+      i += 2; continue;
+    }
     if (depth > 0 && c === '{') { blank(i); depth++; i++; continue; }
-    if (depth > 0 && c === '}') { blank(i); depth--; i++; continue; }
+    if (depth > 0 && c === '}') {
+      blank(i); depth--;
+      if (depth === 0 && spans && spanStart >= 0 && i > spanStart) spans.push([spanStart, i]);
+      if (depth === 0) spanStart = -1;
+      i++; continue;
+    }
     blank(i); i++;
   }
   return i;
+}
+
+// The text findUsages scans: the blanked skeleton, with each template interpolation's code
+// spliced back in — itself recursively cleaned (a string INSIDE `${…}` must not leak
+// identifiers, and a template inside an interpolation gets its own interpolations back too).
+// Length- and newline-preserving throughout, so line numbers stay 1:1 with the source.
+// functionRanges deliberately keeps the fully-blanked skeleton: interpolation braces must
+// never take part in function brace-matching.
+export function scanText(src) {
+  src = String(src || '');
+  const spans = [];
+  const skeleton = blankLiterals(src, spans);
+  if (!spans.length) return skeleton;
+  const out = skeleton.split('');
+  for (const [a, b] of spans) {
+    const inner = scanText(src.slice(a, b));
+    for (let k = 0; k < inner.length; k++) out[a + k] = inner[k];
+  }
+  return out.join('');
 }
 
 // Local names an importer binds from each import statement + the module specifier. Handles named
@@ -153,7 +187,7 @@ export function enclosingFunction(ranges, line) {
 // so a call site can say WHICH part of the target it touches, not just that it touches it.
 export function findUsages(text, names, { skipLines = new Set(), member = false, members = false } = {}) {
   if (!names || !names.length) return [];
-  const clean = blankLiterals(text);
+  const clean = scanText(text);   // skeleton + interpolation code — calls inside `${…}` count
   const set = new Set(names);
   const pre = member ? '(?:this\\.)?' : '';
   const re = new RegExp('(^|[^.\\w$])' + pre + '(' + names.map(escapeRe).join('|') + ')(?![\\w$])(?:\\s*\\.\\s*([A-Za-z_$][\\w$]*))?(\\s*\\()?', 'g');

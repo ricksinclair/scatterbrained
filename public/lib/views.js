@@ -5,8 +5,10 @@
 //
 //   inspector — the slim peek panel (single click): identity, key facts, one action.
 //   report    — the large working canvas (expand): components render full-size.
+//   panel     — an assistant-composed card inline in the voice thread (VOICE Phase 5):
+//               compact like inspector, but scrolls inside its own ~40vh card.
 // Future (reserved, not yet built): study, pinboard, glyph.
-export const VIEWS = ['inspector', 'report'];
+export const VIEWS = ['inspector', 'report', 'panel'];
 export const DEFAULT_VIEW = 'inspector';
 
 export function isView(v) { return VIEWS.includes(v); }

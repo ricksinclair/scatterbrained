@@ -1,5 +1,5 @@
 // ============================================================================
-// Scatterbrained — Knowledge Graph Schema
+// Rick's Personal Knowledge Graph — Schema
 // Safe to re-run: uses CREATE CONSTRAINT IF NOT EXISTS.
 // Node creation happens via MERGE in the application scripts; this file
 // establishes uniqueness constraints (which also create backing indexes).
@@ -18,6 +18,16 @@ CREATE CONSTRAINT source_title       IF NOT EXISTS FOR (n:Source)       REQUIRE 
 CREATE CONSTRAINT insight_id         IF NOT EXISTS FOR (n:Insight)      REQUIRE n.id    IS UNIQUE;
 CREATE CONSTRAINT skill_name         IF NOT EXISTS FOR (n:Skill)        REQUIRE n.name  IS UNIQUE;
 CREATE CONSTRAINT goal_name          IF NOT EXISTS FOR (n:Goal)         REQUIRE n.name  IS UNIQUE;
+CREATE CONSTRAINT review_id          IF NOT EXISTS FOR (n:Review)       REQUIRE n.id    IS UNIQUE;
+// ProtectedFact (#23): a protected fact ABOUT a target node — a number/$amount/date/citation that a
+// rewrite must HONOR. Keyed by id; a pending change (pending_status/pending_new) queues for
+// approval; superseded bi-temporally on approve. (ProtectedFact)-[:ABOUT]->(any), optional
+// (ProtectedFact)-[:DERIVED_FROM]->(Source) for the citation.
+CREATE CONSTRAINT protected_fact_id         IF NOT EXISTS FOR (n:ProtectedFact)      REQUIRE n.id    IS UNIQUE;
+// Lens (2026-07-04): a saved live-query view (Scatterbrained Studio) — stores a read-only Cypher +
+// a chart spec (never the data) that re-runs against the graph on open. Keyed by id; may link
+// (Lens)-[:ABOUT]->(Project|Idea|node) it concerns, or stand alone as a global lens over the graph.
+CREATE CONSTRAINT lens_id                   IF NOT EXISTS FOR (n:Lens)               REQUIRE n.id    IS UNIQUE;
 
 // Non-unique lookup index: the document lane (scripts/document-index.js) resolves
 // file Sources by absolute path on every change-detection pass.
@@ -45,7 +55,7 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 // NODE LABEL REFERENCE
 // ============================================================================
 // Person       { name*, role, organization, jurisdiction, contact_info,
-//                relationship_to_owner, tags[], created_at }
+//                relationship_to_rick, tags[], created_at }
 // Organization { name*, type, jurisdiction, url, purpose, tags[], created_at }
 // Project      { name*, status, domain, description, repo_url, notion_url,
 //                tags[], created_at }
@@ -54,15 +64,27 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 //                tags[], created_at }
 // Resource     { title*, type, url, summary, tags[], created_at }
 // Source       { title*, type, url, last_synced_at, tags[], created_at,
-//                source_kind ('notion'|'markdown'|'text'|'pdf'|'docx'|'pptx'),
+//                source_kind (closed vocab — scripts/lib/vocab.js is the source of
+//                             truth; notion/document/spreadsheet/curated lanes plus
+//                             agent_session for captured Slipway agent sessions),
 //                -- notion lane:   notion_id, notion_last_edited
 //                -- document lane: file_path (abs), display_title,
 //                                  content_hash, file_mtime
+//                (the Studio markdown edit-lock is NOT here — it's ephemeral operational
+//                 state in a local lockfile ~/.scatterbrained/locks.json, not the graph)
 //                title for files = path relative to its configured root, so it
 //                is unique and stable across edits (a heading can change). }
 // Insight      { id*, summary, full_text, session_id, tags[], created_at }
 // Skill        { name*, category, proficiency, tags[], created_at }
-// Goal         { name*, timeframe, status, description, tags[], created_at }
+// Goal         { name*, timeframe, status, description, target_date, tags[], created_at }
+//   target_date: optional intention-time date (YYYY-MM-DD) the calendar/scheduler plot;
+//   additive — `timeframe` (free-text bucket) is kept for back-compat. (#25 P1)
+//
+// Intention-time properties (#25 P2 scheduler) — optional ISO dates (YYYY-MM-DD) on ANY node,
+// set via the Studio's Schedule control (POST /api/schedule, kind ∈ {due_at, review_at}):
+//   due_at    : a deadline the node is due by
+//   review_at : when to revisit / re-review the node (explicit sibling to staleness resurface)
+//   These feed the calendar + agenda. Distinct from RECORD time (created_at/valid_until).
 // (* = unique natural key)
 //
 // Cross-cutting optional property: `aliases` (string[]) — alternate names an
@@ -81,6 +103,10 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 // (Person)-[:RECOMMENDED]->(Organization)
 // (Person)-[:RECOMMENDED]->(Resource)
 // (Person)-[:COLLABORATES_ON]->(Project)
+// (Person)-[:INSPIRED]->(Project)        // namesake/legacy/inspiration (e.g. a mentor → a project named for them)
+// (Person)-[:INSPIRED]->(Idea)
+// (Resource)-[:INSPIRED]->(Project)
+// (Resource)-[:INSPIRED]->(Idea)
 // (Organization)-[:SUPPORTS]->(Project)
 // (Organization)-[:PUBLISHED]->(Source)
 //
@@ -95,6 +121,9 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 // -- Rules & Compliance
 // (Rule)-[:CONSTRAINS]->(Idea)
 // (Rule)-[:CONSTRAINS]->(Project)
+// (Organization)-[:CONSTRAINS]->(Project)   // a regulator/agency constraining a project
+// (Idea)-[:CONSTRAINS]->(Idea)              // a constraint-idea bounding another idea
+// (Rule)-[:REQUIRES]->(Organization)        // a rule mandating a specific org/vendor
 // (Rule)-[:APPLIES_TO]->(Project)
 //
 // -- Knowledge & Learning
@@ -104,9 +133,11 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 // (Resource)-[:TEACHES]->(Skill)
 // (Insight)-[:DERIVED_FROM]->(Source)
 // (Insight)-[:DERIVED_FROM]->(Rule)
+// (Idea)-[:DERIVED_FROM]->(Idea)            // one idea evolving from a prior idea
 // (Insight)-[:ABOUT]->(Idea)
 // (Insight)-[:ABOUT]->(Project)
 // (Skill)-[:USED_IN]->(Project)
+// (Project)-[:ROUTES_TO]->(Project)      // a domain/site routes a subdomain/path to a project hosted elsewhere
 //
 // -- Goals
 // (Goal)-[:REQUIRES]->(Skill)

@@ -1,0 +1,272 @@
+' solar-light.puml — PlantUML theme matching Scatterbrained Studio's "solar" theme (light).
+' GENERATED from scatterbrained-studio/public/lib/themes.js — do not edit; run `npm run gen:puml`.
+' Usage: !include <path>/solar-light.puml at the top of any diagram.
+' Element stereotypes <<Insight>> <<Project>> <<Idea>> … color as Scatterbrained graph node types.
+
+skinparam defaultFontName Inter
+skinparam defaultMonospacedFontName JetBrains Mono
+skinparam shadowing false
+skinparam backgroundColor #fffdf7
+skinparam roundCorner 12
+skinparam ArrowColor #7A5A35
+skinparam ArrowFontColor #7A5A35
+skinparam ActivityDiamondBackgroundColor #F9F0E2
+skinparam SequenceGroupBodyBackgroundColor transparent
+skinparam SequenceLifeLineBorderColor #EFE0C9
+
+<style>
+root {
+  FontName "Inter"
+  FontSize 13
+  FontColor #3A2410
+  LineColor #C8965A
+  LineThickness 1
+  RoundCorner 12
+  Margin 8
+  Padding 6
+}
+element { BackgroundColor #F9F0E2; }
+arrow { LineColor #7A5A35; FontColor #7A5A35; }
+note { BackgroundColor #F6E8D4; LineColor #C47318; FontColor #3A2410; }
+title { FontColor #3A2410; FontSize 16; }
+header, footer { FontColor #866C49; }
+caption { FontColor #7A5A35; }
+mindmapDiagram {
+  node { BackgroundColor #F9F0E2; LineColor #C8965A; FontColor #3A2410; RoundCorner 14; }
+  rootNode { BackgroundColor #C47318; FontColor #1C1206; LineColor #C47318; FontStyle bold; RoundCorner 14; }
+  arrow { LineColor #C8965A; }
+}
+wbsDiagram {
+  node { BackgroundColor #F9F0E2; LineColor #C8965A; FontColor #3A2410; RoundCorner 14; }
+  rootNode { BackgroundColor #C47318; FontColor #1C1206; LineColor #C47318; FontStyle bold; RoundCorner 14; }
+  arrow { LineColor #C8965A; }
+}
+sequenceDiagram {
+  lifeline { LineColor #EFE0C9; }
+  participant, actor, boundary, control, entity, database, collections, queue { BackgroundColor #F9F0E2; LineColor #C8965A; FontColor #3A2410; }
+  group, box { BackgroundColor #F6E8D4; LineColor #C8965A; FontColor #7A5A35; }
+  separator { BackgroundColor #F9F0E2; FontColor #7A5A35; LineColor #EFE0C9; }
+}
+activityDiagram {
+  activity, diamond { BackgroundColor #F9F0E2; LineColor #C8965A; FontColor #3A2410; }
+  partition { BackgroundColor transparent; LineColor #EFE0C9; FontColor #7A5A35; }
+}
+.Insight { BackgroundColor #F9E5DB; LineColor #E07A5C; FontColor #3A2410; }
+.Rule { BackgroundColor #F5EDD8; LineColor #C9A24A; FontColor #3A2410; }
+.Idea { BackgroundColor #FCEFD6; LineColor #F0B040; FontColor #3A2410; }
+.Source { BackgroundColor #F1EAE0; LineColor #B09678; FontColor #3A2410; }
+.Project { BackgroundColor #FBEAD5; LineColor #E6963C; FontColor #3A2410; }
+.Goal { BackgroundColor #F8DFDA; LineColor #D65656; FontColor #3A2410; }
+.Person { BackgroundColor #F8DFDA; LineColor #D65656; FontColor #3A2410; }
+.Organization { BackgroundColor #F1EAE0; LineColor #B09678; FontColor #3A2410; }
+.Resource { BackgroundColor #F5EDD8; LineColor #C9A24A; FontColor #3A2410; }
+.Skill { BackgroundColor #FCEFD6; LineColor #F0B040; FontColor #3A2410; }
+.SyncState { BackgroundColor #ECE7DE; LineColor #96826E; FontColor #3A2410; }
+.warn { BackgroundColor #F6E8D4; LineColor #B03A3A; FontColor #B03A3A; }
+.ok { BackgroundColor #F6E8D4; LineColor #1D8A66; FontColor #1D8A66; }
+</style>
+
+' Legacy skinparam fallback for elements the <style> stereotype selectors miss.
+' NOTE: no `skinparam node` here — mindmap/WBS nodes are `node` elements, and a
+' node skinparam OVERRIDES the <style> mindmapDiagram section (verified 1.2026.6).
+skinparam rectangle {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  BackgroundColor<<Insight>> #F9E5DB
+  BorderColor<<Insight>> #E07A5C
+  BackgroundColor<<Rule>> #F5EDD8
+  BorderColor<<Rule>> #C9A24A
+  BackgroundColor<<Idea>> #FCEFD6
+  BorderColor<<Idea>> #F0B040
+  BackgroundColor<<Source>> #F1EAE0
+  BorderColor<<Source>> #B09678
+  BackgroundColor<<Project>> #FBEAD5
+  BorderColor<<Project>> #E6963C
+  BackgroundColor<<Goal>> #F8DFDA
+  BorderColor<<Goal>> #D65656
+  BackgroundColor<<Person>> #F8DFDA
+  BorderColor<<Person>> #D65656
+  BackgroundColor<<Organization>> #F1EAE0
+  BorderColor<<Organization>> #B09678
+  BackgroundColor<<Resource>> #F5EDD8
+  BorderColor<<Resource>> #C9A24A
+  BackgroundColor<<Skill>> #FCEFD6
+  BorderColor<<Skill>> #F0B040
+  BackgroundColor<<SyncState>> #ECE7DE
+  BorderColor<<SyncState>> #96826E
+}
+skinparam component {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  BackgroundColor<<Insight>> #F9E5DB
+  BorderColor<<Insight>> #E07A5C
+  BackgroundColor<<Rule>> #F5EDD8
+  BorderColor<<Rule>> #C9A24A
+  BackgroundColor<<Idea>> #FCEFD6
+  BorderColor<<Idea>> #F0B040
+  BackgroundColor<<Source>> #F1EAE0
+  BorderColor<<Source>> #B09678
+  BackgroundColor<<Project>> #FBEAD5
+  BorderColor<<Project>> #E6963C
+  BackgroundColor<<Goal>> #F8DFDA
+  BorderColor<<Goal>> #D65656
+  BackgroundColor<<Person>> #F8DFDA
+  BorderColor<<Person>> #D65656
+  BackgroundColor<<Organization>> #F1EAE0
+  BorderColor<<Organization>> #B09678
+  BackgroundColor<<Resource>> #F5EDD8
+  BorderColor<<Resource>> #C9A24A
+  BackgroundColor<<Skill>> #FCEFD6
+  BorderColor<<Skill>> #F0B040
+  BackgroundColor<<SyncState>> #ECE7DE
+  BorderColor<<SyncState>> #96826E
+}
+skinparam card {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  BackgroundColor<<Insight>> #F9E5DB
+  BorderColor<<Insight>> #E07A5C
+  BackgroundColor<<Rule>> #F5EDD8
+  BorderColor<<Rule>> #C9A24A
+  BackgroundColor<<Idea>> #FCEFD6
+  BorderColor<<Idea>> #F0B040
+  BackgroundColor<<Source>> #F1EAE0
+  BorderColor<<Source>> #B09678
+  BackgroundColor<<Project>> #FBEAD5
+  BorderColor<<Project>> #E6963C
+  BackgroundColor<<Goal>> #F8DFDA
+  BorderColor<<Goal>> #D65656
+  BackgroundColor<<Person>> #F8DFDA
+  BorderColor<<Person>> #D65656
+  BackgroundColor<<Organization>> #F1EAE0
+  BorderColor<<Organization>> #B09678
+  BackgroundColor<<Resource>> #F5EDD8
+  BorderColor<<Resource>> #C9A24A
+  BackgroundColor<<Skill>> #FCEFD6
+  BorderColor<<Skill>> #F0B040
+  BackgroundColor<<SyncState>> #ECE7DE
+  BorderColor<<SyncState>> #96826E
+}
+skinparam agent {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  BackgroundColor<<Insight>> #F9E5DB
+  BorderColor<<Insight>> #E07A5C
+  BackgroundColor<<Rule>> #F5EDD8
+  BorderColor<<Rule>> #C9A24A
+  BackgroundColor<<Idea>> #FCEFD6
+  BorderColor<<Idea>> #F0B040
+  BackgroundColor<<Source>> #F1EAE0
+  BorderColor<<Source>> #B09678
+  BackgroundColor<<Project>> #FBEAD5
+  BorderColor<<Project>> #E6963C
+  BackgroundColor<<Goal>> #F8DFDA
+  BorderColor<<Goal>> #D65656
+  BackgroundColor<<Person>> #F8DFDA
+  BorderColor<<Person>> #D65656
+  BackgroundColor<<Organization>> #F1EAE0
+  BorderColor<<Organization>> #B09678
+  BackgroundColor<<Resource>> #F5EDD8
+  BorderColor<<Resource>> #C9A24A
+  BackgroundColor<<Skill>> #FCEFD6
+  BorderColor<<Skill>> #F0B040
+  BackgroundColor<<SyncState>> #ECE7DE
+  BorderColor<<SyncState>> #96826E
+}
+skinparam database {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  BackgroundColor<<Insight>> #F9E5DB
+  BorderColor<<Insight>> #E07A5C
+  BackgroundColor<<Rule>> #F5EDD8
+  BorderColor<<Rule>> #C9A24A
+  BackgroundColor<<Idea>> #FCEFD6
+  BorderColor<<Idea>> #F0B040
+  BackgroundColor<<Source>> #F1EAE0
+  BorderColor<<Source>> #B09678
+  BackgroundColor<<Project>> #FBEAD5
+  BorderColor<<Project>> #E6963C
+  BackgroundColor<<Goal>> #F8DFDA
+  BorderColor<<Goal>> #D65656
+  BackgroundColor<<Person>> #F8DFDA
+  BorderColor<<Person>> #D65656
+  BackgroundColor<<Organization>> #F1EAE0
+  BorderColor<<Organization>> #B09678
+  BackgroundColor<<Resource>> #F5EDD8
+  BorderColor<<Resource>> #C9A24A
+  BackgroundColor<<Skill>> #FCEFD6
+  BorderColor<<Skill>> #F0B040
+  BackgroundColor<<SyncState>> #ECE7DE
+  BorderColor<<SyncState>> #96826E
+}
+skinparam usecase {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  BackgroundColor<<Insight>> #F9E5DB
+  BorderColor<<Insight>> #E07A5C
+  BackgroundColor<<Rule>> #F5EDD8
+  BorderColor<<Rule>> #C9A24A
+  BackgroundColor<<Idea>> #FCEFD6
+  BorderColor<<Idea>> #F0B040
+  BackgroundColor<<Source>> #F1EAE0
+  BorderColor<<Source>> #B09678
+  BackgroundColor<<Project>> #FBEAD5
+  BorderColor<<Project>> #E6963C
+  BackgroundColor<<Goal>> #F8DFDA
+  BorderColor<<Goal>> #D65656
+  BackgroundColor<<Person>> #F8DFDA
+  BorderColor<<Person>> #D65656
+  BackgroundColor<<Organization>> #F1EAE0
+  BorderColor<<Organization>> #B09678
+  BackgroundColor<<Resource>> #F5EDD8
+  BorderColor<<Resource>> #C9A24A
+  BackgroundColor<<Skill>> #FCEFD6
+  BorderColor<<Skill>> #F0B040
+  BackgroundColor<<SyncState>> #ECE7DE
+  BorderColor<<SyncState>> #96826E
+}
+skinparam actor {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  BackgroundColor<<Insight>> #F9E5DB
+  BorderColor<<Insight>> #E07A5C
+  BackgroundColor<<Rule>> #F5EDD8
+  BorderColor<<Rule>> #C9A24A
+  BackgroundColor<<Idea>> #FCEFD6
+  BorderColor<<Idea>> #F0B040
+  BackgroundColor<<Source>> #F1EAE0
+  BorderColor<<Source>> #B09678
+  BackgroundColor<<Project>> #FBEAD5
+  BorderColor<<Project>> #E6963C
+  BackgroundColor<<Goal>> #F8DFDA
+  BorderColor<<Goal>> #D65656
+  BackgroundColor<<Person>> #F8DFDA
+  BorderColor<<Person>> #D65656
+  BackgroundColor<<Organization>> #F1EAE0
+  BorderColor<<Organization>> #B09678
+  BackgroundColor<<Resource>> #F5EDD8
+  BorderColor<<Resource>> #C9A24A
+  BackgroundColor<<Skill>> #FCEFD6
+  BorderColor<<Skill>> #F0B040
+  BackgroundColor<<SyncState>> #ECE7DE
+  BorderColor<<SyncState>> #96826E
+}
+
+skinparam class {
+  BackgroundColor #F9F0E2
+  BorderColor #C8965A
+  FontColor #3A2410
+  HeaderBackgroundColor #F6E8D4
+  AttributeFontColor #7A5A35
+}
+skinparam stereotypeCBackgroundColor #F6E8D4
+skinparam legendBackgroundColor #F9F0E2
+skinparam legendBorderColor #EFE0C9
+skinparam legendFontColor #7A5A35

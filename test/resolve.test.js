@@ -15,6 +15,12 @@ describe('resolveLayout — the graph expresses its own UI', () => {
     expect(resolveLayout({ label: 'Insight', isTabular: true })).toContain('chart');
   });
 
+  it('leads a saved Lens with its chart', () => {
+    const out = resolveLayout({ label: 'Lens' });
+    expect(out).toContain('chart');
+    expect(out[0]).toBe('chart');
+  });
+
   it('shows a confidence meter for a Rule with confidence', () => {
     expect(resolveLayout({ label: 'Rule', confidence: 'medium' })).toContain('confidence');
     expect(resolveLayout({ label: 'Rule' })).not.toContain('confidence');
@@ -54,7 +60,7 @@ describe('resolveLayout — the graph expresses its own UI', () => {
 
   it('honors a single render hint first, and ui:* tags', () => {
     expect(resolveLayout({ label: 'Insight', renderHint: 'map' })[0]).toBe('map');
-    expect(resolveLayout({ label: 'Insight', tags: ['ui:chart', 'northwind'] })).toContain('chart');
+    expect(resolveLayout({ label: 'Insight', tags: ['ui:chart', 'atlas'] })).toContain('chart');
   });
 
   it('adds ai-summary only when an LLM is connected', () => {
@@ -89,5 +95,23 @@ describe('resolveLayout — the graph expresses its own UI', () => {
     const KNOWN = new Set(['markdown', 'excerpt', 'chart', 'text', 'timeline', 'resurface', 'provenance', 'relations', 'confidence', 'goal-progress', 'map', 'keyvalue', 'ai-summary', 'protected-facts', 'notes', 'acceptance', 'video', 'link']);
     const out = resolveLayout({ label: 'Insight', ui: ['bogus', 'chart'], renderHint: 'nonsense' });
     out.forEach((c) => expect(KNOWN.has(c)).toBe(true));
+  });
+});
+
+describe('diagram components (PlantUML lane)', () => {
+  const CAPS = { llm: true, diagram: true };
+  it('diagram is capability-gated on caps.diagram', () => {
+    expect(resolveLayout({ label: 'Source', sourceKind: 'diagram' }, {})).not.toContain('diagram');
+    expect(resolveLayout({ label: 'Source', sourceKind: 'diagram' }, CAPS)).toContain('diagram');
+  });
+  it('any node carrying a puml property renders the diagram (free fallback)', () => {
+    expect(resolveLayout({ label: 'Insight', puml: '@startuml\nA->B\n@enduml' }, CAPS)).toContain('diagram');
+    expect(resolveLayout({ label: 'Insight' }, CAPS)).not.toContain('diagram');
+  });
+  it('ai-diagram needs BOTH llm and diagram capabilities plus node text', () => {
+    expect(resolveLayout({ label: 'Insight', hasText: true }, CAPS)).toContain('ai-diagram');
+    expect(resolveLayout({ label: 'Insight', hasText: true }, { llm: true })).not.toContain('ai-diagram');
+    expect(resolveLayout({ label: 'Insight', hasText: true }, { diagram: true })).not.toContain('ai-diagram');
+    expect(resolveLayout({ label: 'Insight', hasText: false }, CAPS)).not.toContain('ai-diagram');
   });
 });

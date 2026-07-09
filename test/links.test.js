@@ -31,7 +31,7 @@ describe('links — URL helpers', () => {
     expect(domainOf('https://www.nytimes.com/2026/article')).toBe('nytimes.com');
     expect(domainOf('garbage')).toBe('');
     expect(isWebUrl('https://x.com')).toBe(true);
-    expect(isWebUrl('/Users/demo/file.md')).toBe(false);
+    expect(isWebUrl('/Users/rick/file.md')).toBe(false);
     expect(isWebUrl('ftp://x')).toBe(false);
   });
 });

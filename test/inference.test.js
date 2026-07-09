@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveProvider, generate } from '../lib/inference.js';
+import { resolveProvider, resolveProviderDetailed, generate } from '../lib/inference.js';
 
 // The local inference lane (Act plane Phase 4): Slipway-managed MLX when running, else Ollama,
 // never cloud. fetchImpl is injected so provider resolution and the exact wire formats are
@@ -84,6 +84,61 @@ describe('resolveProvider — Slipway MLX first, Ollama fallback, never cloud', 
   });
 });
 
+describe('resolveProviderDetailed — WHY there is no provider', () => {
+  it("Slipway down + no Ollama → reason 'no-slipway'", async () => {
+    const d = await resolveProviderDetailed({ fetchImpl: fakeFetch([DOWN('/api/status'), DOWN('/api/tags')]) });
+    expect(d.provider).toBeNull();
+    expect(d.reason).toBe('no-slipway');
+    expect(d.slipway).toBeNull();
+  });
+  it("Slipway up but idle (state 'stopped' — models never load by default) → 'no-model', with the selected model", async () => {
+    const d = await resolveProviderDetailed({ fetchImpl: fakeFetch([
+      ['/api/status', { json: { state: 'stopped', backend: 'mlx', model: 'mlx-community/Qwen3.6-35B-A3B-6bit' } }],
+      DOWN('/api/tags'),
+    ]) });
+    expect(d.provider).toBeNull();
+    expect(d.reason).toBe('no-model');
+    expect(d.slipway.model).toBe('mlx-community/Qwen3.6-35B-A3B-6bit');
+  });
+  it('reason is null whenever a provider resolves', async () => {
+    const d = await resolveProviderDetailed({ fetchImpl: fakeFetch([MLX_UP, ['/v1/models', { json: {} }]]) });
+    expect(d.provider).not.toBeNull();
+    expect(d.reason).toBeNull();
+  });
+});
+
+describe('resolveProviderDetailed — requireResident (the voice lane)', () => {
+  it("Ollama library non-empty but NOTHING in memory (/api/ps empty) → 'no-model', never a cold promise", async () => {
+    const d = await resolveProviderDetailed({ requireResident: true, fetchImpl: fakeFetch([
+      DOWN('/api/status'), OLLAMA_UP, ['/api/ps', { json: { models: [] } }],
+    ]) });
+    expect(d.provider).toBeNull();
+    expect(d.reason).toBe('no-model');
+  });
+  it('a resident Ollama model IS the brain — advertised over the library default', async () => {
+    const d = await resolveProviderDetailed({ requireResident: true, fetchImpl: fakeFetch([
+      DOWN('/api/status'), OLLAMA_UP, ['/api/ps', { json: { models: [{ name: 'llama3:8b' }] } }],
+    ]) });
+    expect(d.provider).toMatchObject({ kind: 'ollama', model: 'llama3:8b' });
+    expect(d.provider.models).toEqual(['qwen3:8b', 'llama3:8b']);   // full library kept for the picker
+  });
+  it('a /api/ps ghost not in the library is ignored (stale daemon state)', async () => {
+    const d = await resolveProviderDetailed({ requireResident: true, fetchImpl: fakeFetch([
+      DOWN('/api/status'), OLLAMA_UP, ['/api/ps', { json: { models: [{ name: 'gone:1b' }] } }],
+    ]) });
+    expect(d.provider).toBeNull();
+    expect(d.reason).toBe('no-model');
+  });
+  it('without the flag, on-demand semantics are unchanged (summary/ask lanes)', async () => {
+    const d = await resolveProviderDetailed({ fetchImpl: fakeFetch([DOWN('/api/status'), OLLAMA_UP]) });
+    expect(d.provider).toMatchObject({ kind: 'ollama', model: 'qwen3:8b' });
+  });
+  it('Slipway MLX serving always wins — residency is inherent there', async () => {
+    const d = await resolveProviderDetailed({ requireResident: true, fetchImpl: fakeFetch([MLX_UP, ['/v1/models', { json: {} }]]) });
+    expect(d.provider).toMatchObject({ label: 'slipway-mlx' });
+  });
+});
+
 describe('generate — exact wire formats', () => {
   it('openai: POSTs /v1/chat/completions with stream:false + max_tokens, reads choices[0]', async () => {
     const f = fakeFetch([['/chat/completions', { json: { choices: [{ message: { content: 'hello' } }] } }]]);
@@ -93,16 +148,22 @@ describe('generate — exact wire formats', () => {
     expect(body).toEqual({ model: 'M', messages: [{ role: 'user', content: 'hi' }], max_tokens: 99, stream: false, temperature: 0.5 });
   });
 
-  it('ollama: POSTs /api/generate with stream:false, reads .response', async () => {
-    const f = fakeFetch([['/api/generate', { json: { response: 'yo' } }]]);
+  it('ollama: POSTs /api/chat with a CAPPED context + explicit keep_alive, reads .message.content', async () => {
+    // /api/chat (not /api/generate): template-strict models (gemma4-mlx) return '' on raw
+    // completion. num_ctx matters: Ollama otherwise allocates the model's FULL window —
+    // a 4.9GB llama3.1 sat at 22GB resident from its 131k KV cache (observed 2026-07-04).
+    const f = fakeFetch([['/api/chat', { json: { message: { role: 'assistant', content: 'yo' } } }]]);
     const out = await generate({ kind: 'ollama', base: 'http://localhost:11434', model: 'q' }, 'hi', { fetchImpl: f });
     expect(out).toBe('yo');
-    expect(JSON.parse(f.calls[0].opts.body)).toEqual({ model: 'q', prompt: 'hi', stream: false });
+    expect(JSON.parse(f.calls[0].opts.body)).toEqual({
+      model: 'q', messages: [{ role: 'user', content: 'hi' }], stream: false, keep_alive: '5m',
+      options: { num_ctx: 8192, temperature: 0.2, num_predict: 512 },
+    });
   });
 
   it('degrades to null on non-200 / network error / no provider', async () => {
     expect(await generate({ kind: 'openai', base: 'b', model: 'm' }, 'p', { fetchImpl: fakeFetch([['chat', { ok: false, json: {} }]]) })).toBeNull();
-    expect(await generate({ kind: 'ollama', base: 'b', model: 'm' }, 'p', { fetchImpl: fakeFetch([DOWN('generate')]) })).toBeNull();
+    expect(await generate({ kind: 'ollama', base: 'b', model: 'm' }, 'p', { fetchImpl: fakeFetch([DOWN('chat')]) })).toBeNull();
     expect(await generate(null, 'p')).toBeNull();
   });
 });

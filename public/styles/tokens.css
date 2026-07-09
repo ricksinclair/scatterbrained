@@ -2,7 +2,7 @@
    Scatterbrained Studio — design tokens (the shared token layer).
    Loaded BEFORE styles.css. The color vars are the Observatory·dark defaults;
    lib/theme-ui.js overrides them on <html> at runtime (6 themes × light/dark).
-   This file is also vendored by Slipway (as its static/tokens.css) —
+   This file is also vendored by Slipway (mlx-control/static/tokens.css) —
    change it here first, then re-vendor; keep the two copies in sync.
    ========================================================================== */
 :root {
@@ -69,10 +69,12 @@
   --ease: cubic-bezier(.2, .7, .3, 1);
 
   /* ── elevation + glow (lickable pass) ────────────────────────────────────
-     --glow: the ONE accent glow — used in exactly three places (focused
+     --glow: the ONE accent glow — used in exactly four places (focused
      search/palette, the selected node ring's canvas twin in lib/themes.js
-     {ring, glow}, and the primary CTA). Everything else that floats uses
-     --shadow-pop, a plain elevation shadow — never an accent glow. */
+     {ring, glow}, the primary CTA, and a FOCUSED diagram card — .c-diagram
+     glows only on :focus-within/expanded emphasis, never at rest). Everything
+     else that floats uses --shadow-pop, a plain elevation shadow — never an
+     accent glow. */
   --glow: 0 0 0 1px var(--accent-soft), 0 4px 24px color-mix(in srgb, var(--accent) 18%, transparent);
   --shadow-pop: 0 18px 50px -12px rgba(0, 0, 0, 0.45);
 }

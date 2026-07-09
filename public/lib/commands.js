@@ -17,12 +17,14 @@ const BASE = [
   { id: 'open-agents', title: 'Open Agents', hint: 'Slipway runtime', keywords: ['slipway', 'terminal', 'llm', 'claude', 'act'], shortcut: 'A', group: 'lens' },
   { id: 'agent-archive-selected', title: 'Archive / Unarchive session', hint: 'the selected agent session', keywords: ['slipway', 'agent', 'session', 'archive', 'unarchive', 'rail', 'hide'], group: 'action', gated: 'agentSession' },
   { id: 'agent-archive-ended', title: 'Archive all ended sessions', hint: 'clear the agent rail', keywords: ['slipway', 'agent', 'session', 'archive', 'ended', 'rail', 'clean', 'bulk'], group: 'action' },
+  { id: 'open-assistant', title: 'Open Assistant', hint: 'talk to your graph', keywords: ['voice', 'chat', 'ask', 'assistant', 'talk', 'speak'], shortcut: 'V', group: 'action' },
   { id: 'capture-link', title: 'Capture a link', hint: 'save a web or YouTube page', keywords: ['add', 'save', 'url', 'bookmark', 'resource'], group: 'capture' },
   { id: 'add-criterion', title: 'Add acceptance criterion', hint: 'pin a testable expectation on this node', keywords: ['acceptance', 'criteria', 'criterion', 'test', 'regression', 'guardrail', 'verify'], group: 'capture', gated: 'selection' },
   { id: 'needs-review', title: 'Show needs review', hint: 'stale · superseded · orphans', keywords: ['stale', 'orphans', 'superseded', 'filter', 'queue'], group: 'filter' },
   { id: 'focus-clear', title: 'Clear focus', hint: 'show the whole graph', keywords: ['unfocus', 'show all', 'reset'], group: 'action', gated: 'focus' },
   { id: 'study-selected', title: 'Study this node', hint: 'flashcards · active recall', keywords: ['flashcards', 'recall', 'cards', 'learn'], group: 'action', gated: 'selection' },
   { id: 'export-report', title: 'Export briefing', hint: 'selected node as Markdown', keywords: ['markdown', 'download', 'report', 'briefing'], group: 'action', gated: 'selection' },
+  { id: 'diagram-neighborhood', title: 'Diagram: map this node\'s neighborhood', hint: 'PlantUML mindmap of its connections', keywords: ['diagram', 'plantuml', 'mindmap', 'map', 'visualize', 'cluster', 'export'], group: 'action', gated: 'selection' },
   { id: 'toggle-mode', title: 'Toggle light / dark', keywords: ['dark', 'light', 'mode', 'appearance'], group: 'appearance' },
   { id: 'toggle-calm', title: 'Toggle calm mode', hint: 'less motion', keywords: ['motion', 'reduce', 'animation', 'still'], group: 'appearance' },
   { id: 'ui-size-s', title: 'UI size · Small', keywords: ['scale', 'small', 'compact', 'text size'], group: 'appearance' },
@@ -42,7 +44,9 @@ const labelPlural = (d) => (d === 'Person' ? 'People' : d + 's');
 // buildRegistry({ themes, types }) → the closed registry.
 //   themes: [{ name, label }] — one 'set-theme-<name>' per app theme.
 //   types:  ['Project', …]    — node labels present in the graph → 'filter-<Type>' each.
-export function buildRegistry({ themes = [], types = [] } = {}) {
+//   tours:  [{ id, label }]    — per-surface tours → 'start-tour-<id>' each (showcase is the BASE
+//                                'start-tour'; skip it here so it isn't listed twice).
+export function buildRegistry({ themes = [], types = [], tours = [] } = {}) {
   return [
     ...BASE,
     ...themes.map((t) => ({
@@ -52,6 +56,10 @@ export function buildRegistry({ themes = [], types = [] } = {}) {
     ...types.map((t) => ({
       id: 'filter-' + t, title: 'Filter · ' + labelPlural(t), hint: 'toggle this type on the graph',
       keywords: ['filter', 'type', 'lens', t.toLowerCase()], group: 'filter',
+    })),
+    ...tours.filter((t) => t.id !== 'showcase').map((t) => ({
+      id: 'start-tour-' + t.id, title: 'Tour · ' + t.label, hint: 'guided walkthrough',
+      keywords: ['tour', 'guide', 'walkthrough', String(t.id)], group: 'help',
     })),
   ];
 }

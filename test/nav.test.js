@@ -80,6 +80,11 @@ describe('esc unwind order', () => {
     expect(escTarget()).toBe(null);
   });
   it('exposes the closed lens set', () => {
-    expect(LENSES).toEqual(['graph', 'time', 'code', 'agents']);
+    expect(LENSES).toEqual(['graph', 'time', 'code', 'agents', 'docs']);
+  });
+  it('docs is a tabless lens with a reload-safe hash', () => {
+    expect(reduce(initialState, { type: 'open', lens: 'docs' })).toEqual({ lens: 'docs', tab: null });
+    expect(serializeHash({ lens: 'docs', tab: null })).toBe('#docs');
+    expect(parseHash('#docs')).toEqual({ lens: 'docs', tab: null });
   });
 });

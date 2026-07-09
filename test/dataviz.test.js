@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { columnValues, histogramSpec, barSpecByCategory, profileColumns, recommendChart } from '../public/lib/dataviz.js';
+import { columnValues, histogramSpec, barSpecByCategory, profileColumns, recommendChart, recommendChartFromObjects, lineSvg, scatterSvg } from '../public/lib/dataviz.js';
 import { REGISTRY } from '../public/lib/registry.js';
 
 const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -54,7 +54,42 @@ describe('profileColumns / recommendChart', () => {
   });
 });
 
-describe('chart component — histogram kind', () => {
+describe('recommendChartFromObjects', () => {
+  it('recommends a bar directly from query-result objects', () => {
+    const spec = recommendChartFromObjects([{ status: 'active', n: 5 }, { status: 'done', n: 9 }]);
+    expect(spec.kind).toBe('bar');
+    expect(spec.bars[0]).toEqual({ label: 'done', value: 9 });
+  });
+  it('is empty-safe', () => {
+    expect(recommendChartFromObjects([])).toBe(null);
+  });
+});
+
+describe('lineSvg / scatterSvg', () => {
+  it('draws a polyline per series with a themed stroke', () => {
+    const svg = lineSvg({ title: 'growth', x: ['w1', 'w2', 'w3'], series: [{ name: 'nodes', values: [1, 4, 9] }] });
+    expect(svg).toContain('<polyline');
+    expect(svg).toContain('stroke="var(--accent)"');
+    expect(svg).toContain('ch-title');            // title rendered
+  });
+  it('handles a flat series without dividing by zero', () => {
+    const svg = lineSvg({ x: ['a', 'b'], series: [{ name: 's', values: [5, 5] }] });
+    expect(svg).toContain('<polyline');
+    expect(svg).not.toContain('NaN');
+  });
+  it('draws a circle per scatter point with a tooltip', () => {
+    const svg = scatterSvg({ points: [{ x: 1, y: 2, label: 'p1' }, { x: 3, y: 4 }] });
+    expect((svg.match(/<circle/g) || []).length).toBe(2);
+    expect(svg).toContain('p1');
+    expect(svg).not.toContain('NaN');
+  });
+  it('returns empty string for no data', () => {
+    expect(lineSvg({ x: [], series: [] })).toBe('');
+    expect(scatterSvg({ points: [] })).toBe('');
+  });
+});
+
+describe('chart component — kind dispatch', () => {
   it('renders vertical columns for kind:histogram', () => {
     const html = REGISTRY.chart.render({}, { chart: { kind: 'histogram', title: 'dist', bars: [{ label: '0–1', value: 3 }, { label: '1–2', value: 5 }] } }, { esc });
     expect(html).toContain('c-histogram');
@@ -65,5 +100,18 @@ describe('chart component — histogram kind', () => {
     const html = REGISTRY.chart.render({}, { chart: { bars: [{ label: 'ABOUT', value: 10 }] } }, { esc });
     expect(html).toContain('ch-bar');
     expect(html).not.toContain('c-histogram');
+  });
+  it('dispatches line/scatter to the SVG renderers', () => {
+    const line = REGISTRY.chart.render({}, { chart: { kind: 'line', x: ['a', 'b'], series: [{ name: 's', values: [1, 2] }] } }, { esc });
+    expect(line).toContain('c-chart-svg');
+    expect(line).toContain('<polyline');
+    const sc = REGISTRY.chart.render({}, { chart: { kind: 'scatter', points: [{ x: 1, y: 2 }] } }, { esc });
+    expect(sc).toContain('<circle');
+  });
+  it('renders an honest error strip for a failed lens query', () => {
+    const html = REGISTRY.chart.render({}, { chart: { error: 'query failed: SyntaxError', title: 'Projects by status' } }, { esc });
+    expect(html).toContain('c-chart-err');
+    expect(html).toContain('query failed');
+    expect(html).toContain('Projects by status');
   });
 });

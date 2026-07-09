@@ -6,3 +6,7 @@ backups/*.json
 
 # Your real Notion IDs (config, not template — see examples/notion-ids.example.json)
 notion-ids.json
+
+# Python bytecode from the bin/ VOICE helpers (kokoro-tts.py, whisper-stt.py)
+__pycache__/
+*.pyc

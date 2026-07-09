@@ -26,10 +26,22 @@ See → Understand → Act, all on your own machine, no cloud.
 - **File viewers** — Markdown, CSV/sheets, PDF, Word, PowerPoint, rendered in place.
 - **Writable graph** — wire two nodes together by typing; edit and save Markdown to disk
   (git-recoverable).
-- **Reports** — turn any node into a shareable briefing.
+- **Reports & exports** — turn any node into a briefing, then export exactly what you see:
+  Markdown, self-contained HTML, PDF, or JSON.
+- **Ask for a chart** — the assistant answers countable questions with real charts (bar,
+  histogram, line, scatter), and "save that" keeps one as a **living lens** that re-runs its
+  query on every open.
+- **Docs lens + live diagrams** — ingested markdown reads like a per-project doc site
+  (grouped by audience), with PlantUML architecture diagrams rendered locally and re-themed
+  live (optional `plantuml` binary; degrades gracefully without it).
+- **A code map you can trust** — ranked hubs/orphans/cycles, per-file impact diagrams with
+  function-level call sites (including calls inside template strings), a render-time stamp,
+  and stale-tab self-healing.
+- **An honest assistant** — the orb only wears a model's name when one is actually loaded;
+  otherwise it says "no model" and offers a one-click load through your local runtime.
 
-Take the **guided tour** (the ▶ Tour button, top-right, or add `/#tour`) for a ~60-second walk
-through all of it.
+Take the **guided tour** (Help ▸ Take a tour, or add `/#tour`) — plus short per-surface tours
+for each lens from the same menu.
 
 ## Run it
 

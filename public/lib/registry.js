@@ -12,6 +12,7 @@
 
 import { resolveLayout } from './resolve.js';
 import { coerceView } from './views.js';
+import { lineSvg, scatterSvg } from './dataviz.js';
 import { parseVideoUrl, domainOf, isWebUrl } from './links.js';
 import { classifyStatus } from './roadmap.js';
 import { emptyState } from './empty-state.js';
@@ -528,10 +529,18 @@ export const REGISTRY = {
     // numeric column's bins). Self-suppresses if no bars.
     render(_node, data, { esc }) {
       const ch = data.chart;
-      if (!ch || !ch.bars || !ch.bars.length) return '';
+      if (!ch) return '';
+      // A Lens whose stored query failed (or returned nothing) renders an honest strip, not a crash.
+      if (ch.error) return `<div class="c-chart c-chart-err"><span class="ch-err">⚠ ${esc(ch.error)}</span>` +
+        `${ch.title ? `<span class="ch-err-sub">${esc(ch.title)}</span>` : ''}</div>`;
+      const kind = ch.kind || 'bar';
+      // line/scatter: pure SVG renderers (they include their own title). bar/histogram: DOM bars below.
+      if (kind === 'line') { const s = lineSvg(ch); return s ? `<div class="c-chart c-chart-svg">${s}</div>` : ''; }
+      if (kind === 'scatter') { const s = scatterSvg(ch); return s ? `<div class="c-chart c-chart-svg">${s}</div>` : ''; }
+      if (!ch.bars || !ch.bars.length) return '';
       const title = ch.title ? `<div class="ch-title">${esc(ch.title)}</div>` : '';
       const max = Math.max(...ch.bars.map((b) => b.value), 1);
-      if ((ch.kind || 'bar') === 'histogram') {
+      if (kind === 'histogram') {
         const cols = ch.bars.slice(0, 24).map((b) => {
           const h = Math.max(1, Math.round((b.value / max) * 100));
           return `<span class="hg-col" title="${esc(b.label)}: ${esc(String(b.value))}">` +
@@ -612,6 +621,65 @@ export const REGISTRY = {
       const blockers = blk.length ? `<div class="gp-blockers"><span class="gp-label">blocked by</span>` +
         blk.map((b) => `<a href="#" class="nav-node gp-blocker" data-id="${esc(b.id || '')}" data-name="${esc(b.name || '')}">${esc(trunc(b.name || '(unnamed)', 24))}</a>`).join('') + `</div>` : '';
       return `<div class="c-goal-progress">${head}${bar}${sub}${milestones}${blockers}${dueRow}</div>`;
+    },
+  },
+
+  // Rendered PlantUML (local render lane; capability-gated on caps.diagram).
+  // States in data.diagram: {loading} | {svg} | {error, puml?} | none (on-ramp / stored-puml
+  // auto-render pending). The SVG arrives sentinel-rewritten + sanitized from the server,
+  // so it re-themes live via CSS vars and is safe for innerHTML.
+  diagram: {
+    id: 'diagram',
+    render(node, data, { esc }) {
+      const d = data.diagram || {};
+      const toolbar = (withSave) =>
+        `<div class="dg-bar">` +
+        `<button class="dg-btn" data-diagram="copy" title="copy PlantUML source">copy source</button>` +
+        `<button class="dg-btn" data-diagram="download" title="download SVG">download</button>` +
+        (withSave ? `<button class="dg-btn dg-save" data-diagram="save" title="save to the graph as a diagram Source">save to graph</button>` : '') +
+        `</div>`;
+      if (d.loading) return '<div class="c-diagram"><div class="ai-loading">rendering diagram…</div></div>';
+      if (d.svg) {
+        // generated (unsaved) diagrams offer "save to graph"; stored ones already live there
+        const unsaved = !node.puml && node.sourceKind !== 'diagram';
+        return `<div class="c-diagram" tabindex="0"><div class="dg-svg">${d.svg}</div>${toolbar(unsaved)}</div>`;
+      }
+      if (d.error) {
+        const src = d.puml || node.puml;
+        return `<div class="c-diagram"><div class="ai-err">${esc(d.error)}</div>` +
+          (src ? `<pre class="dg-src">${esc(src)}</pre>` : '') +
+          `<button class="dg-btn" data-diagram="rerender">retry</button></div>`;
+      }
+      if (node.puml || node.sourceKind === 'diagram') return '<div class="c-diagram"><div class="ai-loading">rendering diagram…</div></div>';
+      // on-ramp: a well-connected node with no stored diagram — offer the neighborhood map
+      return `<div class="c-diagram c-diagram-onramp">` +
+        `<button class="dg-btn" data-diagram="map-mindmap">✦ map neighborhood — mindmap</button>` +
+        `<button class="dg-btn" data-diagram="map-component">component</button></div>`;
+    },
+  },
+
+  // "Diagram this" — LLM-generated PlantUML from the node's text (needs caps.llm AND
+  // caps.diagram). Mirrors ai-summary's state machine in data.ai.diagram.
+  'ai-diagram': {
+    id: 'ai-diagram',
+    render(_node, data, { esc }) {
+      const g = (data.ai || {}).diagram;
+      const kinds = ['mindmap', 'component', 'sequence'];
+      const sel = (cur) => `<select class="ai-dg-kind" data-ai-dgkind>` +
+        kinds.map((k) => `<option value="${k}"${k === (cur || 'mindmap') ? ' selected' : ''}>${k}</option>`).join('') + `</select>`;
+      if (g && g.loading) return '<div class="c-ai"><div class="ai-loading">drawing with local model…</div></div>';
+      if (g && g.svg) {
+        return `<div class="c-ai c-ai-diagram"><div class="ai-badge">local model · ${esc(g.model || '')}${g.attempts > 1 ? ' · attempt ' + g.attempts : ''}</div>` +
+          `<div class="c-diagram" tabindex="0"><div class="dg-svg">${g.svg}</div></div>` +
+          `<div class="dg-bar"><button class="dg-btn dg-save" data-diagram="save-ai">save to graph</button>` +
+          `<button class="ai-btn" data-ai="diagram">regenerate</button>${sel(g.kind)}</div></div>`;
+      }
+      if (g && g.error) {
+        return `<div class="c-ai"><div class="ai-err">${esc(g.error)}</div>` +
+          (g.puml ? `<pre class="dg-src">${esc(g.puml)}</pre>` : '') +
+          `<div class="dg-bar"><button class="ai-btn" data-ai="diagram">retry</button>${sel(g.kind)}</div></div>`;
+      }
+      return `<div class="c-ai"><div class="dg-bar"><button class="ai-btn" data-ai="diagram">✦ diagram this</button>${sel()}</div></div>`;
     },
   },
 

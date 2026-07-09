@@ -50,8 +50,9 @@ jobs:
                       # The embedder (@xenova/transformers) installs but isn't exercised here.
       - name: Static checks (syntax + JSON)
         run: |
-          for f in scripts/*.js scripts/lib/*.js server.js lib/*.js public/lib/*.js bin/*.* studio-scripts/*.mjs; do node --check "$f"; done
+          for f in scripts/*.js scripts/lib/*.js server.js lib/*.js public/lib/*.js bin/*.js bin/*.mjs studio-scripts/*.mjs; do node --check "$f"; done
           for j in package.json examples/*.json; do node -e "JSON.parse(require('fs').readFileSync('$j','utf8'))"; done
+          for p in bin/*.py; do python3 -m py_compile "$p"; done   # VOICE STT/TTS helpers ship here; node can't --check them
       - name: Unit tests — toolkit (node:test) + Studio (vitest)
         run: |
           npm test               # methodology pure-function suite; no DB or network needed
