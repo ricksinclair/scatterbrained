@@ -19,7 +19,7 @@
 // can gate on it: `node scripts/protected-fact-check.js … || echo "needs approval"`); 2 on error.
 import fs from 'node:fs';
 import { getDriver, run, parseArgs, toPlain } from './lib/db.js';
-import { checkRewrite } from '../scatterbrained-studio/public/lib/protected-facts.js';
+import { checkRewrite } from '../public/lib/protected-facts.js';
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));

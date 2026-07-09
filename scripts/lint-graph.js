@@ -19,10 +19,10 @@ import { IDENTITY_SIGNALS } from './lib/identity.js';
 import { IDENTITY_LABELS as ALIAS_LABELS, NAME_FIELDS as ALIAS_NAME_FIELDS, brandRegexCypher } from './lib/aliases.js';
 // Scatterbrained Studio's composable-UI annotation vocab (SPEC §10.7): render hints written
 // onto graph nodes must reference a real component/view. Single source of truth.
-import { COMPONENTS as UI_COMPONENTS } from '../scatterbrained-studio/public/lib/resolve.js';
-import { VIEWS as UI_VIEWS } from '../scatterbrained-studio/public/lib/views.js';
+import { COMPONENTS as UI_COMPONENTS } from '../public/lib/resolve.js';
+import { VIEWS as UI_VIEWS } from '../public/lib/views.js';
 // Acceptance-criterion state vocabulary (unverified/pass/fail) — single source in the Studio lib.
-import { CRITERION_STATES } from '../scatterbrained-studio/public/lib/criteria.js';
+import { CRITERION_STATES } from '../public/lib/criteria.js';
 
 // Repo root = the dir containing scripts/. Relative Source.file_paths are
 // resolved against it, matching where this lint (and the indexer) run.
@@ -287,7 +287,7 @@ const CHECKS = [
   {
     name: 'ui-hint-out-of-vocabulary',
     severity: 'ERROR',
-    hint: 'A composable-UI render hint (render_hint / ui[] / ui:* tag) references a component or view outside the closed vocab (scatterbrained-studio/public/lib/resolve.js + views.js). Fix the hint or add the id to the vocab. Off-vocab hints are silently dropped at render time.',
+    hint: 'A composable-UI render hint (render_hint / ui[] / ui:* tag) references a component or view outside the closed vocab (public/lib/resolve.js + views.js). Fix the hint or add the id to the vocab. Off-vocab hints are silently dropped at render time.',
     cypher: `
       MATCH (n)
       WHERE (n.render_hint IS NOT NULL AND NOT n.render_hint IN $uiComponents)

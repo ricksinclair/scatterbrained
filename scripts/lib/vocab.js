@@ -130,7 +130,7 @@ export function isKnownRelType(t) {
 // source) gets caught instead of landing silently. Legacy types are not shape-checked.
 export const REL_SHAPES = {
   // Review>Project: a Studio code-review is ABOUT the Project whose repo it pins —
-  // materialized by createReview via scatterbrained-studio/lib/review-project.js
+  // materialized by createReview via lib/review-project.js
   // (conservative resolver: no/ambiguous match → no edge). Enumerated here even though
   // Review is RELSHAPE_EXEMPT, so the shape stays documented+legal if the exemption
   // ever narrows. Added 2026-07-02.

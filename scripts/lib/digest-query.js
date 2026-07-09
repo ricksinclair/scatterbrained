@@ -2,7 +2,7 @@
 // query over the graph's intention dates (due_at / review_at / Goal.target_date) within the
 // next 30 days (so all overdue + the coming month). Used by both `scripts/digest.js` (the
 // standalone push) and `scripts/resume.js` (the session-start brief). Bucketing/formatting is
-// the pure lib's job (scatterbrained-studio/public/lib/digest.js); this just returns rows.
+// the pure lib's job (public/lib/digest.js); this just returns rows.
 import { run, toPlain } from './db.js';
 
 const Q_DIGEST = `
