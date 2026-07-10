@@ -1,6 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Local LLM Control</title>
+<title>Slipway</title>
 <link rel="stylesheet" href="/static/fonts/fonts.css?v=__V__">
 <link rel="stylesheet" href="/static/tokens.css?v=__V__"><link rel="stylesheet" href="/static/panel.css?v=__V__">
 <link rel="stylesheet" href="/vendor/xterm/xterm.css">
@@ -9,7 +9,7 @@
 </head><body><div class="wrap">
 
   <div class="top">
-    <div class="apptitle"><h1>Local LLM Control</h1><p class="sub">Backs <code>claude-local</code></p></div>
+    <div class="apptitle"><h1>Slipway</h1><p class="sub">Local models for your agent CLIs</p></div>
     <div class="topbtns" style="display:flex;gap:8px">
       <button class="ghost topbtn-terms" onclick="openTerms()"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4m0 2a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2z"/><path d="M8 9l3 3l-3 3"/><path d="M14 15l3 0"/></svg> Terminals</button>
       <button class="ghost topbtn-unload" onclick="unloadAll()" title="Free all model RAM — stop the MLX server and unload every Ollama model"><svg class="ti-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 13l7 -8l7 8z"/><path d="M5 17h14"/></svg> Unload all</button>

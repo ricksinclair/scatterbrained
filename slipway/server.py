@@ -1552,6 +1552,6 @@ if __name__ == "__main__":
     if not os.path.exists(STATE_FILE):
         write_state(DEFAULT["model"], DEFAULT["backend"])
     load_downloads_registry()
-    print(f"Local LLM control panel → http://127.0.0.1:{PANEL_PORT}")
+    print(f"Slipway → http://127.0.0.1:{PANEL_PORT}")
     HTTPD = ThreadingHTTPServer(("127.0.0.1", PANEL_PORT), Handler)
     HTTPD.serve_forever()
