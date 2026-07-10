@@ -163,3 +163,87 @@ describe('staleness + provenance breadcrumbs', () => {
     ]);
   });
 });
+
+describe('query grounding (#2a): turn-scoped evidence on the say event', () => {
+  // helper: connect, deliver an utterance (starts the turn), return the session id
+  async function turn(w, s) {
+    const { sessionId } = s.connect({ model: 'a' });
+    const parked = s.listen(sessionId, {});
+    s.utterance({ text: 'q', ui: { selected_node_id: 'ui1', selected_node_name: 'UI', selected_node_label: 'Idea' } });
+    await parked;
+    return sessionId;
+  }
+  const sayEvents = (w) => w.events.filter((e) => e.name === 'say');
+
+  it('nodes touched after delivery ride the say event as grounding', async () => {
+    const w = world(); const s = w.make();
+    const sid = await turn(w, s);
+    s.touch('n1', { name: 'One', label: 'Idea' });
+    s.touch('n2', { name: 'Two', label: 'Goal' });
+    s.say(sid, { text: 'answer' });
+    expect(sayEvents(w)[0].grounding).toEqual([
+      { id: 'n1', name: 'One', label: 'Idea' },
+      { id: 'n2', name: 'Two', label: 'Goal' },
+    ]);
+  });
+  it('an untouched turn emits NO grounding field at all', async () => {
+    const w = world(); const s = w.make();
+    const sid = await turn(w, s);
+    s.say(sid, { text: 'answer' });
+    expect('grounding' in sayEvents(w)[0]).toBe(false);
+  });
+  it("the user's ui context is not assistant evidence", async () => {
+    const w = world(); const s = w.make();
+    const sid = await turn(w, s);              // utterance carried ui node ui1
+    s.touch('n1', { name: 'One', label: 'Idea' });
+    s.say(sid, { text: 'answer' });
+    const ids = sayEvents(w)[0].grounding.map((g) => g.id);
+    expect(ids).toEqual(['n1']);               // ui1 absent — session provenance only
+    expect(s.touchedNodes().map((t) => t.id)).toContain('ui1');
+  });
+  it('the next delivered utterance resets the turn (parked path)', async () => {
+    const w = world(); const s = w.make();
+    const sid = await turn(w, s);
+    s.touch('n1', { name: 'One', label: 'Idea' });
+    s.say(sid, { text: 'first' });
+    s.sayDone({ msg_id: sayEvents(w)[0].msg_id });
+    const parked = s.listen(sid, {});
+    s.utterance({ text: 'next' });
+    await parked;
+    s.say(sid, { text: 'second' });            // nothing touched this turn
+    expect('grounding' in sayEvents(w)[1]).toBe(false);
+  });
+  it('a queued delivery also resets the turn', async () => {
+    const w = world(); const s = w.make();
+    const sid = await turn(w, s);
+    s.touch('n1', { name: 'One', label: 'Idea' });
+    s.utterance({ text: 'queued while thinking' });   // queued — no park
+    await s.listen(sid, {});                          // drained → delivery → reset
+    s.say(sid, { text: 'answer' });
+    expect('grounding' in sayEvents(w)[0]).toBe(false);
+  });
+  it('multi-say turns keep accumulating; evidence caps at 12', async () => {
+    const w = world(); const s = w.make();
+    const sid = await turn(w, s);
+    s.touch('n1', { name: 'One', label: 'Idea' });
+    s.say(sid, { text: 'first' });
+    s.sayDone({ msg_id: sayEvents(w)[0].msg_id });
+    for (let i = 2; i <= 20; i++) s.touch('n' + i, { name: 'N' + i, label: 'Idea' });
+    s.say(sid, { text: 'second' });
+    const evts = sayEvents(w);
+    expect(evts[0].grounding).toHaveLength(1);
+    expect(evts[1].grounding).toHaveLength(12);       // cap
+    expect(evts[1].grounding[0].id).toBe('n1');       // still the same turn
+  });
+  it('a fresh connect inherits no prior evidence', async () => {
+    const w = world(); const s = w.make();
+    const sid = await turn(w, s);
+    s.touch('n1', { name: 'One', label: 'Idea' });
+    const b = s.connect({ model: 'b' });
+    const parked = s.listen(b.sessionId, {});
+    s.utterance({ text: 'q2' });
+    await parked;
+    s.say(b.sessionId, { text: 'answer' });
+    expect('grounding' in sayEvents(w).at(-1)).toBe(false);
+  });
+});

@@ -1,5 +1,5 @@
 ' scatterbrained-dark.puml — PlantUML theme matching Scatterbrained Studio's "scatterbrained" theme (dark).
-' GENERATED from scatterbrained-studio/public/lib/themes.js — do not edit; run `npm run gen:puml`.
+' GENERATED from public/lib/themes.js — do not edit; run `npm run gen:puml`.
 ' Usage: !include <path>/scatterbrained-dark.puml at the top of any diagram.
 ' Element stereotypes <<Insight>> <<Project>> <<Idea>> … color as Scatterbrained graph node types.
 

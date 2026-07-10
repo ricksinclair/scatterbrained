@@ -215,21 +215,6 @@ async function main() {
     }
     lines.push('');
 
-    // SOURCES & PROVENANCE (the INFORMS lane — files, repos, Notion pages)
-    const sources = await section(
-      driver,
-      ids,
-      'Source',
-      'n.title AS title, n.source_kind AS kind, n.url AS url, n.file_path AS file_path ORDER BY title'
-    );
-    lines.push('SOURCES & PROVENANCE:');
-    if (!sources.length) lines.push('  (none)');
-    for (const r of sources) {
-      const loc = v(r.get('url'), '') || v(r.get('file_path'), '') || 'no location';
-      lines.push(`* ${v(r.get('title'))} (${v(r.get('kind'), 'source')}): ${loc}`);
-    }
-    lines.push('');
-
     // RECENT INSIGHTS
     const insights = await section(
       driver,

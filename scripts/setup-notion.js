@@ -123,8 +123,8 @@ export async function createWorkspace({ name, goal, modules, problemTests = fals
     icon: { type: 'emoji', emoji: '🚀' },
     properties: { title: { title: [{ text: { content: `${name} — Workspace` } }] } },
     children: [
-      para(`Home for ${name}. Created by Scatterbrained's new-project.`),
-      para('These databases are human digests for non-technical stakeholders, written at milestones — not live mirrors to hand-maintain. Your code, git/GitHub, and the Scatterbrained graph are the day-to-day sources of truth. Each database below describes what it is for and who keeps it current.'),
+      para(`Home for ${name}. Created by Engram's new-project.`),
+      para('These databases are human digests for non-technical stakeholders, written at milestones — not live mirrors to hand-maintain. Your code, git/GitHub, and the Engram graph are the day-to-day sources of truth. Each database below describes what it is for and who keeps it current.'),
     ],
   };
   let workspaceId = '<workspace-page-id>';

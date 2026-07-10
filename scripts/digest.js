@@ -6,7 +6,7 @@
 // Usage:
 //   node scripts/digest.js                 # human brief
 //   node scripts/digest.js --json          # machine output (cron / automation)
-//   node scripts/digest.js --project Northwind
+//   node scripts/digest.js --project Acme
 //
 // Schedule the PUSH cadence (examples — NOT installed automatically; your ops call):
 //   • cron (weekdays 8am):  0 8 * * 1-5  cd ~/Projects/scatterbrained && npm run -s digest

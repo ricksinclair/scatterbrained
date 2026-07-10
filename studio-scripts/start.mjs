@@ -19,8 +19,8 @@ import neo4j from 'neo4j-driver';
 import dotenv from 'dotenv';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-// Resolve a file by trying a few candidate roots, so this works whether it is run from the
-// repo root or one directory below it.
+// Resolve a file across both layouts: the public repo (server.js + scripts/ + examples/ at one
+// root) and the private monorepo (the studio one level below scripts/ + examples/).
 function resolve(rel) {
   for (const base of [path.join(HERE, '..'), path.join(HERE, '..', '..'), HERE]) {
     const p = path.join(base, rel);
@@ -28,13 +28,13 @@ function resolve(rel) {
   }
   return null;
 }
-const SERVER = resolve('server.js');
+const SERVER = resolve('server.js') || resolve('server.js');
 const SCHEMA = resolve('scripts/seed-schema.cypher');
 const DEMO = resolve('examples/seed-demo.cypher');
 
-// Load .env so a custom graph's credentials are seen here too — without it the
+// Load .env so a personal graph's credentials are seen here too — without it the
 // launcher can't auth to an already-running container and tries to spin its own
-// (port clash → hang). No .env → no-op, defaults below apply.
+// (port clash → hang). No .env (e.g. public repo) → no-op, defaults below apply.
 const ENV_FILE = resolve('.env');
 if (ENV_FILE) dotenv.config({ path: ENV_FILE });
 

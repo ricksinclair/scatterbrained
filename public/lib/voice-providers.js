@@ -11,7 +11,7 @@ export function sttAvailable(w = globalThis) {
   return !!(w.SpeechRecognition || w.webkitSpeechRecognition);
 }
 
-// Voice preference (Rick, 2026-07-04): British by default. Explicit user pick wins;
+// Voice preference (you, 2026-07-04): British by default. Explicit user pick wins;
 // else the classic British male (Daniel on macOS), else any en-GB, else engine default.
 export function pickVoice(voices = [], preferred = null) {
   if (preferred) {

@@ -37,24 +37,54 @@ export function parseCards(text) {
 
 export function hasCards(text) { return parseCards(text).length > 0; }
 
-// Spacing scheduler — an SM-2-lite/Leitner hybrid. grade ∈ {again, hard, good, easy}.
-// `prev` = { interval(days), ease, reps } | undefined. Returns the next state +
-// `dueInDays`. Spacing scales with success (Cepeda: no fixed interval). Pure.
-const GRADES = { again: 0, hard: 1, good: 2, easy: 3 };
-export function nextReview(grade, prev = {}) {
-  const g = GRADES[grade] != null ? GRADES[grade] : 2;
-  let ease = prev.ease || 2.5;
-  let reps = prev.reps || 0;
-  let interval = prev.interval || 0;
-  ease = Math.max(1.3, ease + (g === 0 ? -0.2 : g === 1 ? -0.05 : g === 3 ? 0.1 : 0));
-  if (g === 0) { reps = 0; interval = 0; }                       // lapse → relearn today
-  else {
-    reps += 1;
-    if (reps === 1) interval = g === 3 ? 4 : 1;
-    else if (reps === 2) interval = g === 1 ? 3 : 6;
-    else interval = Math.round((prev.interval || 1) * (g === 1 ? 1.2 : ease));
+// Spacing scheduler — real FSRS (vendored ts-fsrs; ~20-30% fewer reviews than SM-2
+// at equal retention, benchmarked on 500M+ Anki reviews — don't hand-roll what the
+// settled algorithm does better). grade ∈ {again, hard, good, easy}. `prev` is the
+// previous return value (JSON-round-tripped via localStorage) | a legacy SM-2-lite
+// state { interval, ease, reps } | undefined. Returns { interval, reps, dueInDays,
+// fsrs } — same caller contract as before, with the FSRS card riding along.
+import { fsrs, createEmptyCard, Rating, State } from '../vendor/ts-fsrs.mjs';
+
+const DAY_MS = 86400000;
+const RATING = { again: Rating.Again, hard: Rating.Hard, good: Rating.Good, easy: Rating.Easy };
+const scheduler = fsrs();   // default params, fuzz off — deterministic
+
+// prev → an FSRS card. Three shapes: our own serialized card (dates as epoch-ms),
+// a legacy SM-2-lite state (seed stability from its interval so existing review
+// history keeps its spacing instead of restarting), or nothing (a new card).
+function reviveCard(prev, now) {
+  if (prev && prev.fsrs) {
+    const c = { ...prev.fsrs, due: new Date(prev.fsrs.due), last_review: prev.fsrs.last_review ? new Date(prev.fsrs.last_review) : undefined };
+    return c;
   }
-  return { interval, ease: Math.round(ease * 100) / 100, reps, dueInDays: interval };
+  if (prev && (prev.interval || prev.reps)) {                    // legacy SM-2-lite state
+    const interval = Math.max(prev.interval || 0, 0);
+    const last = new Date(now - interval * DAY_MS);
+    return {
+      ...createEmptyCard(last),
+      stability: Math.max(interval, 0.5),
+      difficulty: 5,
+      reps: prev.reps || 1,
+      state: State.Review,
+      scheduled_days: interval,
+      elapsed_days: interval,
+      last_review: last,
+      due: new Date(now),
+    };
+  }
+  return createEmptyCard(new Date(now));
+}
+
+export function nextReview(grade, prev = {}, now = Date.now()) {
+  const rating = RATING[grade] ?? Rating.Good;
+  const { card } = scheduler.next(reviveCard(prev, now), new Date(now), rating);
+  const interval = card.scheduled_days;                          // whole days; 0 = again today (learning step / lapse)
+  return {
+    interval,
+    reps: card.reps,
+    dueInDays: interval,
+    fsrs: { ...card, due: card.due.getTime(), last_review: card.last_review ? card.last_review.getTime() : undefined },
+  };
 }
 
 // Is a card due now? `state.dueAt` is an epoch-ms timestamp; no state → due (new).

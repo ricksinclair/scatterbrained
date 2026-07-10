@@ -49,6 +49,9 @@ const codeBlock = (text, lang) => {
 };
 
 export function renderDoc(text, { docPath = '' } = {}) {
+  // A leading frontmatter block (the docsite audience:/section:/order: escape hatch)
+  // is routing metadata, never content — strip before parsing. Mid-doc --- stays an hr.
+  const src = String(text || '').replace(/^---\r?\n[\s\S]*?\r?\n---(\r?\n|$)/, '');
   const toc = [];
   const seen = new Set();
   const md = new Marked({
@@ -57,7 +60,11 @@ export function renderDoc(text, { docPath = '' } = {}) {
       heading({ tokens, depth }) {
         const inner = this.parser.parseInline(tokens);
         const id = slugify(inner, seen);
-        if (depth <= 3) toc.push({ id, level: depth, text: inner.replace(/<[^>]*>/g, '') });
+        // TOC text is plain text (re-escaped at render) — strip tags AND decode the
+        // entities marked left behind, or "&" headings show as "&amp;" in the TOC.
+        const plain = inner.replace(/<[^>]*>/g, '')
+          .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        if (depth <= 3) toc.push({ id, level: depth, text: plain });
         return `<h${depth} id="${id}">${inner}</h${depth}>\n`;
       },
       code({ text: codeText, lang }) {
@@ -90,7 +97,7 @@ export function renderDoc(text, { docPath = '' } = {}) {
       html({ text: raw }) { return escHtml(raw); },   // raw HTML never passes through
     },
   });
-  const html = sanitizeDocHtml(md.parse(String(text || '')));
+  const html = sanitizeDocHtml(md.parse(src));
   return { html, toc };
 }
 

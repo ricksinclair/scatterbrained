@@ -1,5 +1,5 @@
 // ============================================================================
-// Rick's Personal Knowledge Graph — Schema
+// Scatterbrained — Knowledge Graph Schema
 // Safe to re-run: uses CREATE CONSTRAINT IF NOT EXISTS.
 // Node creation happens via MERGE in the application scripts; this file
 // establishes uniqueness constraints (which also create backing indexes).
@@ -33,15 +33,27 @@ CREATE CONSTRAINT lens_id                   IF NOT EXISTS FOR (n:Lens)          
 // file Sources by absolute path on every change-detection pass.
 CREATE INDEX source_file_path        IF NOT EXISTS FOR (n:Source)       ON (n.file_path);
 
-// Full-text (BM25/Lucene) index — the keyword retrieval lane (scripts/search.js).
+// Full-text (BM25/Lucene) index — the keyword retrieval lane (scripts/search.js), which
+// now backs the CLI, the Studio's search box, and the voice agent's search_nodes alike.
 // Spans every text-bearing label/property; missing properties are simply skipped.
-// `n.aliases` is indexed too, so a search for an entity's alternate name (or a
-// name a past session used before it was consolidated) resolves to the canonical
-// node. NOTE: if this index already exists, adding a property here does not alter
-// it — DROP INDEX knowledge_text and re-run this file to pick up `aliases`.
+// `n.aliases` and `n.former_name` are indexed so a search for an entity's alternate or
+// pre-rename name resolves to the canonical node (alias-aware search) — former_name was
+// previously matched only by the Studio's own CONTAINS query, so it MUST be indexed here
+// before that query is retired. It costs ~3.6pp of keyword hit@1 (more surface to match)
+// but fused stays at baseline, and losing alias search would be a shipped-feature regression.
+//
+// `n.tags` was TRIED AND REJECTED against the golden-questions gate (2026-07-09): tags are
+// short, high-frequency tokens, so BM25 over-rewards a tag match — keyword hit@1 -10.7pp,
+// fused hit@10 -3.6pp, MRR -0.5. Tags are a FILTER, not a relevance field; if tag search is
+// wanted, add a `tag:` filter over the tags[] property, don't feed them to BM25. Don't
+// re-add without beating scripts/eval-baseline.json.
+//
+// NOTE: if this index already exists, adding a property here does NOT alter it — you must
+// `DROP INDEX knowledge_text` and re-run this file. (Verified 2026-07-09: the live index
+// had never picked up `aliases` for exactly this reason.)
 CREATE FULLTEXT INDEX knowledge_text IF NOT EXISTS
   FOR (n:Insight|Idea|Rule|Project|Resource|Goal|Person|Organization|Skill|Source)
-  ON EACH [n.summary, n.full_text, n.name, n.title, n.description, n.purpose, n.role, n.aliases];
+  ON EACH [n.summary, n.full_text, n.name, n.title, n.description, n.purpose, n.role, n.aliases, n.former_name];
 
 // Vector index — the semantic lane (scripts/embed.js writes n.embedding + the
 // :Embeddable marker label; scripts/search.js queries it for hybrid recall).
@@ -55,7 +67,7 @@ CREATE VECTOR INDEX knowledge_vec IF NOT EXISTS
 // NODE LABEL REFERENCE
 // ============================================================================
 // Person       { name*, role, organization, jurisdiction, contact_info,
-//                relationship_to_rick, tags[], created_at }
+//                relationship_to_owner, tags[], created_at }
 // Organization { name*, type, jurisdiction, url, purpose, tags[], created_at }
 // Project      { name*, status, domain, description, repo_url, notion_url,
 //                tags[], created_at }

@@ -59,3 +59,34 @@ describe('renderThread', () => {
     expect(renderThread(setGhost([], 'listening'))).toContain('vt-ghost');
   });
 });
+
+describe('query grounding chips (#2a)', () => {
+  const g = [{ id: 'n1', name: 'One', label: 'Idea' }, { id: 'n2', name: 'Two', label: 'Goal' }];
+  it('an assistant message carries grounding; rendered as clickable data-node chips', () => {
+    const m = addMessage([], { role: 'assistant', text: 'because…', grounding: g });
+    expect(m[0].grounding).toHaveLength(2);
+    const html = renderThread(m);
+    expect(html).toContain('vt-ground');
+    expect(html).toContain('data-node="n1"');
+    expect(html).toContain('>Two</button>');
+    expect(html).toContain('grounded in');
+  });
+  it('no grounding (absent, empty, or id-less) → no chip markup', () => {
+    expect(renderThread(addMessage([], { role: 'assistant', text: 'plain' }))).not.toContain('vt-ground');
+    expect(renderThread(addMessage([], { role: 'assistant', text: 'x', grounding: [] }))).not.toContain('vt-ground');
+    expect(renderThread(addMessage([], { role: 'assistant', text: 'x', grounding: [{ name: 'no-id' }] }))).not.toContain('vt-ground');
+  });
+  it('chip text and attributes are escaped', () => {
+    const html = renderThread(addMessage([], { role: 'assistant', text: 'x', grounding: [{ id: 'a"b', name: '<X&Y>', label: 'Idea' }] }));
+    expect(html).not.toContain('<X&Y>');
+    expect(html).toContain('&lt;X&amp;Y&gt;');
+    expect(html).not.toContain('data-node="a"b"');
+  });
+  it('karaoke interruption markup leaves chips intact (they sit outside the bubble)', () => {
+    let m = addMessage([], { role: 'assistant', text: 'a grounded answer', grounding: g });
+    m = markInterrupted(m, 5);
+    const html = renderThread(m);
+    expect(html).toContain('vt-ground');
+    expect(html).toContain('vt-cutmark');
+  });
+});

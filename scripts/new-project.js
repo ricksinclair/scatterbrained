@@ -107,6 +107,16 @@ call it synced until the change-gate is clean.
 > rule each turn so it isn't relied on from memory — \`SessionStart\` (full rule, once) and a
 > terse \`UserPromptSubmit\` nudge (~40 tokens/turn). Review or disable them via \`/hooks\`.
 
+## Coding discipline — write the minimum that works (Ponytail)
+Before writing any code, walk the **decision ladder** and stop at the first step that satisfies the
+task: (1) does this need to exist? — if not, **skip it** (YAGNI); (2) does the **stdlib** do it?;
+(3) a **native platform** feature?; (4) an **already-installed dependency**?; (5) can it be **one
+line**?; (6) only then, write the minimum that works. Prefer deleting code and reusing what exists
+over adding abstractions/helpers/config until a real second caller forces them. **Never minimize
+away** (full rigor, always): security, input validation / trust boundaries, data-loss handling,
+error handling, accessibility. *The code ends up small because it is necessary, not golfed.*
+Adapted from [Ponytail](https://github.com/DietrichGebert/ponytail).
+
 ## Git
 Branch from main; conventional commits; PR before merge.
 `;

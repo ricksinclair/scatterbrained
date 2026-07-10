@@ -23,24 +23,55 @@ describe('parseCards', () => {
   });
 });
 
-describe('nextReview — spacing scheduler', () => {
-  it('grows the interval on successive good recalls', () => {
-    let s = nextReview('good');
-    expect(s.interval).toBe(1);
-    s = nextReview('good', s);
-    expect(s.interval).toBe(6);
-    const s3 = nextReview('good', s);
-    expect(s3.interval).toBeGreaterThan(6);
+describe('nextReview — FSRS scheduler (vendored ts-fsrs)', () => {
+  const T0 = Date.parse('2026-07-09T12:00:00Z');
+  const day = (n) => T0 + n * 86400000;
+  // review each step ON its due day (elapsed time is what grows FSRS stability)
+  const chain = (grades) => {
+    let s, t = T0;
+    for (const g of grades) { s = nextReview(g, s, t); t += Math.max(s.interval, 0.01) * 86400000; }
+    return s;
+  };
+
+  it('grows the interval across successive good recalls (learning step first)', () => {
+    const s1 = nextReview('good', undefined, T0);
+    expect(s1.interval).toBe(0);                       // learning step — again today
+    const s2 = chain(['good', 'good']);
+    expect(s2.interval).toBeGreaterThan(0);
+    const s3 = chain(['good', 'good', 'good']);
+    expect(s3.interval).toBeGreaterThan(s2.interval);  // stability compounds
   });
-  it('resets to relearn on "again" and lowers ease', () => {
-    const learned = nextReview('good', nextReview('good'));
-    const lapsed = nextReview('again', learned);
+  it('"again" is a lapse: relearn today, stability collapses', () => {
+    const learned = chain(['good', 'good', 'good']);
+    const lapsed = nextReview('again', learned, day(30));
     expect(lapsed.interval).toBe(0);
-    expect(lapsed.reps).toBe(0);
-    expect(lapsed.ease).toBeLessThan(learned.ease);
+    expect(lapsed.fsrs.stability).toBeLessThan(learned.fsrs.stability);
+    expect(lapsed.fsrs.lapses).toBe(1);
   });
-  it('easy jumps further than good', () => {
-    expect(nextReview('easy').interval).toBeGreaterThan(nextReview('good').interval);
+  it('easy schedules further than good from the same state', () => {
+    const base = chain(['good', 'good']);
+    const t = day(base.interval + 2);
+    expect(nextReview('easy', base, t).interval).toBeGreaterThan(nextReview('good', base, t).interval);
+  });
+  it('the FSRS state JSON-round-trips through localStorage-style storage', () => {
+    const s = chain(['good', 'good']);
+    const revived = JSON.parse(JSON.stringify(s));
+    const next = nextReview('good', revived, day(s.interval + 2));
+    expect(next.interval).toBeGreaterThan(0);
+    expect(next.fsrs.reps).toBe(s.fsrs.reps + 1);
+  });
+  it('legacy SM-2-lite state seeds FSRS instead of restarting: a mature card stays spaced out', () => {
+    const legacy = { interval: 20, ease: 2.6, reps: 5 };   // what old localStorage holds
+    const migrated = nextReview('good', legacy, T0);
+    expect(migrated.interval).toBeGreaterThan(10);         // history respected, not relearned from day 1
+    expect(migrated.fsrs.reps).toBe(6);
+    const fresh = nextReview('good', undefined, T0);
+    expect(migrated.interval).toBeGreaterThan(fresh.interval);
+  });
+  it('FSRS growth diverges from the old SM-2 ease ladder (not a reskin)', () => {
+    // old scheduler: 3rd good = round(6 * 2.5) = 15 exactly; FSRS derives from stability
+    const s3 = chain(['good', 'good', 'good']);
+    expect(s3.interval).not.toBe(15);
   });
 });
 

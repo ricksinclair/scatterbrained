@@ -79,6 +79,13 @@ let lastNodeClick = { id: null, t: 0 };       // for double-click-to-open-file d
 let NODES = [], LINKS = [], byId = {};
 let domains = [];
 let hover = null, sel = null, searchHits = new Set();
+// Query grounding (#2a): the evidence nodes behind the assistant's current answer.
+// Painted as an accent double-ring + forced label; never dims or moves anything else.
+let groundingHits = new Map();   // id → { name, label }
+function setGrounding(list) {
+  groundingHits = new Map((list || []).filter((n) => n && n.id).map((n) => [n.id, n]));
+  poke();
+}
 // Filtering: a multi-select set of node-type labels (empty = all) + a "needs review"
 // toggle. The left dock has quick Projects/Goals shortcuts; the HUD filter panel is the
 // full multi-select. Both mutate this one state and call applyFilter() — single source.
@@ -371,7 +378,7 @@ function computeLabelVisibility(scale) {
   const searchOn = searchHits.size > 0;
   // Only the selected/hovered/searched node is *forced* (always drawn). Focus-subgraph
   // neighbors get a big priority boost but still declutter, so they never smear.
-  const forced = (n) => sel === n.id || hover === n || (searchOn && searchHits.has(n.id));
+  const forced = (n) => sel === n.id || hover === n || (searchOn && searchHits.has(n.id)) || groundingHits.has(n.id);
   const cand = [];
   for (const n of NODES) {
     if (!isFinite(n.x) || !isFinite(n.y) || n.bornTime > selT()) continue;
@@ -403,7 +410,10 @@ function paintNode(node, ctx, scale) {
   const sf = searchOn ? (searchHits.has(node.id) ? 1 : 0.22) : 1;
   const prov = node.label === 'Source' || node.label === 'Organization';
   const recede = prov && !(focusId && doi >= 0.9) ? 0.55 : 1;
-  const dim = (future ? 0.05 : 1) * doi * lf * sf * recede;
+  // Evidence nodes stay legible even under a filter/search/focus dim — the answer's
+  // grounding must be visible wherever it lives (never dims OTHERS; only lifts its own).
+  const isEvidence = groundingHits.has(node.id);
+  const dim = Math.max((future ? 0.05 : 1) * doi * lf * sf * recede, isEvidence && !future ? 0.95 : 0);
   if (dim < 0.015) return;
   const r = node.r, GLOW = themeState.calm ? 0 : themeState.theme.glow, isSel = sel === node.id, isFocus = focusId === node.id;
   const px = 1 / scale;                                          // 1 screen px in graph units
@@ -424,6 +434,16 @@ function paintNode(node, ctx, scale) {
   g.addColorStop(1, rgba([col[0] * 0.7, col[1] * 0.7, col[2] * 0.7], dim));
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(node.x, node.y, r, 0, 7); ctx.fill(); ctx.shadowBlur = 0;
   if (isSel) { ctx.strokeStyle = themeState.theme.ring; ctx.lineWidth = 2 * px; ctx.beginPath(); ctx.arc(node.x, node.y, r + 2 * px, 0, 7); ctx.stroke(); }
+  if (isEvidence && !future) {
+    // the evidence double-ring: accent-colored, distinct from selection (solid ring),
+    // pin (dashed), and stale (amber) — reads as "this answer echoes from here"
+    ctx.strokeStyle = themeState.theme.accent;
+    ctx.lineWidth = 1.6 * px; ctx.globalAlpha = 0.95;
+    ctx.beginPath(); ctx.arc(node.x, node.y, r + 4.5 * px, 0, 7); ctx.stroke();
+    ctx.lineWidth = 1.1 * px; ctx.globalAlpha = 0.45;
+    ctx.beginPath(); ctx.arc(node.x, node.y, r + 7.5 * px, 0, 7); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 
   const show = labelShow.has(node.id);   // chosen by the decluttering pass (no overlaps)
   if (show && dim > 0.12) {
@@ -570,10 +590,17 @@ function selectNode(n) {
     : Promise.resolve(null);
   Promise.all([nodeReq, srcReq, lensReq]).then(([{ node }, { source }, lensRes]) => {
     node = node || {};
-    // Off-canvas opens (voice card ↗, __open by id) may pass a bare {id}; backfill identity
-    // from the fetched node so the report/inspector header renders a real name + type, not blanks.
+    // Off-canvas opens (voice card ↗, grounding chip, __open by id) may pass a bare {id};
+    // backfill identity from the fetched node AND repaint the inspector header, which was
+    // drawn before the fetch and would otherwise stay blank/"undefined" for off-canvas nodes.
+    const backfilled = (!n.name && node.name) || (!n.label && node.label);
     if (!n.name && node.name) n.name = node.name;
     if (!n.label && node.label) n.label = node.label;
+    if (backfilled && !reportOpen) {
+      document.getElementById('i-name').textContent = n.name || '';
+      document.getElementById('i-type').textContent = (n.label || '') + (n.embeddable ? ' · indexed' : '');
+      document.getElementById('i-dot').style.background = rgba(colorOf(n.label), 1);
+    }
     // The composable inspector: resolveLayout picks components from the node's
     // content-signals, the registry renders each. Derivation lives in node-view.js —
     // shared with the assistant's dynamic panels (same shape, no drift).
@@ -1374,7 +1401,7 @@ async function getRepos() {
   return cbRepos;
 }
 const requestLensClose = () => navigate({ type: 'close' });   // threaded into every lens (C2)
-const cbUi = initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, getRepos, prefRepo: null });
+const cbUi = initCodebase({ esc, pauseMainGraph, resumeMainGraph, openFile, getRepos, prefRepo: 'scatterbrained' });
 // ── Agents surface → lib/agents-ui.js (embeds Slipway, the local + hosted model/agent runtime) ──
 // showInGraph = the capture receipt's payoff: back to the constellation, focused on the
 // new Source (refreshGraphData(name) refetches, then focuses once the node lands).
@@ -1461,7 +1488,7 @@ const agentLauncher = (function initAgentLaunch() {
 })();
 
 // ── Code review surface (#34) → lib/review-ui.js (repos shared via getRepos, like the codebase map) ──
-const reviewUi = initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos, prefRepo: null });
+const reviewUi = initReview({ esc, trunc, pauseMainGraph, resumeMainGraph, openNoteModal, getRepos, prefRepo: 'scatterbrained' });
 
 // ── folder permissions pane → lib/perms-ui.js (grant/revoke resets the shared repo cache) ──
 const perms = initPerms({ esc, onRootsChanged: () => { cbRepos = null; } });
@@ -1491,6 +1518,8 @@ const voiceUi = initVoice({
       selectNode(byId[node_id] || { id: node_id, name: node_name });   // off-canvas → selectNode fetches by id
     }
   },
+  // query grounding (#2a): the evidence subgraph behind the current answer, or null to clear
+  onGrounding: setGrounding,
 });
 
 // Add-link intake (#19): save a web/YouTube link as a Resource, fuzzy-attach to a

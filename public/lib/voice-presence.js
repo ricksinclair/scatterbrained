@@ -1,4 +1,4 @@
-// voice-presence.js — the model's on-screen representation (VOICE; Rick 2026-07-04):
+// voice-presence.js — the model's on-screen representation (VOICE; you 2026-07-04):
 // deliberately NON-anthropomorphic. A small state glyph (css-animated ring/bars) plus,
 // in Phase 2, subtitle windowing for the collapsed-pill strip. Pure: state in, html out.
 
@@ -17,7 +17,7 @@ export function renderGlyph(state = 'idle') {
   return `<span class="vp-glyph vp-${s}" data-state="${s}" role="img" aria-label="assistant ${s}"><span class="vp-ring"></span>${bars}</span>`;
 }
 
-// The ORB — the assistant's primary on-screen presence (Rick, 2026-07-04, from the
+// The ORB — the assistant's primary on-screen presence (you, 2026-07-04, from the
 // Jarvis-meets-Wispr-Flow direction): a circular visual bottom-right whose motion IS the
 // state (breathing=idle, rippling=listening, orbiting arc=thinking, waveform=speaking).
 // The chat window expands from and collapses back into it. Still deliberately

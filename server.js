@@ -32,6 +32,7 @@ import { hashText, validateSave, gitArgs, parseLog, commitMessage } from './lib/
 import { getDriver, run, toPlain } from './scripts/lib/db.js';
 import { IDENTITY_LABELS as ALIAS_LABELS, NAME_FIELDS as ALIAS_NAME_FIELDS, brandRegexCypher } from './scripts/lib/aliases.js';
 import { keysLookAlike } from './scripts/lib/identity.js';
+import { searchGraph, demoteSuperseded } from './scripts/search.js';
 import { REL_TYPES, REL_SHAPES, isValidRelType, isValidRelShape, isProvenanceRelType } from './scripts/lib/vocab.js';
 import { isScheduleKind, isIsoDate, isRecurKind } from './public/lib/schedule.js';
 import { effectiveDate, recurLabel } from './public/lib/recurrence.js';
@@ -45,7 +46,7 @@ import { available as pumlAvailable, render as pumlRender } from './lib/plantuml
 import { prepareSvg } from './public/lib/diagram-svg.js';
 import { toPlantuml } from './public/lib/graph-puml.js';
 import { aiDiagram as aiDiagramLane } from './lib/ai-diagram.js';
-import { buildDocTree } from './public/lib/docsite.js';
+import { buildDocTree, parseDocMeta, firstH1 } from './public/lib/docsite.js';
 import { buildLocalSystemPrompt, digestBlock, overviewBlock, recentBlock, findingsBlock, PERSONA_BRIEF } from './lib/persona.js';
 import { fetchDigestRows } from './scripts/lib/digest-query.js';
 import { createVoiceSession, LISTEN_DEFAULT_S, LISTEN_MAX_S, LISTEN_IDLE_S } from './lib/voice-session.js';
@@ -532,17 +533,19 @@ const Q_SYNC = `
   OPTIONAL MATCH (s:SyncState)
   RETURN toString(coalesce(s.last_full_sync, s.updated_at)) AS last_sync`;
 
-const Q_SEARCH = `
-  MATCH (n)
-  WHERE toLower(coalesce(n.name, n.title, n.summary, '')) CONTAINS toLower($q)
-     OR toLower(coalesce(n.description, n.full_text, '')) CONTAINS toLower($q)
-     OR toLower(coalesce(n.former_name, '')) CONTAINS toLower($q)
-  WITH n, COUNT { (n)--() } AS degree
-  RETURN elementId(n) AS id, ${PRIMARY_LABEL} AS label,
-         coalesce(n.name, n.title, n.summary, n.id) AS name,
-         n.former_name AS former_name,
-         (n.valid_until IS NOT NULL) AS superseded
-  ORDER BY degree DESC LIMIT 12`;
+// ONE retrieval path. The Studio's search box, the voice agent's search_nodes tool, and the
+// local lane's grounding all used to run a private CONTAINS query ordered by node DEGREE,
+// which buried a fresh, specific answer under popular unrelated hubs — the reason the voice
+// agent "couldn't answer a lot of questions". They now call the same hybrid searchGraph()
+// (BM25 + vectors, fused by weighted RRF) that scripts/search.js ships and the
+// golden-questions harness scores, so what gets measured is what voice actually uses.
+// Superseded facts are kept but demoted, never dropped (invalidate-don't-delete).
+async function searchNodes(q, limit = 12) {
+  const { results } = await searchGraph(driver, q, { limit, includeSuperseded: true });
+  return demoteSuperseded(results).map((r) => ({
+    id: r.eid, label: r.label, name: r.key, former_name: r.former_name, superseded: r.superseded,
+  }));
+}
 
 const Q_NODE = `
   MATCH (n) WHERE elementId(n) = $id
@@ -792,7 +795,7 @@ async function api(pathname, params) {
   if (pathname === '/api/search') {
     const q = String(params.q || '').trim();
     if (!q) return { results: [] };
-    return { results: rows(await run(driver, Q_SEARCH, { q })) };
+    return { results: await searchNodes(q) };
   }
   if (pathname === '/api/node') {
     const node = rows(await run(driver, Q_NODE, { id: String(params.id || '') }))[0] || null;
@@ -842,17 +845,54 @@ async function api(pathname, params) {
   }
   if (pathname === '/api/docs') {
     // The Docs lens. No params → projects with ingested doc Sources (markdown/text with
-    // a file_path, current only). ?project= → that project's classified doc tree
+    // a file_path, current only), plus the BUILT-IN manual — the app's own docs
+    // (public/docs/**/*.md), served as app assets with no graph rows so it works day one
+    // with an empty graph, or Neo4j down. ?project= → that project's classified doc tree
     // (docsite.js taxonomy — built entirely from what the document lane already recorded;
-    // no re-ingestion). Each doc carries `readable` (inside the granted read roots) so a
-    // blocked doc shows the grant on-ramp instead of a dead-end click.
+    // no re-ingestion; frontmatter escape hatch read from the file head per request).
+    // Each graph doc carries `readable` (inside the granted read roots) so a blocked doc
+    // shows the grant on-ramp instead of a dead-end click; built-in docs are always
+    // readable and fetched straight from the static server (never /api/file — the app
+    // install dir is deliberately NOT a granted read root).
+    const BUILTIN = '__scatterbrained__';   // reserved id — a real Project is named 'Scatterbrained'
+    const builtinDocs = () => {
+      const base = path.join(PUBLIC, 'docs');
+      const files = [];
+      const walkDocs = (dir) => {
+        let entries = [];
+        try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+        for (const e of entries) {
+          if (e.isDirectory()) walkDocs(path.join(dir, e.name));
+          else if (/\.md$/i.test(e.name)) files.push(path.join(dir, e.name));
+        }
+      };
+      walkDocs(base);
+      return files.map((fp) => {
+        const rel = path.relative(base, fp).split(path.sep).join('/');
+        let text = '';
+        try { text = fs.readFileSync(fp, 'utf8'); } catch { /* enumerated but unreadable: skip below */ }
+        return text && {
+          id: 'builtin:' + rel, title: 'scatterbrained/' + rel,
+          display_title: firstH1(text) || rel, file_path: '/docs/' + rel,
+          source_kind: 'markdown', readable: true, builtin: true, meta: parseDocMeta(text),
+        };
+      }).filter(Boolean);
+    };
     if (!params.project) {
-      const recs = await run(driver, `
-        MATCH (s:Source)-[:INFORMS]->(p:Project)
-        WHERE s.source_kind IN ['markdown', 'text'] AND s.file_path IS NOT NULL
-          AND s.valid_until IS NULL
-        RETURN p.name AS name, count(DISTINCT s) AS doc_count ORDER BY doc_count DESC`);
-      return { projects: recs.map((r) => toPlain(r.toObject())) };
+      let projects = [];
+      try {
+        const recs = await run(driver, `
+          MATCH (s:Source)-[:INFORMS]->(p:Project)
+          WHERE s.source_kind IN ['markdown', 'text'] AND s.file_path IS NOT NULL
+            AND s.valid_until IS NULL
+          RETURN p.name AS name, count(DISTINCT s) AS doc_count ORDER BY doc_count DESC`);
+        projects = recs.map((r) => toPlain(r.toObject()));
+      } catch { /* graph down/empty — the manual below still shows */ }
+      return { projects: [{ name: BUILTIN, label: 'Scatterbrained manual', doc_count: builtinDocs().length }, ...projects] };
+    }
+    if (params.project === BUILTIN) {
+      const docs = builtinDocs();
+      return { project: BUILTIN, tree: buildDocTree(docs), doc_count: docs.length };
     }
     const recs = await run(driver, `
       MATCH (s:Source)-[:INFORMS]->(p:Project {name: $project})
@@ -864,7 +904,19 @@ async function api(pathname, params) {
     const docs = recs.map((r) => toPlain(r.toObject())).map((d) => {
       let readable = false;
       try { readable = isWithinRoots(realOf(absSrc(d.file_path)), SOURCE_ROOTS); } catch { readable = false; }
-      return { ...d, readable };
+      let meta;
+      if (readable && d.source_kind === 'markdown') {
+        // The frontmatter escape hatch: a ~2KB head read per doc (corpora are small).
+        // A block truncated at 2KB has no closing fence → {} → convention rules apply.
+        try {
+          const fd = fs.openSync(realOf(absSrc(d.file_path)), 'r');
+          const buf = Buffer.alloc(2048);
+          const n = fs.readSync(fd, buf, 0, 2048, 0);
+          fs.closeSync(fd);
+          meta = parseDocMeta(buf.toString('utf8', 0, n));
+        } catch { /* unreadable head: no meta */ }
+      }
+      return { ...d, readable, ...(meta && Object.keys(meta).length ? { meta } : {}) };
     });
     return { project: String(params.project), tree: buildDocTree(docs), doc_count: docs.length };
   }
@@ -1176,7 +1228,7 @@ async function voiceChat({ q, node_id, history, model } = {}) {
   try {
     const q = utterance.replace(/[^\w\s'-]/g, ' ').trim().slice(0, 120);
     if (q.length > 3) {
-      const hits = rows(await run(driver, Q_SEARCH, { q })).slice(0, 3);
+      const hits = (await searchNodes(q, 3));
       if (hits.length) {
         const withText = rows(await run(driver,
           `UNWIND $ids AS id MATCH (n) WHERE elementId(n) = id
@@ -1437,7 +1489,7 @@ const MCP_TOOLS = [
     handler: async (args) => {
       const q = String(args.q || '').trim().slice(0, 200);
       if (!q) return { results: [] };
-      return { results: rows(await run(driver, Q_SEARCH, { q })).map((r) => ({ id: r.id, name: r.name, label: r.label, superseded: r.superseded })) };
+      return { results: (await searchNodes(q)).map((r) => ({ id: r.id, name: r.name, label: r.label, superseded: r.superseded })) };
     },
   },
   {
@@ -1533,7 +1585,7 @@ const MCP_TOOLS = [
     description: `Run a WRITE Cypher statement against the knowledge graph — full session parity for trusted agents (safety net: the graph is git-backed-up on every sync). HOUSE RULES, non-negotiable: (1) MERGE on natural keys, never bare CREATE — re-runs must not duplicate (Project/Idea/Goal/Person/Organization/Skill key on name, Resource/Source on title, Insight on id); set created_at = coalesce(n.created_at, datetime()). (2) Pass ALL text values as $parameters, never inline literals. (3) Relationship types are a CLOSED vocabulary: ${REL_TYPES.join(', ')} — anything else fails lint. (4) Connect every new node with at least one edge (orphans are invisible). (5) NEVER delete to correct — supersede: set valid_until = datetime() and superseded_by. Prefer capture_note/schedule for their cases; this is for Insights, Ideas, and structure.`,
     inputSchema: { type: 'object', properties: { cypher: { type: 'string' }, params: { type: 'object', description: 'query parameters — all text values go here' } }, required: ['cypher'] },
     handler: async (args) => {
-      // Added 2026-07-04 at Rick's direction: the voice-loop agent gets the same graph
+      // Added 2026-07-04 at your direction: the voice-loop agent gets the same graph
       // reach as an interactive session; backups + lint are the recovery story.
       const session = driver.session();
       try {

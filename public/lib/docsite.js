@@ -1,8 +1,11 @@
 // docsite.js — the standard doc taxonomy + per-project doc-tree builder (pure).
 // Convention-over-manifest: a project's doc set is classified from data ALREADY on its
-// Source nodes (title = '<root>/<relPath>', display_title) — no frontmatter, no manifest,
-// no re-ingestion. The taxonomy is the SINGLE source of truth shared by the Docs lens,
-// /api/docs, and the new-project scaffold, so every project gets uniform navigation:
+// Source nodes (title = '<root>/<relPath>', display_title) — no manifest, no re-ingestion.
+// Frontmatter exists only as a per-doc escape hatch (audience:/section:/order:, parsed
+// per-request by /api/docs via parseDocMeta) for the rare doc a rename can't fit; invalid
+// values fall back to the convention rules. The taxonomy is the SINGLE source of truth
+// shared by the Docs lens, /api/docs, and the new-project scaffold, so every project
+// gets uniform navigation:
 //   user    — reading the app        admin — running a packaged/self-hosted server
 //   builder — changing the code      (+ "Working notes" for everything unclassified)
 // Docs that don't match a section are NEVER hidden — they group by directory under
@@ -63,8 +66,39 @@ export function docPathOf(title) {
   return inRoot.replace(/\.[a-z0-9]+$/i, '').toLowerCase();
 }
 
-// → { audience, section } | null (null = Working notes)
-export function classifyDoc({ title } = {}) {
+// Leading frontmatter block → { audience?, section?, order? } (only those keys; values
+// lowercased, order parsed as an integer). {} when absent/unclosed — never throws.
+export function parseDocMeta(text) {
+  const s = String(text || '');
+  const m = /^---\r?\n([\s\S]*?)\r?\n---(\r?\n|$)/.exec(s);
+  if (!m) return {};
+  const meta = {};
+  for (const line of m[1].split('\n')) {
+    const kv = /^(audience|section|order):\s*(.+?)\s*$/.exec(line.trim());
+    if (!kv) continue;
+    if (kv[1] === 'order') { const n = parseInt(kv[2], 10); if (Number.isFinite(n)) meta.order = n; }
+    else meta[kv[1]] = kv[2].toLowerCase();
+  }
+  return meta;
+}
+
+// First H1 (`# ...`) — display-title derivation for built-in docs; mirrors the document
+// lane's firstHeading (cheap, tolerant of frontmatter). null when there is none.
+export function firstH1(text) {
+  for (const line of String(text || '').split('\n').slice(0, 200)) {
+    const m = /^#\s+(.+?)\s*#*\s*$/.exec(line.trim());
+    if (m) return m[1].trim();
+  }
+  return null;
+}
+
+// → { audience, section } | null (null = Working notes). A valid meta override
+// (audience + section, section belonging to that audience) beats the filename rules.
+export function classifyDoc({ title, meta } = {}) {
+  if (meta && meta.audience && meta.section) {
+    const aud = DOC_TAXONOMY.find((a) => a.id === meta.audience);
+    if (aud && aud.sections.some((s) => s.id === meta.section)) return { audience: meta.audience, section: meta.section };
+  }
   const p = docPathOf(title);
   if (!p) return null;
   for (const r of RULES) if (r.re.test(p)) return { audience: r.a, section: r.s };
@@ -80,6 +114,7 @@ export function buildDocTree(sources = []) {
   const docOf = (s) => ({
     title: s.title, display_title: s.display_title || s.title, file_path: s.file_path,
     source_kind: s.source_kind, readable: s.readable !== false, id: s.id,
+    ...(s.builtin ? { builtin: true } : {}), ...(s.meta && s.meta.order != null ? { order: s.meta.order } : {}),
   });
   for (const s of sources) {
     const c = classifyDoc(s);
@@ -94,7 +129,9 @@ export function buildDocTree(sources = []) {
       notes.get(dir).push(docOf(s));
     }
   }
-  const byName = (a, b) => String(a.display_title).localeCompare(String(b.display_title));
+  // order: (frontmatter, sparse) first, then alphabetical — Quickstart before Reference.
+  const byName = (a, b) => ((a.order ?? Infinity) - (b.order ?? Infinity)) ||
+    String(a.display_title).localeCompare(String(b.display_title));
   const audiences = DOC_TAXONOMY.map((aud) => ({
     id: aud.id, label: aud.label,
     sections: aud.sections
