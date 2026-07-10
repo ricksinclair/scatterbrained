@@ -10,6 +10,42 @@ can follow, then the technical details underneath.
 > believed six months ago and why, with every claim tracing back to its source. No cloud,
 > no subscription — it's yours.
 
+## [0.2.0-alpha.4] — Talk to your map, fully on your own machine (2026-07-09)
+
+**TL;DR (explain-like-I'm-5):** Now you can *talk* to your second brain — and everything runs on
+your own computer, no cloud. Scatterbrained bundles its little local-AI engine (**Slipway**) and
+starts it for you automatically. The first time, you pick **one small model** to download (a couple
+of gigabytes — not a giant one that takes forever), and then you can speak to your graph, ask what's
+due or stale, and capture notes by voice — offline. The engine is also sturdier: a bug that
+sometimes made a model **refuse to load** (and then just sit there) is fixed.
+
+**Technical:**
+
+### Added
+- **Bundled Act plane.** The Slipway runtime (a zero-dependency Python control panel that serves
+  local MLX/Ollama models and launches agent CLIs) is now **vendored into the release** at
+  [`slipway/`](slipway/) and **autostarted** with the Studio on `127.0.0.1:8765`. Two processes,
+  one install; models are never loaded until you ask, so an idle runtime costs ~nothing. Opt out
+  with `SLIPWAY_AUTOSTART=0`; override with `SLIPWAY_DIR`. `slipwayDirCandidates()` resolves
+  `SLIPWAY_DIR → ./slipway (bundled) → ~/Projects/mlx-control (dev)` and the Studio runs the first
+  that exists. Vendored via a sanitizing derivation (`scripts/vendor-slipway.sh`, whole-subtree
+  leak-gate; the personal ops file and the 222 MB docs-site are excluded).
+- **README "Talk to it" getting-started** — the bundled two-process flow, first-run **small-model**
+  guidance (a ~3–4 B 4-bit MLX build, not the ~28 GB default), Web Speech voice (zero-setup) with
+  optional local Whisper/Kokoro, and `bin/summon-claude.sh` for a subscription-Claude loop.
+- **CI now compiles and unit-tests the bundled runtime** (`py_compile` + the Slipway `unittest`
+  suite, including the load-deadlock regression); the whole-tree leak-gate already covers `slipway/`.
+
+### Fixed
+- **A loaded model could "refuse to load" for up to 5 minutes.** Slipway treated a stale `.starting`
+  marker as proof of an in-flight load, so a load that died without cleaning its marker wedged every
+  retry with "already starting…". It now trusts only a live model-server process; a marker with no
+  process (older than the spawn-race window) is cleared and the model respawns. (Surfaced as the
+  voice Load-model button waiting 90 s then reporting "model did not come up".)
+- **No-runtime hint no longer points at a dev path.** The "Local runtime is down" empty state used to
+  suggest `python3 ~/Projects/mlx-control/server.py`; it now says to restart the Studio (which
+  re-autostarts the bundled copy).
+
 ## [0.2.0-alpha.3] — Ask your map for a chart, docs that read like a site, and an assistant that tells the truth (2026-07-07)
 
 **TL;DR (explain-like-I'm-5):** The assistant can now **draw**. Ask it something countable —

@@ -71,7 +71,7 @@ export function brainEmptyState(brain = {}) {
   return {
     reason: 'no-slipway',
     headline: 'Local runtime is down',
-    hint: 'Slipway isn’t answering on :8765 — it normally starts with the Studio. Restart the Studio, or run it yourself: python3 ~/Projects/mlx-control/server.py.',
+    hint: 'Slipway isn’t answering on :8765 — it normally starts with the Studio. Restart the Studio to bring it back up (SLIPWAY_AUTOSTART=0 disables that).',
     action: null,
   };
 }

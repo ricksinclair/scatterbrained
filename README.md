@@ -74,6 +74,28 @@ Config via env (see [`.env.example`](.env.example)): `NEO4J_URI` (default `bolt:
 seed. To let the file viewers read your documents, list the allowed roots in
 `document-sources.json` — the Studio never reads outside them.
 
+### Talk to it — the local AI (Act) plane
+
+Scatterbrained can **see** and **understand** your graph on its own. To **act** — talk to it,
+ask it about what's due or stale, capture notes by voice — it uses a local model, served by a
+bundled runtime called **Slipway** (in [`slipway/`](slipway/)). Two processes, one install:
+
+1. **It starts itself.** `npm start` autostarts Slipway on `:8765` alongside the Studio. Models
+   are **never loaded until you ask**, so an idle runtime costs almost nothing. Opt out with
+   `SLIPWAY_AUTOSTART=0`; point `SLIPWAY_DIR` at your own checkout to override the bundled copy.
+2. **First run: download one small model.** A fresh machine has no models on disk. Open Slipway
+   (the **manage models in Slipway ↗** link in the voice panel, or <http://127.0.0.1:8765>) →
+   **Browse** → pull a **small 4-bit MLX model** to start — search `mlx-community`, pick a ~3–4B
+   build (~2–3 GB, quick to download, runs on a 16 GB Mac). Save the big
+   `mlx-community/Qwen3.6-35B-A3B-6bit` (~28 GB) for when you want maximum quality.
+3. **Talk.** Open the voice orb and **hold Space** to speak (release to send), or type. Voice uses
+   the browser's built-in speech (Web Speech) by default — **zero setup**. For fully-offline voice,
+   optional local Whisper (STT) and Kokoro (TTS) helpers ship in [`bin/`](bin/).
+4. **Prefer your Claude subscription?** `bash bin/summon-claude.sh` puts a subscription-billed
+   Claude session on the same voice loop over MCP — no API keys, no per-token cost.
+
+Requires Apple Silicon for local MLX models. Ollama models work too if you run Ollama.
+
 ## Try the demo
 
 [`examples/`](examples/) is a small, fictional engineering story ("Northwind Logistics") that
@@ -91,6 +113,10 @@ to run it on a throwaway Neo4j by hand.
   (lint, search, context-assembly, Notion + local-document capture lanes, bi-temporal supersede).
   Clone the repo and run any of it via the `npm run` scripts (`npm run lint:graph`,
   `npm run resume`, `npm run search`, …).
+- **Local AI runtime (Act)** — `slipway/`: a bundled, zero-dependency Python control panel
+  (**Slipway**) that serves local models (MLX via `vllm-mlx`, or Ollama) and launches agent CLIs.
+  The Studio autostarts it and federates over `127.0.0.1:8765`, so everything — see, understand,
+  and act — runs on your machine. Vendored from its own repo; self-contained.
 
 ## Develop
 
