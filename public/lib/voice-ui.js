@@ -14,8 +14,9 @@ import { esc } from './dom.js';
 import { sttAvailable, createSTT, createRecorderSTT, createTTS, createServerTTS, pickVoice } from './voice-providers.js';
 import { renderAgendaBody, renderSearchBody, renderNodeBody, renderVizBody } from './voice-panels.js';
 import { deriveNodeView } from './node-view.js';
+import { consentView, pickerOptions } from './model-consent.js';
 
-export function initVoice({ getSelectedId = () => null, getUi = () => null, onNavigate = () => {} } = {}) {
+export function initVoice({ getSelectedId = () => null, getUi = () => null, onNavigate = () => {}, onGrounding = () => {} } = {}) {
   const pop = document.getElementById('voice');
   const thread = document.getElementById('vc-thread');
   const input = document.getElementById('vc-input');
@@ -57,7 +58,7 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
   const openMic = () => localStorage.getItem('scatterbrained:voice:openmic') === '1';
   const pttKey = () => localStorage.getItem('scatterbrained:voice:ptt') || 'space';
 
-  // ── one voice, many tabs: leader election (Rick, 2026-07-04 — a second open tab
+  // ── one voice, many tabs: leader election (you, 2026-07-04 — a second open tab
   // doubled memory pressure). The Web Locks holder is the ONLY tab that speaks, listens,
   // or acks; others render read-only and take over automatically when the leader closes.
   let leader = !('locks' in navigator);   // ancient browser → behave as sole tab
@@ -75,6 +76,9 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
   let agent = { connected: false, model: null, stale: false };   // the MCP lane (SSE-fed)
   let localModel = null;             // explicit local pick (honored on Ollama only)
   let loadingModel = null;           // model id mid-load via the empty-state button
+  // Everything Slipway COULD serve (with sizes), not just what's resident — /api/ai/ping
+  // reports only the model in memory, so the picker could never offer a switch without this.
+  let loadable = [];
   let speaking = null;               // { handle, text, msgId? } while TTS is running
   let wasInterrupted = false;        // barge-in happened → flag rides on the NEXT utterance
   let state = 'idle';
@@ -110,7 +114,7 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
       const es = brainEmptyState(brain);
       const short = (id) => String(id || '').split('/').pop();
       if (loadingModel) {
-        empty.innerHTML = `<p><b>Loading ${esc(short(loadingModel))}…</b> — an MLX load takes 15–60s. The orb wakes when it's ready.</p>`;
+        empty.innerHTML = `<p><b>Loading ${esc(short(loadingModel))}…</b> — a local model load takes 15–60s. The orb wakes when it's ready.</p>`;
       } else if (es) {
         const btn = es.action && es.action.model
           ? `<button id="vc-load" class="vc-load" data-model="${esc(es.action.model)}">Load ${esc(short(es.action.model))}</button>`
@@ -133,11 +137,15 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
     micBtn.title = live ? 'Listening — click to stop' : 'Talk — click once to start listening, again to stop';
     muteBtn.textContent = muted ? '🔇' : '🔊';
     muteBtn.title = muted ? 'Voice replies off — click to unmute' : 'Voice replies on — click to mute';
-    // the brain picker: the MCP agent (when connected) + every local model
-    const opts = [];
-    if (agent.connected) opts.push(`<option value="agent">agent · ${esc(agent.model)}</option>`);
-    for (const m of (brain.models || [])) opts.push(`<option value="local:${esc(m)}"${!agent.connected && (localModel || brain.model) === m ? ' selected' : ''}>${esc(brain.provider || 'local')} · ${esc(m)}</option>`);
-    picker.innerHTML = opts.join('');
+    // The brain picker: the MCP agent (when connected) + EVERY loadable local model, resident
+    // or not. Picking a non-resident one asks for consent, then loads it (see picker.onchange).
+    const opts = pickerOptions({
+      models: loadable,
+      resident: brain.available ? (localModel || brain.model) : null,
+      agent,
+    });
+    picker.innerHTML = opts.map((o) =>
+      `<option value="${esc(o.value)}"${o.selected ? ' selected' : ''}>${esc(o.label)}${o.resident === false ? ' — not loaded' : ''}</option>`).join('');
     picker.hidden = !opts.length;
     if (agent.connected) picker.value = 'agent';
     document.getElementById('vc-save').hidden = !messages.some((m) => m.kind === 'msg');
@@ -150,11 +158,64 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
     paintOrb();
   };
 
-  // One-click model load (the 'no-model' remedy): POST the validated load, then poll the
-  // ping until the brain answers — an MLX load takes ~15-60s, so patience with a deadline.
-  empty.addEventListener('click', (e) => {
+  // ── Model-load consent ───────────────────────────────────────────────────────
+  // Loading weights is slow and memory-hungry, so it is ALWAYS an explicit full-screen
+  // accept/decline — never a side effect of touching the picker. Resolves true on accept.
+  const cDlg = document.getElementById('consent');
+  const cConfirm = document.getElementById('mc-confirm');
+  const cCancel = document.getElementById('mc-cancel');
+  let closeConsent = null;           // set while open; also the "is open" flag
+
+  function askConsent(model) {
+    const row = loadable.find((m) => m.id === model) || { id: model };
+    const v = consentView(row);
+    document.getElementById('mc-title').textContent = v.title;
+    document.getElementById('mc-model').textContent = v.id;
+    document.getElementById('mc-body').textContent = v.body;
+    const warn = document.getElementById('mc-warn');
+    warn.textContent = v.warning || '';
+    warn.hidden = !v.warning;
+    cConfirm.textContent = v.confirmLabel;
+    cCancel.textContent = v.cancelLabel;
+
+    const restore = document.activeElement;
+    cDlg.hidden = false;
+    cCancel.focus();                 // decline is the safe default under the keyboard
+
+    return new Promise((resolve) => {
+      const done = (ok) => {
+        cDlg.hidden = true;
+        cConfirm.removeEventListener('click', onOk);
+        cCancel.removeEventListener('click', onNo);
+        cDlg.removeEventListener('click', onBackdrop);
+        document.removeEventListener('keydown', onKey, true);
+        closeConsent = null;
+        if (restore && restore.focus) restore.focus();
+        resolve(ok);
+      };
+      const onOk = () => done(true);
+      const onNo = () => done(false);
+      const onBackdrop = (e) => { if (e.target === cDlg) done(false); };
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.stopPropagation(); done(false); return; }   // never reaches barge-in
+        if (e.key !== 'Tab') return;
+        e.preventDefault();                                                     // trap: two buttons only
+        (document.activeElement === cConfirm ? cCancel : cConfirm).focus();
+      };
+      closeConsent = onNo;
+      cConfirm.addEventListener('click', onOk);
+      cCancel.addEventListener('click', onNo);
+      cDlg.addEventListener('click', onBackdrop);
+      document.addEventListener('keydown', onKey, true);   // capture: beat the panel's Escape
+    });
+  }
+
+  // The 'no-model' remedy: consent, then POST the validated load and poll the ping until the
+  // brain answers — an MLX load takes ~15-60s, so patience with a deadline.
+  empty.addEventListener('click', async (e) => {
     const b = e.target.closest('#vc-load');
-    if (b && !loadingModel) loadModel(b.dataset.model);
+    if (!b || loadingModel || closeConsent) return;
+    if (await askConsent(b.dataset.model)) loadModel(b.dataset.model);
   });
   async function loadModel(model) {
     loadingModel = model; paint();
@@ -179,6 +240,12 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
 
   async function probe() {
     try { brain = await (await fetch('/api/ai/ping')).json(); } catch { brain = { available: false }; }
+    // What Slipway could serve, with sizes — the picker's switch targets. Cosmetic if it
+    // fails: the panel still works against whatever is resident.
+    try {
+      const j = await (await fetch('/api/slipway/models')).json();
+      loadable = Array.isArray(j.models) ? j.models : [];
+    } catch { /* keep the last list */ }
     try {
       const s = await (await fetch('/api/voice/status')).json();
       agent = s.agent.connected ? { connected: true, model: s.agent.model, stale: !!s.agent.stale } : { connected: false };
@@ -206,13 +273,36 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
     paint();
   });
   sse.addEventListener('voice-say', (e) => {
-    const { msg_id, text, model } = JSON.parse(e.data);
-    messages = addMessage(messages, { role: 'assistant', text, model });
+    const { msg_id, text, model, grounding } = JSON.parse(e.data);
+    messages = addMessage(messages, { role: 'assistant', text, model, grounding });
+    // Query grounding (#2a): light up the evidence subgraph while the answer plays.
+    // Spoken answers clear via the speech-end linger; unspoken ones via the fallback timer.
+    const willSpeak = leader && !!tts && !muted;
+    showGrounding(grounding || null, willSpeak);
     busy = false; setState('idle'); paint();
     if (!leader) return;                            // read-only tab: render, never speak/ack
     if (!tts || muted) { ackSayDone(msg_id, { reason: !tts ? 'no_tts' : 'muted' }); return; }
     speakReply(text, msg_id);
   });
+
+  // ── grounding lifecycle: show → (speech ends → linger) or (unspoken → fallback) → clear.
+  // A new utterance clears instantly (submit); a new say replaces the set outright.
+  const GROUNDING_UNSPOKEN_MS = 10000, GROUNDING_LINGER_MS = 4000;
+  let groundingTimer = null;
+  function showGrounding(list, willSpeak) {
+    if (groundingTimer) { clearTimeout(groundingTimer); groundingTimer = null; }
+    if (!list || !list.length) { onGrounding(null); return; }
+    onGrounding(list);
+    if (!willSpeak) groundingTimer = setTimeout(() => onGrounding(null), GROUNDING_UNSPOKEN_MS);
+  }
+  function lingerGrounding() {
+    if (groundingTimer) clearTimeout(groundingTimer);
+    groundingTimer = setTimeout(() => onGrounding(null), GROUNDING_LINGER_MS);
+  }
+  function clearGrounding() {
+    if (groundingTimer) { clearTimeout(groundingTimer); groundingTimer = null; }
+    onGrounding(null);
+  }
   sse.addEventListener('voice-listen-state', (e) => {
     const { listening } = JSON.parse(e.data);
     if (agent.stale && listening) { agent.stale = false; paint(); }   // it's polling again — alive
@@ -276,13 +366,21 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
   picker.onchange = async () => {
     const v = picker.value;
     if (!v.startsWith('local:')) return;
+    const model = v.slice('local:'.length);
+    // Switching to a model that isn't in memory is a LOAD — ask first, and put the picker back
+    // if declined, so the dropdown never claims a brain that was never loaded.
+    const resident = brain.available && (localModel || brain.model) === model;
+    if (!resident && !loadingModel) {
+      if (!(await askConsent(model))) { paint(); return; }
+    }
     if (agent.connected) {
       try { await fetch('/api/voice/switch-local', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch { /* SSE will confirm */ }
       agent = { connected: false };
       messages = addMessage(messages, { role: 'assistant', text: '— switched to the local model —' });
     }
-    localModel = v.slice('local:'.length);
+    localModel = model;
     paint();
+    if (!resident) loadModel(model);
   };
 
   // ── TTS + the live karaoke highlight ─────────────────────────────────────────
@@ -312,6 +410,7 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
       },
       onDone: ({ interrupted, spokenChars }) => {
         speaking = null; sub.hidden = true;
+        lingerGrounding();                          // speech over — evidence fades shortly after
         if (interrupted) { messages = markInterrupted(messages, spokenChars); wasInterrupted = true; }
         if (msgId) ackSayDone(msgId, interrupted ? { interrupted: true, spoken_chars: spokenChars } : {});
         if (resumeAfterSay && stt && !stt.active()) stt.start();   // the paused mic comes back
@@ -320,7 +419,7 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
       },
     });
     if (handle) { speaking = { handle, text, msgId }; setState('speaking'); }
-    else if (msgId) ackSayDone(msgId, { reason: 'no_tts' });
+    else if (msgId) { lingerGrounding(); ackSayDone(msgId, { reason: 'no_tts' }); }
   }
   // The barge-in: instant, from any interrupt gesture. onDone (normalized in the
   // provider) freezes the highlight and repaints.
@@ -361,6 +460,7 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
     const q = String(text != null ? text : input.value).trim();
     if (!q || !leader || (busy && !agentMode())) return;
     interrupt();                                   // sending while it talks = barge-in
+    clearGrounding();                              // a new question retires the old evidence
     if (text == null) input.value = '';
     messages = addMessage(messages, { role: 'you', text: q });
     paint();

@@ -1,5 +1,5 @@
 ' _sentinel.puml — the in-app render theme (Scatterbrained Studio).
-' GENERATED from scatterbrained-studio/public/lib/themes.js — do not edit; run `npm run gen:puml`.
+' GENERATED from public/lib/themes.js — do not edit; run `npm run gen:puml`.
 ' Colors are sentinel hexes rewritten to CSS custom properties after render
 ' (public/lib/diagram-svg.js) — NOT meant for use outside the Studio.
 

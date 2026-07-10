@@ -8,7 +8,7 @@
 // the LLM/MCP only has to extract the pages this script flags.
 //
 // Two modes, picked automatically:
-//   • One-root mode (DEFAULT — matches Scatterbrained's one-root Notion model):
+//   • One-root mode (DEFAULT — matches Engram's one-root Notion model):
 //     POST /v1/search over everything shared with the integration, sorted by
 //     last_edited_time. Because the integration is connected once at the single
 //     parent ("one-root") page, that share inherits to every project subpage —

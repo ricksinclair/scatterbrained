@@ -180,7 +180,7 @@ function standaloneColors(v) {
 export function themeToPuml(v, { name, mode }) {
   const header = [
     `' ${name}-${mode}.puml — PlantUML theme matching Scatterbrained Studio's "${name}" theme (${mode}).`,
-    "' GENERATED from scatterbrained-studio/public/lib/themes.js — do not edit; run `npm run gen:puml`.",
+    "' GENERATED from public/lib/themes.js — do not edit; run `npm run gen:puml`.",
     "' Usage: !include <path>/" + `${name}-${mode}.puml` + ' at the top of any diagram.',
     "' Element stereotypes <<Insight>> <<Project>> <<Idea>> … color as Scatterbrained graph node types.",
   ].join('\n');
@@ -202,7 +202,7 @@ export function sentinelTheme() {
   });
   const header = [
     "' _sentinel.puml — the in-app render theme (Scatterbrained Studio).",
-    "' GENERATED from scatterbrained-studio/public/lib/themes.js — do not edit; run `npm run gen:puml`.",
+    "' GENERATED from public/lib/themes.js — do not edit; run `npm run gen:puml`.",
     "' Colors are sentinel hexes rewritten to CSS custom properties after render",
     "' (public/lib/diagram-svg.js) — NOT meant for use outside the Studio.",
   ].join('\n');

@@ -7,10 +7,11 @@
 import { esc } from './dom.js';
 import { renderCard } from './voice-panels.js';
 
-export function addMessage(messages, { role, text, model = null, at = Date.now() }) {
+export function addMessage(messages, { role, text, model = null, at = Date.now(), grounding = null }) {
   const t = String(text || '').trim();
   if (!t) return messages;
-  return [...dropGhost(messages), { kind: 'msg', role, text: t, model, at }];
+  const g = Array.isArray(grounding) && grounding.length ? grounding.filter((n) => n && n.id) : null;
+  return [...dropGhost(messages), { kind: 'msg', role, text: t, model, at, ...(g && g.length ? { grounding: g } : {}) }];
 }
 
 // The interim STT line: replace-or-append so there is never more than one ghost,
@@ -37,10 +38,18 @@ export function markInterrupted(messages, at) {
 export const spokenSplitHtml = (text, at) =>
   `<span class="vt-spoken">${esc(text.slice(0, at))}</span><span class="vt-unspoken">${esc(text.slice(at))}</span>`;
 
+// Query grounding (#2a): the evidence chips under an assistant bubble — the nodes the
+// answer was grounded in. data-node rides the thread's existing click-to-navigate delegate.
+export const groundingHtml = (grounding) => {
+  if (!Array.isArray(grounding) || !grounding.length) return '';
+  const chips = grounding.map((n) => `<button class="vt-gchip" data-node="${esc(n.id)}" title="${esc(n.label || '')}">${esc(n.name || n.id)}</button>`).join('');
+  return `<div class="vt-ground"><span class="vt-ground-l">grounded in</span>${chips}</div>`;
+};
+
 const bubble = (m) => {
   const cut = m.interruptedAt != null;
   const body = cut ? spokenSplitHtml(m.text, m.interruptedAt) : esc(m.text);
-  return `<div class="vt-row vt-${m.role}"><div class="vt-bubble${cut ? ' vt-cut' : ''}" ${m.at ? `data-at="${m.at}"` : ''}>${body}${cut ? '<span class="vt-cutmark">interrupted</span>' : ''}</div></div>`;
+  return `<div class="vt-row vt-${m.role}"><div class="vt-bubble${cut ? ' vt-cut' : ''}" ${m.at ? `data-at="${m.at}"` : ''}>${body}${cut ? '<span class="vt-cutmark">interrupted</span>' : ''}</div>${groundingHtml(m.grounding)}</div>`;
 };
 
 // Add (or replace) a dynamic panel card. One live card per assistant turn: a repeat

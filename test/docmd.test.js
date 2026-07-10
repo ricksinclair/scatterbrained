@@ -28,6 +28,24 @@ describe('docmd — real doc-set constructs', () => {
     expect(toc.map((t) => t.id)).toEqual(['setup', 'setup-2']);
     const seen = new Set(['x']); expect(slugify('x', seen)).toBe('x-2');
   });
+  it('TOC text decodes entities — "&" headings never show as "&amp;"', () => {
+    const { toc } = renderDoc('# Time & the intention clock\n## "Quotes" <tags>');
+    expect(toc[0].text).toBe('Time & the intention clock');
+    expect(toc[1].text).toBe('"Quotes" <tags>');
+  });
+});
+
+describe('docmd — frontmatter never renders (docs-curation)', () => {
+  it('strips a leading frontmatter block before parsing', () => {
+    const { html, toc } = renderDoc('---\naudience: user\nsection: guides\norder: 1\n---\n# Themes\nbody');
+    expect(html).not.toContain('audience');
+    expect(html).toContain('<h1 id="themes">');
+    expect(toc[0].text).toBe('Themes');
+  });
+  it('leaves a mid-document --- (an hr) and an unclosed block alone', () => {
+    expect(renderDoc('# T\n\n---\n\nmore').html).toContain('<hr>');
+    expect(renderDoc('---\naudience: user\nnever closed').html).toContain('audience');
+  });
 });
 
 describe('docmd — plantuml fences (stage 6c hydration contract)', () => {
@@ -43,9 +61,9 @@ describe('docmd — plantuml fences (stage 6c hydration contract)', () => {
 
 describe('docmd — links and images', () => {
   it('relative .md links become in-lens data-doc-link with resolved paths', () => {
-    const { html } = renderDoc('[spec](../SPEC.md) [frag](GUIDE.md#part-2)', { docPath: 'scatterbrained-studio/docs/DESIGN.md' });
-    expect(html).toContain('data-doc-link="scatterbrained-studio/SPEC.md"');
-    expect(html).toContain('data-doc-link="scatterbrained-studio/docs/GUIDE.md"');
+    const { html } = renderDoc('[spec](../SPEC.md) [frag](GUIDE.md#part-2)', { docPath: 'docs/DESIGN.md' });
+    expect(html).toContain('data-doc-link="SPEC.md"');
+    expect(html).toContain('data-doc-link="docs/GUIDE.md"');
     expect(html).toContain('data-doc-frag="part-2"');
   });
   it('external links open new-tab with noopener; unknown schemes render as text', () => {

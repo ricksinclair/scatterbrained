@@ -26,6 +26,11 @@
 //   node scripts/document-index.js --root acme   # restrict to roots whose path matches a substring
 //   node scripts/document-index.js --kind pdf      # restrict to one source_kind (markdown|text|pdf|docx|pptx)
 //   node scripts/document-index.js --stats         # print counts to stderr
+//   node scripts/document-index.js --report-missing [--json]
+//       # the PRUNE-GAP report: current doc Sources whose file is gone from disk,
+//       # plus duplicate current Sources per file (overlapping-roots class).
+//       # Prints suggested `npm run supersede` commands — NEVER writes
+//       # (mirrors review-supersession.js: it suggests, the human decides).
 //
 // Output: JSON array on stdout, newest-mtime first:
 //   [{ title, file_path, source_kind, display_title, status, hash, mtime, bytes, tags }]
@@ -56,6 +61,46 @@ function expandHome(p) {
 
 function sha256(buf) {
   return crypto.createHash('sha256').update(buf).digest('hex');
+}
+
+// ── --report-missing helpers (pure; exported for tests) ─────────────────────
+// The change-gate above only ever emits new/changed files, so a file DELETED or
+// MOVED on disk leaves its :Source permanently "current". These close that gap
+// as a report: findings + ready-to-paste supersede commands, zero writes.
+export const DOC_KINDS = ['markdown', 'text', 'pdf', 'docx', 'pptx'];
+
+// sources: [{ title, file_path, source_kind }] (current only — valid_until IS NULL),
+// rootAbs: absolute allowlisted root dirs, existsFn: fs.existsSync (injectable).
+// → { missing: [source], duplicates: [{ file_path, keeper, extras }] }
+// Scope: document kinds under a configured root — agent/voice transcripts,
+// diagrams, and Notion Sources are never reported. Duplicate groups keep the
+// PATH-FORM title (`<rootName>/<rel>` — the doc lane's MERGE key: keep anything
+// else and the next ingest recreates the duplicate), else the shortest title.
+export function reportMissing(sources, rootAbs, existsFn) {
+  const norm = (p) => path.resolve(expandHome(String(p)));
+  const rootsN = rootAbs.map(norm);
+  const rootOf = (fp) => rootsN.find((r) => fp === r || fp.startsWith(r + path.sep)) || null;
+  const inScope = (sources || []).filter(
+    (s) => s.file_path && DOC_KINDS.includes(s.source_kind) && rootOf(norm(s.file_path))
+  );
+  const missing = inScope.filter((s) => !existsFn(norm(s.file_path)));
+  const byPath = new Map();
+  for (const s of inScope) {
+    const key = norm(s.file_path);
+    if (!byPath.has(key)) byPath.set(key, []);
+    byPath.get(key).push(s);
+  }
+  const duplicates = [];
+  for (const [file_path, group] of byPath) {
+    if (group.length < 2) continue;
+    const root = rootOf(file_path);
+    const laneKey = `${path.basename(root)}/${path.relative(root, file_path).split(path.sep).join('/')}`;
+    const keeper =
+      group.find((s) => s.title === laneKey) ||
+      group.reduce((a, b) => (b.title.length < a.title.length ? b : a));
+    duplicates.push({ file_path, keeper, extras: group.filter((s) => s !== keeper) });
+  }
+  return { missing, duplicates };
 }
 
 // First markdown/text H1 (`# ...`), else null. Cheap, tolerant of front-matter.
@@ -139,6 +184,58 @@ async function main() {
   if (!roots.length) {
     console.error('document-index: no roots configured (or --root matched none).');
     process.exit(2);
+  }
+
+  // ── the prune-gap report: missing files + duplicate Sources, suggest-only ──
+  if (args['report-missing']) {
+    const kinds = [...new Set(Object.values(kindOf))];   // honors --kind
+    const driver = getDriver();
+    let sources = [];
+    try {
+      const recs = await run(
+        driver,
+        `MATCH (s:Source)
+         WHERE s.valid_until IS NULL AND s.file_path IS NOT NULL AND s.source_kind IN $kinds
+         RETURN s.title AS title, s.file_path AS file_path, s.source_kind AS source_kind`,
+        { kinds }
+      );
+      sources = recs.map((r) => toPlain(r.toObject()));
+    } finally {
+      await driver.close();
+    }
+    const { missing, duplicates } = reportMissing(sources, roots.map((r) => r.abs), fs.existsSync);
+    if (args.json) {
+      console.log(JSON.stringify({ scanned: sources.length, missing, duplicates }, null, 2));
+      return;
+    }
+    console.log(
+      `document-index --report-missing: ${sources.length} current doc Sources · ` +
+        `${missing.length} missing from disk · ${duplicates.length} duplicate group(s)`
+    );
+    if (missing.length || duplicates.length) {
+      console.log('\nBack up before running any supersede batch: node scripts/export-graph.js\n');
+    }
+    if (missing.length) {
+      console.log('MISSING — file gone from disk; invalidate bi-temporally (never delete):');
+      for (const s of missing) {
+        console.log(`  · ${s.title}  (${s.source_kind})`);
+        console.log(`    npm run supersede -- --old "${s.title}" --reason "file removed from disk (report-missing)"`);
+      }
+    }
+    if (duplicates.length) {
+      console.log('\nDUPLICATES — same file, multiple current Sources; keep the doc-lane path title:');
+      for (const d of duplicates) {
+        console.log(`  · ${d.file_path}`);
+        console.log(`    keep: ${d.keeper.title}`);
+        for (const x of d.extras) {
+          console.log(`    npm run supersede -- --old "${x.title}" --by "${d.keeper.title}" --reason "duplicate Source for the same file (report-missing)"`);
+        }
+      }
+    }
+    if (!missing.length && !duplicates.length) {
+      console.log('Nothing missing, no duplicates — the document lane is clean.');
+    }
+    return;
   }
 
   // Collect every tracked file, tagging each with its root's tags + rel-path title.
@@ -248,7 +345,10 @@ async function main() {
   console.log(JSON.stringify(out, null, 2));
 }
 
-main().catch((err) => {
-  console.error('document-index error:', err.message);
-  process.exit(1);
-});
+// Run only when invoked directly — the pure helpers above are importable by tests.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  main().catch((err) => {
+    console.error('document-index error:', err.message);
+    process.exit(1);
+  });
+}

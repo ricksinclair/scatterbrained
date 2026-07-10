@@ -37,7 +37,7 @@ export function initDocsLens({ esc, openPerms } = {}) {
   async function loadProjects() {
     let projects = [];
     try { projects = (await fetch('/api/docs').then((r) => r.json())).projects || []; } catch {}
-    projSel.innerHTML = projects.map((p) => `<option value="${esc(p.name)}">${esc(p.name)} (${p.doc_count})</option>`).join('');
+    projSel.innerHTML = projects.map((p) => `<option value="${esc(p.name)}">${esc(p.label || p.name)} (${p.doc_count})</option>`).join('');
     const saved = lsGet();
     if (saved && projects.some((p) => p.name === saved)) projSel.value = saved;
   }
@@ -52,12 +52,12 @@ export function initDocsLens({ esc, openPerms } = {}) {
     renderNav();
     // land on the first doc (Overview when it exists — taxonomy order guarantees it's first)
     const first = nav.querySelector('.docs-item:not(.blocked)');
-    if (first) openDoc(first.dataset.path, first.dataset.title);
+    if (first) openDoc(first.dataset.path, first.dataset.title, undefined, first.dataset.builtin === '1');
     else body.innerHTML = '<div class="docs-empty">no readable docs — grant access to this project\'s folder</div>';
   }
 
   function itemHtml(d) {
-    return `<button class="docs-item${d.readable ? '' : ' blocked'}" data-path="${esc(d.file_path || '')}" data-title="${esc(d.title)}" title="${esc(d.title)}">` +
+    return `<button class="docs-item${d.readable ? '' : ' blocked'}" data-path="${esc(d.file_path || '')}" data-title="${esc(d.title)}"${d.builtin ? ' data-builtin="1"' : ''} title="${esc(d.title)}">` +
       `${esc(d.display_title)}${d.readable ? '' : ' <span class="docs-lock" title="outside the granted read roots">🔒</span>'}</button>`;
   }
   function renderNav() {
@@ -77,12 +77,21 @@ export function initDocsLens({ esc, openPerms } = {}) {
     nav.innerHTML = html || '<div class="docs-empty">no docs ingested for this project yet</div>';
   }
 
-  async function openDoc(filePath, title, frag) {
+  async function openDoc(filePath, title, frag, builtin) {
     nav.querySelectorAll('.docs-item').forEach((b) => b.classList.toggle('on', b.dataset.path === filePath));
     body.innerHTML = '<div class="docs-loading">loading…</div>'; tocEl.innerHTML = '';
     let res;
-    try { res = (await fetch('/api/file?path=' + encodeURIComponent(filePath)).then((r) => r.json())).file || {}; }
-    catch { body.innerHTML = '<div class="docs-empty">could not read the file</div>'; return; }
+    if (builtin) {
+      // Built-in manual docs are app assets — fetched from the static server, not
+      // /api/file (the install dir is deliberately outside the granted read roots).
+      try {
+        const r = await fetch(filePath);
+        res = r.ok ? { text: await r.text() } : { error: 'doc not found' };
+      } catch { res = { error: 'could not read the doc' }; }
+    } else {
+      try { res = (await fetch('/api/file?path=' + encodeURIComponent(filePath)).then((r) => r.json())).file || {}; }
+      catch { body.innerHTML = '<div class="docs-empty">could not read the file</div>'; return; }
+    }
     if (res.blocked) {
       body.innerHTML = `<div class="docs-empty">this file is outside the granted read roots ` +
         (openPerms ? `<button class="dg-btn" id="docs-grant">grant access</button>` : '') + `</div>`;
@@ -132,14 +141,14 @@ export function initDocsLens({ esc, openPerms } = {}) {
       if (openPerms) openPerms();
       return;
     }
-    openDoc(it.dataset.path, it.dataset.title);
+    openDoc(it.dataset.path, it.dataset.title, undefined, it.dataset.builtin === '1');
   });
   body.addEventListener('click', (e) => {
     const dl = e.target.closest('[data-doc-link]');
     if (dl) {
       e.preventDefault();
       const target = findByTitleSuffix(dl.dataset.docLink);
-      if (target) openDoc(target.file_path, target.title, dl.dataset.docFrag);
+      if (target) openDoc(target.file_path, target.title, dl.dataset.docFrag, !!target.builtin);
       else dl.classList.add('docs-link-dead'), dl.title = 'not in this project\'s ingested doc set';
     }
   });

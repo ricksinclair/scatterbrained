@@ -1,5 +1,5 @@
 ' solar-light.puml — PlantUML theme matching Scatterbrained Studio's "solar" theme (light).
-' GENERATED from scatterbrained-studio/public/lib/themes.js — do not edit; run `npm run gen:puml`.
+' GENERATED from public/lib/themes.js — do not edit; run `npm run gen:puml`.
 ' Usage: !include <path>/solar-light.puml at the top of any diagram.
 ' Element stereotypes <<Insight>> <<Project>> <<Idea>> … color as Scatterbrained graph node types.
 

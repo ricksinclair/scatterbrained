@@ -12,6 +12,11 @@ import { getDriver, run, parseArgs } from './lib/db.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
+// Natural key per label — MUST cover every label the export can contain, or a
+// restore SILENTLY drops those nodes. Found the hard way (restore drill,
+// 2026-07-09): Note/Review/SyncState were missing and a restore lost all 155
+// acceptance-criteria/doc Notes, 11 Reviews, and the sync anchor while exiting 0.
+// When a new label enters seed-schema.cypher, add it here in the same change.
 const KEY_BY_LABEL = {
   Person: 'name',
   Organization: 'name',
@@ -23,6 +28,11 @@ const KEY_BY_LABEL = {
   Insight: 'id',
   Skill: 'name',
   Goal: 'name',
+  Note: 'id',
+  Review: 'id',
+  ProtectedFact: 'id',
+  Lens: 'id',
+  SyncState: 'key',
 };
 
 const SAFE_LABEL = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -125,6 +135,9 @@ async function main() {
     console.log(`Relationships merged: ${relsMerged}`);
     console.log(`Errors:               ${errors.length}`);
     for (const e of errors) console.log(`  ! ${e}`);
+    // A restore that skipped ANYTHING is a partial restore — fail loudly so no
+    // caller (human or drill) can mistake it for a clean round-trip.
+    if (errors.length) process.exit(1);
   } finally {
     await driver.close();
   }

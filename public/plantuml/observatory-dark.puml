@@ -1,5 +1,5 @@
 ' observatory-dark.puml — PlantUML theme matching Scatterbrained Studio's "observatory" theme (dark).
-' GENERATED from scatterbrained-studio/public/lib/themes.js — do not edit; run `npm run gen:puml`.
+' GENERATED from public/lib/themes.js — do not edit; run `npm run gen:puml`.
 ' Usage: !include <path>/observatory-dark.puml at the top of any diagram.
 ' Element stereotypes <<Insight>> <<Project>> <<Idea>> … color as Scatterbrained graph node types.
 

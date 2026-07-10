@@ -342,6 +342,21 @@
     </div>
   </div>
 
+  <!-- Model-load consent. Loading weights is costly and slow, so it is always an explicit
+       full-screen accept/decline — never a side effect of touching the brain picker. -->
+  <div class="consent" id="consent" hidden role="dialog" aria-modal="true" aria-labelledby="mc-title" aria-describedby="mc-body">
+    <div class="mc-card">
+      <h2 id="mc-title">Load this model?</h2>
+      <p class="mc-model" id="mc-model"></p>
+      <p id="mc-body"></p>
+      <p class="mc-warn" id="mc-warn" hidden></p>
+      <div class="mc-actions">
+        <button id="mc-confirm" class="ob-go" type="button">Load model</button>
+        <button id="mc-cancel" class="ob-alt" type="button">Not now</button>
+      </div>
+    </div>
+  </div>
+
   <div class="filereader" id="filereader" hidden>
     <div class="fr-panel">
       <div class="fr-head">
@@ -431,7 +446,7 @@
     </div>
   </aside>
 
-  <!-- The ORB — the assistant's primary presence (Jarvis-meets-Wispr-Flow, Rick 2026-07-04):
+  <!-- The ORB — the assistant's primary presence (Jarvis-meets-Wispr-Flow, you 2026-07-04):
        breathing/rippling/orbiting/waveform per state; the chat panel expands from it and
        collapses back into it. The subtitle strip floats above while it speaks. -->
   <div id="voice-sub" class="voice-sub" hidden aria-live="polite"></div>

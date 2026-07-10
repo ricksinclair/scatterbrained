@@ -676,6 +676,19 @@ body.calm .c-diagram:focus-within, [data-anim="off"] .c-diagram:focus-within { b
 .ob-alt:hover { border-color: var(--accent); }
 .ob-go:disabled, .ob-alt:disabled { opacity: 0.5; cursor: default; }
 .ob-msg { min-height: 1em; margin: 12px 0 0; font-size: var(--fs-sm); color: var(--warn, #e5704b); }
+
+/* Model-load consent — the same full-screen dialog idiom as .onboard, one z-layer above so it
+   sits over the voice panel that summoned it. */
+.consent { position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.62); backdrop-filter: blur(3px); }
+.consent[hidden] { display: none; }
+.mc-card { width: min(460px, 92vw); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 28px 26px; box-shadow: var(--shadow-pop); }
+.mc-card h2 { margin: 0 0 10px; font-size: var(--fs-2xl); color: var(--ink); }
+.mc-card p { margin: 0 0 14px; color: var(--ink-dim); font-size: var(--fs-md); line-height: 1.55; }
+.mc-model { font-family: var(--font-mono); font-size: var(--fs-sm); color: var(--ink); word-break: break-all; }
+.mc-warn { border-left: 2px solid var(--warn); padding-left: 12px; color: var(--warn-ink); }
+.mc-warn[hidden] { display: none; }
+.mc-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
 .c-keyvalue { font-size: var(--fs-xs); }
 .c-keyvalue .kv { display: grid; grid-template-columns: minmax(70px, 32%) 1fr; gap: 10px; padding: 5px 0; border-top: 0.5px solid var(--line); align-items: start; }
 .c-keyvalue .kk { color: var(--ink-dim); font-family: var(--font-mono); word-break: break-word; }
@@ -1694,6 +1707,12 @@ body.calm :is(.rpt-c, .c-link .link-card, .dock-resume, .rm-card):hover { transf
 .vt-bubble.vt-ghost { opacity: 0.65; border-style: dashed; }
 .vt-unspoken { opacity: 0.45; }
 .vt-cutmark { display: block; margin-top: 4px; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--warn, #e0b25a); }
+/* query grounding (#2a): evidence chips under an assistant bubble — click focuses the node */
+.vt-row { flex-wrap: wrap; }
+.vt-ground { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 4px; }
+.vt-ground-l { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-faint); margin-right: 2px; }
+.vt-gchip { font: inherit; font-size: var(--fs-xs); color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--r-full); padding: 1px 8px; cursor: pointer; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-gchip:hover { color: var(--accent-contrast); background: var(--accent); }
 .vc-empty { padding: var(--sp-3); font-size: var(--fs-sm); color: var(--ink-dim); }
 .vc-empty p { margin: 0; }
 .vc-foot { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-top: 1px solid var(--line, rgba(255,255,255,0.1)); }
