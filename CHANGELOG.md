@@ -10,6 +10,21 @@ can follow, then the technical details underneath.
 > believed six months ago and why, with every claim tracing back to its source. No cloud,
 > no subscription — it's yours.
 
+## [Unreleased]
+
+### Docs
+- **Upgrading, spelled out.** New "Upgrading" sections in the README and getting-started: your
+  data never lives in the package (graph in the Neo4j volume, sessions/tokens in
+  `~/.scatterbrained/`, Slipway state in `~/.claude-code-router/`, models in the HF/Ollama
+  caches), so upgrades swap only code — plus the one-liner per install mode (npx tracks the
+  alpha tag automatically; global re-runs `npm i -g scatterbrained@alpha`; clones pull).
+  Also: a Slipway glossary entry on getting-started, and the README's global-install command
+  now says `@alpha` — the bare form installed `latest`, which pointed at the 0.0.1 placeholder.
+
+### Registry
+- **`latest` now tracks the newest release.** `npm i scatterbrained` (no tag) previously
+  installed 0.0.1; the `latest` dist-tag now moves with each publish alongside `alpha`.
+
 ## [0.2.0-alpha.5] — Ask before you think, one search brain, honest model docs (2026-07-12)
 
 **TL;DR (explain-like-I'm-5):** Loading an AI model used to just *happen* when you clicked a

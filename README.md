@@ -115,6 +115,20 @@ dependency to install once:
   Slipway caps Ollama's context at 32k by default so a small model doesn't balloon in RAM
   (`SLIPWAY_NUM_CTX` to change).
 
+## Upgrading
+
+Your data never lives in the package — the graph is in Neo4j (the Docker volume), sessions and
+tokens in `~/.scatterbrained/`, Slipway's state in `~/.claude-code-router/`, and models in the
+Hugging Face cache or Ollama's store. Upgrading replaces only code: the demo seed never re-runs
+on a graph that has data, and the schema re-applies idempotently (additive-only).
+
+- **`npx scatterbrained@alpha`** — nothing to do; every run tracks the newest alpha.
+- **Global install** — re-run `npm i -g scatterbrained@alpha`.
+- **Clone** — `git pull && npm install`.
+
+Belt and suspenders before a big jump (clone): `npm run export` writes the whole graph to
+`backups/graph.json`. What changed in each version is in the [CHANGELOG](CHANGELOG.md).
+
 ## Try the demo
 
 [`examples/`](examples/) is a small, fictional engineering story ("Northwind Logistics") that

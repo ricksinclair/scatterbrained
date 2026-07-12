@@ -172,6 +172,15 @@ npm start          <span class="c"># same dance: database, schema, demo, Studio<
       <div><b>Windows</b><p><code>winget install OpenJS.NodeJS Docker.DockerDesktop</code>, launch Docker Desktop, then the <code>npx</code> command (or <code>npm install &amp;&amp; npm start</code> in a clone).</p></div>
       <div><b>Linux</b><p>Node 18+ (distro or nvm) and Docker Engine, then the <code>npx</code> command. Already running a graph database? Set <code>NEO4J_PASSWORD</code> and skip Docker entirely.</p></div>
     </div>
+    <div class="note">
+      <span class="note-tag">upgrading</span>
+      <p>Your graph never lives in the app — it stays in the database, with config and models in
+        their own homes on disk, so upgrading swaps only code and <strong>never touches your data</strong>.
+        <code>npx</code> users get the newest alpha automatically on every run; a global install
+        re-runs <code>npm i -g scatterbrained@alpha</code>; a clone pulls and reinstalls. The demo
+        seed never re-runs on a graph that has data, and each version's story is in the
+        <a href="https://github.com/ricksinclair/scatterbrained/blob/main/CHANGELOG.md">changelog</a>.</p>
+    </div>
   </div>
 </section>
 
