@@ -83,18 +83,36 @@ bundled runtime called **Slipway** (in [`slipway/`](slipway/)). Two processes, o
 1. **It starts itself.** `npm start` autostarts Slipway on `:8765` alongside the Studio. Models
    are **never loaded until you ask**, so an idle runtime costs almost nothing. Opt out with
    `SLIPWAY_AUTOSTART=0`; point `SLIPWAY_DIR` at your own checkout to override the bundled copy.
-2. **First run: download one small model.** A fresh machine has no models on disk. Open Slipway
-   (the **manage models in Slipway ↗** link in the voice panel, or <http://127.0.0.1:8765>) →
-   **Browse** → pull a **small 4-bit MLX model** to start — search `mlx-community`, pick a ~3–4B
-   build (~2–3 GB, quick to download, runs on a 16 GB Mac). Save the big
-   `mlx-community/Qwen3.6-35B-A3B-6bit` (~28 GB) for when you want maximum quality.
+2. **First run: download one small model — it comes from Hugging Face.** A fresh machine has no
+   models on disk. Slipway pulls them from the [Hugging Face Hub](https://huggingface.co), the
+   open catalog where the ML community publishes models — public models download anonymously,
+   **no account, no API key**. Open Slipway (the **manage models in Slipway ↗** link in the voice
+   panel, or <http://127.0.0.1:8765>) → **Browse**: it searches the Hub live and shows each
+   model's full download size *before* you pull, and refuses any download that would leave your
+   disk under 10 GB free. Start small — search `mlx-community`, pick a ~3–4B 4-bit build
+   (~2–3 GB, quick to download, runs on a 16 GB Mac); save the big
+   `mlx-community/Qwen3.6-35B-A3B-6bit` (~28 GB) for when you want maximum quality. The download
+   is **one-time**: models land in the standard Hugging Face cache (`~/.cache/huggingface/hub` —
+   shared with other HF tools, so models you already have simply appear in the picker), and after
+   that they load and run **fully offline**. That download is the only time this lane touches the
+   network.
 3. **Talk.** Open the voice orb and **hold Space** to speak (release to send), or type. Voice uses
    the browser's built-in speech (Web Speech) by default — **zero setup**. For fully-offline voice,
    optional local Whisper (STT) and Kokoro (TTS) helpers ship in [`bin/`](bin/).
 4. **Prefer your Claude subscription?** `bash bin/summon-claude.sh` puts a subscription-billed
    Claude session on the same voice loop over MCP — no API keys, no per-token cost.
 
-Requires Apple Silicon for local MLX models. Ollama models work too if you run Ollama.
+**What each backend needs** — Slipway manages two local backends; each has one external
+dependency to install once:
+
+- **MLX** (Apple Silicon only): `pip install vllm-mlx huggingface_hub` — `vllm-mlx` serves the
+  model on `:8080`, and the Hugging Face CLI (`hf`) does the downloading described above.
+- **Ollama** (macOS / Linux / Windows): install [Ollama](https://ollama.com) and keep its
+  app/daemon running (`:11434`) — Slipway detects it but doesn't install or start it. Pull models
+  yourself with `ollama pull <name>`; Ollama keeps them in its **own** store (`~/.ollama/models`,
+  *not* the Hugging Face cache), and everything it has appears in Slipway's picker automatically.
+  Slipway caps Ollama's context at 32k by default so a small model doesn't balloon in RAM
+  (`SLIPWAY_NUM_CTX` to change).
 
 ## Try the demo
 
@@ -112,7 +130,12 @@ to run it on a throwaway Neo4j by hand.
 - **Graph toolkit** — `scripts/`: an agent-maintained, bi-temporal knowledge-graph methodology
   (lint, search, context-assembly, Notion + local-document capture lanes, bi-temporal supersede).
   Clone the repo and run any of it via the `npm run` scripts (`npm run lint:graph`,
-  `npm run resume`, `npm run search`, …).
+  `npm run resume`, `npm run search`, …). The **semantic-search lane is optional** and follows the
+  same Hugging Face pattern as the models above: install `@xenova/transformers`, and the first
+  `npm run embed` fetches one small embedding model (`Xenova/bge-small-en-v1.5`, ~30 MB) from the
+  Hugging Face Hub, caches it, and from then on embeds fully on-device — no API, no key, no
+  Python. Without it, keyword search still works; `npm run search` just notes the semantic lane
+  is off.
 - **Local AI runtime (Act)** — `slipway/`: a bundled, zero-dependency Python control panel
   (**Slipway**) that serves local models (MLX via `vllm-mlx`, or Ollama) and launches agent CLIs.
   The Studio autostarts it and federates over `127.0.0.1:8765`, so everything — see, understand,

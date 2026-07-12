@@ -201,9 +201,12 @@ npm start          <span class="c"># same dance: database, schema, demo, Studio<
       <span class="note-tag">honest, up front</span>
       <p>Scatterbrained is <strong>alpha</strong> — surfaces and scripts can change between versions.
         Talking to it, and AI summaries / Q&amp;A, run on a local model: the bundled Slipway runtime
-        starts with the Studio and serves one once you pull it (<a href="tour.html">tour, beats 12–14</a>),
-        and <a href="https://ollama.com">Ollama</a> works too. Everything else works without a model,
-        and nothing leaves your machine.</p>
+        starts with the Studio and serves one once you pull it (<a href="tour.html">tour, beats 12–14</a>).
+        Models come from one of two places, and both are a one-time download: <strong>Hugging Face</strong> —
+        Slipway's Browse searches the public Hub catalog (no account, no key) and caches the model on
+        your disk — or <strong><a href="https://ollama.com">Ollama</a></strong>, if you run it, with
+        models you've pulled via <code>ollama pull</code>. After the download the model loads and runs
+        fully offline. Everything else works without a model, and nothing leaves your machine.</p>
     </div>
   </div>
 </section>
@@ -218,6 +221,8 @@ npm start          <span class="c"># same dance: database, schema, demo, Studio<
       <div><dt>The database</dt><dd>A local graph database holds it all — started for you in Docker; you never have to touch it, and it exports to plain JSON in git. Your data never leaves your machine.</dd></div>
       <div><dt>Protected facts &amp; notes</dt><dd>Pin a number or citation and a rewrite can't quietly change it — alterations are held for your approval. Jot a <em>note</em> on anything and the next agent sync acts on it.</dd></div>
       <div><dt>Record vs. intention time</dt><dd>When a fact was written or superseded is kept automatically; deadlines, revisit dates, and targets are yours to set — the Time lens reads them back as an agenda.</dd></div>
+      <div><dt>Hugging Face</dt><dd>The open library where the ML community publishes models — think "GitHub for AI models." Slipway's <em>Browse</em> searches its public catalog and downloads a model <em>once</em> into a cache on your disk (no account, no key, size shown before you pull); after that the model runs fully offline.</dd></div>
+      <div><dt>Ollama</dt><dd>A popular free app that runs AI models locally on any platform. Scatterbrained doesn't require it — but if you already use it, every model you've pulled with <code>ollama pull</code> shows up in Slipway's picker, ready to talk to your graph.</dd></div>
     </div>
   </div>
 </section>

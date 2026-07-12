@@ -10,6 +10,20 @@ can follow, then the technical details underneath.
 > believed six months ago and why, with every claim tracing back to its source. No cloud,
 > no subscription — it's yours.
 
+## [Unreleased]
+
+### Docs
+- **Where local models actually come from, spelled out.** The README, getting-started page, and
+  tour now clearly explain the two model sources and their dependencies: **Hugging Face** —
+  Slipway's Browse searches the public Hub (no account, no key), shows the size before you pull,
+  downloads once into the shared `~/.cache/huggingface/hub`, and runs offline after (MLX lane
+  needs `pip install vllm-mlx huggingface_hub`, Apple Silicon) — and **Ollama** — install it
+  yourself, keep the daemon running, `ollama pull` your models (stored in Ollama's own
+  `~/.ollama/models`, not the HF cache), and they appear in Slipway's picker; context capped at
+  32k by default (`SLIPWAY_NUM_CTX`). Also documented that the optional semantic-search lane
+  fetches its embedding model (`Xenova/bge-small-en-v1.5`, ~30 MB) from Hugging Face once, then
+  embeds fully on-device. New getting-started glossary entries for Hugging Face and Ollama.
+
 ## [0.2.0-alpha.4] — Talk to your map, fully on your own machine (2026-07-09)
 
 **TL;DR (explain-like-I'm-5):** Now you can *talk* to your second brain — and everything runs on

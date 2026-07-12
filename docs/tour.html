@@ -198,7 +198,10 @@
     <figure><img loading="lazy" src="screenshots/17-launcher.png" alt="Slipway inside the Studio's Agents lens: a running MLX model with its port and memory, the launcher set to Claude Code, and the active-model row with Cloud, Browse HF and Change model" /></figure>
     <p class="sub">honest: it ships with no model and loads none until you pull one (macOS; MLX needs
       Apple silicon, Ollama runs anywhere) — every other beat on this page works without one, and
-      <code>SLIPWAY_AUTOSTART=0</code> keeps the runtime from starting at all.</p>
+      <code>SLIPWAY_AUTOSTART=0</code> keeps the runtime from starting at all. Models are a one-time
+      download: <b>Browse HF</b> pulls from the public Hugging Face catalog (no account, no key,
+      size shown up front) into your local cache, and Ollama models come from your own
+      <code>ollama pull</code> — either way they run fully offline afterward.</p>
   </section>
 
   <section class="beat">
