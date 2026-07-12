@@ -60,7 +60,7 @@ the demo graph on first run, and launches the Studio. To use **your own** graph,
 Or install the CLI globally and launch from anywhere:
 
 ```sh
-npm i -g scatterbrained
+npm i -g scatterbrained@alpha
 scatterbrained studio                 # launch the Studio (auto-Neo4j + demo graph)
 scatterbrained capture "a thought"    # drop a note or a URL into the running Studio
 scatterbrained status                 # is it up? what's in the graph?
