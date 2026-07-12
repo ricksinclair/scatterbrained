@@ -10,7 +10,38 @@ can follow, then the technical details underneath.
 > believed six months ago and why, with every claim tracing back to its source. No cloud,
 > no subscription — it's yours.
 
-## [Unreleased]
+## [0.2.0-alpha.5] — Ask before you think, one search brain, honest model docs (2026-07-12)
+
+**TL;DR (explain-like-I'm-5):** Loading an AI model used to just *happen* when you clicked a
+button — now the Studio **asks first**, with a full-screen "this model is X GB and will take a
+minute" consent, and the brain picker finally lists **every** model you have installed instead of
+only the one already running. Search got **one brain instead of three**: the voice assistant, the
+search box, and the AI's own memory-lookup now all use the same smart search, so the specific
+thing you asked for isn't buried under popular well-connected nodes. And the docs now say plainly
+**where models come from** (Hugging Face or Ollama — a one-time download, then fully offline) and
+that protected facts can lock in *anything* — a name, a phrase, an ID — not just numbers.
+
+**Technical:**
+
+### Added
+- **Full-screen model-load consent.** The orb's brain picker now lists every model the runtime
+  can serve (with sizes) instead of only the resident one; choosing a non-resident model opens an
+  accept/decline naming the model and its size — past 10 GB it warns about load time and memory.
+  Decline reverts the picker so it never claims a brain that was never loaded; Escape and the
+  backdrop decline; focus management and Tab-trap included. (PR #46)
+
+### Changed
+- **One retrieval path.** `search_nodes` (voice), `/api/search` (the search box), and the local
+  lane's grounding previously each ran a private CONTAINS query ordered by node degree — burying
+  specific answers under popular hubs. All three now call the same hybrid `searchGraph()` the CLI
+  uses; the keyword lane retries once with the query escaped when Lucene rejects it; superseded
+  facts are demoted, never dropped; `former_name` is indexed so alias-aware search survives.
+  (PR #46)
+- **The Studio is now derived from canonical** via the sync's new Studio lane — no more
+  hand-edits straight into the public repo (the mechanism behind past mirror inversions). (PR #46)
+- **Site truth-ups.** The site describes the Act plane as bundled (not an "optional companion"),
+  and the tour's launcher beat pictures the surface users can actually reach — the Agents-lens
+  embed. Slipway re-vendored from canonical after its brand fix. (PRs #44, #45)
 
 ### Docs
 - **Where local models actually come from, spelled out.** The README, getting-started page, and
