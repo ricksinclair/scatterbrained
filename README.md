@@ -66,7 +66,8 @@ scatterbrained capture "a thought"    # drop a note or a URL into the running St
 scatterbrained status                 # is it up? what's in the graph?
 ```
 
-The published CLI is intentionally these three commands — what a new user needs.
+The published CLI is intentionally these four commands — what a new user needs
+(`backup` writes both a JSON snapshot and a readable markdown memory file — see Upgrading).
 The full graph toolkit (lint, resume, search, context, new-project, embed,
 supersede, …) ships with the repo; clone it and run `npm run <command>`.
 
@@ -126,8 +127,12 @@ on a graph that has data, and the schema re-applies idempotently (additive-only)
 - **Global install** — re-run `npm i -g scatterbrained@alpha`.
 - **Clone** — `git pull && npm install`.
 
-Belt and suspenders before a big jump (clone): `npm run export` writes the whole graph to
-`backups/graph.json`. What changed in each version is in the [CHANGELOG](CHANGELOG.md).
+Belt and suspenders before a big jump: `scatterbrained backup` writes **two files** — the full
+JSON snapshot (machine lane; restore with the repo toolkit's `npm run import`) and a
+human-readable **markdown memory file** of your current decisions, goals, pinned facts, and open
+ideas. That's the double-accounting exit guarantee: leave Scatterbrained and your graph is still
+yours (it's your Neo4j + JSON); leave any one AI tool and your memory is plain markdown anything
+can read. What changed in each version is in the [CHANGELOG](CHANGELOG.md).
 
 ## Try the demo
 

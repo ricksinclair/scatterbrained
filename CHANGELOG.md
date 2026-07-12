@@ -27,9 +27,14 @@ look at the same moment, so scrubbing to last March moves *everything* to last M
   TL;DR (parsed from the bundled CHANGELOG by the tested `whatsnew.js`); the Help menu shows
   `v<version>`; after an upgrade a one-time bottom toast announces the change (last-seen marker
   in localStorage — zero network, the changelog ships in the package).
-- **`scatterbrained backup [--output <f>]`** — exports the whole graph to a JSON file
-  (default `./scatterbrained-backup-<date>.json`), wrapping the toolkit's export so `npx` users
-  get a visible file without a repo clone. Restore with the repo toolkit's `npm run import`.
+- **`scatterbrained backup [--output <f>]` — double-accounting by design.** One command, two
+  files: the full JSON graph snapshot (machine lane — restore with the repo toolkit's
+  `npm run import`) **and** `scatterbrained-memory-<date>.md`, a human-readable rendering of
+  your major knowledge — current decisions with their rationale, goals, pinned facts, open
+  ideas, and rules, grouped by project, superseded knowledge excluded. The exit guarantee,
+  stated plainly: leave Scatterbrained and the graph is still yours; leave any one AI tool and
+  your memory is plain markdown anything can read. (`npm run export:memory` in the toolkit;
+  tested pure renderer.)
 - **`scatterbrained status` knows about releases** — prints the installed version and,
   best-effort, the newest published one with the upgrade command; plus `--version`/`-v`.
   The registry check runs *only* on explicit `status` invocation, never from the Studio.

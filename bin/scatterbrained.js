@@ -34,9 +34,9 @@ Commands:
   studio                 launch the Studio (auto-starts Neo4j + a demo graph)
   capture "<text|url>"   drop a note or a web link into the running Studio
   status                 is the Studio up? what's in the graph? newest release?
-  backup [--output <f>]  export the whole graph to a JSON file (default:
-                         ./scatterbrained-backup-<date>.json) — restore with the
-                         repo toolkit's \`npm run import\`
+  backup [--output <f>]  export the whole graph as JSON (restore with the repo
+                         toolkit's \`npm run import\`) PLUS a human-readable
+                         markdown memory file — your knowledge, no app needed
 
 Capture a note anchored to a node:  scatterbrained capture "…" --on <nodeId>
 
@@ -168,13 +168,19 @@ if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
 }
 
 if (cmd === 'backup') {
-  // Wraps the toolkit's export (ships in the package) with a cwd-relative default,
-  // so npx users get a visible file — the package's own dir is hidden in npx's cache.
+  // Double accounting, in one command: the full JSON snapshot (machine lane, restore
+  // with `npm run import`) PLUS a human-readable markdown memory file — so the graph
+  // survives leaving Scatterbrained, and the memory survives leaving any one AI tool.
+  // cwd-relative defaults: npx users get visible files (the package dir is hidden in
+  // npx's cache).
   const oi = rest.indexOf('--output');
-  const out = path.resolve(oi >= 0 && rest[oi + 1] ? rest[oi + 1]
-    : `scatterbrained-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  const date = new Date().toISOString().slice(0, 10);
+  const out = path.resolve(oi >= 0 && rest[oi + 1] ? rest[oi + 1] : `scatterbrained-backup-${date}.json`);
   const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts/export-graph.js'), '--output', out], { stdio: 'inherit' });
-  process.exit(res.status ?? 1);
+  if ((res.status ?? 1) !== 0) process.exit(res.status ?? 1);
+  const md = (out.endsWith('.json') ? out.slice(0, -5) : out).replace('scatterbrained-backup', 'scatterbrained-memory') + '.md';
+  const res2 = spawnSync(process.execPath, [path.join(ROOT, 'scripts/export-memory.js'), '--output', md], { stdio: 'inherit' });
+  process.exit(res2.status ?? 1);
 }
 
 if (cmd === 'studio') {
