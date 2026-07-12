@@ -8,7 +8,8 @@
 // exactly as the CLI digest does.
 
 import { groupDigest, relativeLabel, BUCKET_ORDER } from './digest.js';
-import { effectiveDate, recurLabel } from './recurrence.js';
+import { effectiveDate, recurLabel, occurrencesInRange } from './recurrence.js';
+import { isHhMm } from './schedule.js';
 
 // calendar kind → the chip the row wears. Closed set = the agenda's intention kinds;
 // anything else (created) is filtered out before bucketing.
@@ -63,4 +64,58 @@ export function buildAgenda(items = [], nowISO) {
     count += buckets[b].length;
   }
   return { buckets, count, empty: count === 0 };
+}
+
+// ── Day view (the hour-scoped zoom of Agenda) ──────────────────────────────────
+// A plain-English hour label for a 0–23 hour: 0→'12 AM', 9→'9 AM', 12→'12 PM', 19→'7 PM'.
+export function hourLabel(h) {
+  const ap = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12} ${ap}`;
+}
+
+// dayView(items, dateISO, nowISO) → the one-day hour rail.
+//   { date, isToday, slots: [{ hour, label, rows[] }], untimed: rows[], count, empty }
+// `items` are /api/calendar rows ({id, name, label, kind, date, recur?, time?}). Only intention
+// kinds (KIND_CHIP: due/review/goal/expiry) are placed — 'created' record-time activity is noise,
+// dropped exactly as the buckets do. An item lands on `dateISO` if its date is that day, OR — for a
+// recurring anchor (it.recur) — an occurrence falls on that day (expanded by the pure recurrence
+// engine, so a weekly review shows on its occurrence day, not just its anchor day).
+// Timed items (due_time/review_time, an 'HH:MM') group under their hour, soonest-first; untimed
+// items sink into a "sometime today" tray (they don't pretend to be due at midnight). `nowISO` is
+// the playhead's date — it only sets `isToday`, so the rail can mark the current day.
+export function dayView(items = [], dateISO, nowISO) {
+  const day = String(dateISO || '').slice(0, 10);
+  const onDay = (items || []).filter((it) => {
+    if (!it || !KIND_CHIP[it.kind]) return false;
+    if (it.recur) return occurrencesInRange(it.date, it.recur, day, day).length > 0;
+    return String(it.date).slice(0, 10) === day;
+  });
+  const slotsByHour = new Map();     // hour → rows[]
+  const untimed = [];
+  for (const it of onDay) {
+    const time = isHhMm(it.time) ? it.time : null;
+    const row = {
+      id: it.id, name: it.name || '', label: it.label || '',
+      kind: it.kind, chip: KIND_CHIP[it.kind], time,
+    };
+    if (time) {
+      const hour = Number(time.slice(0, 2));
+      if (!slotsByHour.has(hour)) slotsByHour.set(hour, []);
+      slotsByHour.get(hour).push(row);
+    } else {
+      untimed.push(row);
+    }
+  }
+  const slots = [...slotsByHour.keys()].sort((a, z) => a - z).map((hour) => ({
+    hour, label: hourLabel(hour),
+    rows: slotsByHour.get(hour).sort((a, z) => a.time.localeCompare(z.time)),
+  }));
+  const timedCount = slots.reduce((n, s) => n + s.rows.length, 0);
+  const count = timedCount + untimed.length;
+  return {
+    date: day,
+    isToday: !!day && day === String(nowISO || '').slice(0, 10),
+    slots, untimed, count, empty: count === 0,
+  };
 }

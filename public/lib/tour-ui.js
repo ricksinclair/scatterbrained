@@ -121,6 +121,7 @@ export function initTour() {
   let offerEl = null;
   function dismissOffer() { if (offerEl) { offerEl.remove(); offerEl = null; } }
   function maybeOffer() {
+    if (document.querySelector('.tour-offer')) return;   // the what's-new toast has the slot this boot
     if (!shouldOfferTour(loadStore(), Date.now())) return;
     offerEl = document.createElement('div');
     offerEl.className = 'tour-offer';

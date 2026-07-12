@@ -40,6 +40,32 @@ export function isIsoDate(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
+// Time-of-day companions (day view). An OPTIONAL 'HH:MM' (24h, local wall-clock) stored beside
+// a due_at/review_at anchor as due_time / review_time — additive/optional, exactly like the
+// due_every/review_every cadences. A closed set (TIME_FIELDS), same discipline as SCHEDULE_KINDS:
+// the day view is the only reader; every existing reader keeps reading a 'YYYY-MM-DD' string
+// untouched, so a node with a date and no time is the normal case ("sometime today"), not an error.
+// A time without a day is a fragment, not a schedule (lint:graph enforces this).
+export const TIME_FIELDS = {
+  due_at:    'due_time',
+  review_at: 'review_time',
+};
+
+// The 'HH:MM' 24h time string the day-view setter accepts ('' clears). Rejects 24:00 / 9:5 /
+// out-of-range — a strict wall-clock, no seconds, no timezone.
+export function isHhMm(s) {
+  return typeof s === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+}
+
+// The ordering key for one scheduled row in a day: 'YYYY-MM-DDTHH:MM'. An untimed anchor sorts
+// to '…T23:59' — the END of its day — so it sinks BELOW a 9am timed item on the same day rather
+// than pretending to be due at midnight (the '00:00' bug, which would rank every untimed item
+// ahead of every timed one). Strings compare lexicographically = chronologically.
+export function scheduleSortKey(dateISO, timeHhMm) {
+  const d = isIsoDate(dateISO) ? dateISO : '9999-12-31';
+  return d + 'T' + (isHhMm(timeHhMm) ? timeHhMm : '23:59');
+}
+
 // The soonest intention date on a node (for agenda ordering), considering the given props.
 // `node` carries date strings; returns the earliest 'YYYY-MM-DD' or null.
 export function soonestDate(node, props = SCHEDULE_KINDS) {

@@ -314,8 +314,17 @@ export const REGISTRY = {
     id: 'timeline',
     render(_node, data, { esc, trunc }) {
       const bt = [];
-      if (data.created_at) bt.push('created ' + String(data.created_at).slice(0, 10));
-      bt.push(data.valid_until ? `<span class="sup">valid_until ${String(data.valid_until).slice(0, 10)}</span>` : 'valid (current)');
+      // "Stand here" (DESIGN-temporal §3.1): created/valid_until dates are jump controls that
+      // rewind the constellation to that version's position. The date carries on data-standhere;
+      // app.js's #i-components delegate calls jumpPlayhead. Plain text when there's no usable date.
+      const standHere = (label, ts) => {
+        const iso = String(ts).slice(0, 10);
+        return /^\d{4}-\d{2}-\d{2}$/.test(iso)
+          ? `<button class="tl-stand" data-standhere="${esc(iso)}" title="rewind the graph to ${esc(iso)}">${label} ${esc(iso)}</button>`
+          : `${label} ${esc(iso)}`;
+      };
+      if (data.created_at) bt.push(standHere('created', data.created_at));
+      bt.push(data.valid_until ? `<span class="sup">${standHere('valid_until', data.valid_until)}</span>` : 'valid (current)');
       if (data.superseded_by) {
         // navigable when the server resolved the reference to a live node; else plain text
         const label = esc(trunc(data.superseded_by_name || String(data.superseded_by), 30));

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAgenda, itemsOnDay, KIND_CHIP, AGENDA_BUCKETS } from '../public/lib/agenda.js';
+import { buildAgenda, itemsOnDay, KIND_CHIP, AGENDA_BUCKETS, dayView, hourLabel } from '../public/lib/agenda.js';
 
 const NOW = '2026-07-01';
 const item = (date, kind, name = 'n', label = 'Goal', id = 'id-' + date + kind) =>
@@ -116,6 +116,78 @@ describe('itemsOnDay — the mini-month day filter', () => {
   it('no day (cleared filter) → the items unchanged; missing input → safe empty', () => {
     expect(itemsOnDay(items, null)).toBe(items);
     expect(itemsOnDay(undefined, '2026-07-02')).toEqual([]);
+  });
+});
+
+describe('hourLabel — plain-English hour', () => {
+  it('renders 12h with meridiem, midnight and noon as 12', () => {
+    expect(hourLabel(0)).toBe('12 AM');
+    expect(hourLabel(9)).toBe('9 AM');
+    expect(hourLabel(12)).toBe('12 PM');
+    expect(hourLabel(13)).toBe('1 PM');
+    expect(hourLabel(19)).toBe('7 PM');
+    expect(hourLabel(23)).toBe('11 PM');
+  });
+});
+
+describe('dayView — the hour-scoped zoom', () => {
+  const DAY = '2026-07-10';
+  const timed = (time, kind = 'due', name = 't', id = 'id-' + time) =>
+    ({ id, name, label: 'Idea', kind, date: DAY, time });
+  const untimedItem = (kind = 'target', name = 'u', id = 'u-' + kind) =>
+    ({ id, name, label: 'Goal', kind, date: DAY });
+
+  it('groups timed items under their hour, soonest-first', () => {
+    const d = dayView([timed('19:00'), timed('09:30'), timed('09:00')], DAY, DAY);
+    expect(d.slots.map((s) => s.hour)).toEqual([9, 19]);
+    expect(d.slots[0].label).toBe('9 AM');
+    expect(d.slots[0].rows.map((r) => r.time)).toEqual(['09:00', '09:30']);   // within-hour order
+    expect(d.slots[1].rows[0].time).toBe('19:00');
+    expect(d.untimed).toEqual([]);
+    expect(d.count).toBe(3);
+    expect(d.empty).toBe(false);
+  });
+
+  it('sinks untimed intention items into the "sometime today" tray', () => {
+    const d = dayView([timed('09:00'), untimedItem('target'), untimedItem('expiry')], DAY, DAY);
+    expect(d.slots.map((s) => s.hour)).toEqual([9]);
+    expect(d.untimed.map((r) => r.chip).sort()).toEqual(['expires', 'goal']);
+    expect(d.untimed.every((r) => r.time === null)).toBe(true);
+  });
+
+  it('places only the requested day and drops created activity', () => {
+    const d = dayView([
+      timed('10:00'),
+      { id: 'x', name: 'other', label: 'Idea', kind: 'due', date: '2026-07-11', time: '10:00' },
+      { id: 'c', name: 'act', label: 'Idea', kind: 'created', date: DAY },
+    ], DAY, DAY);
+    expect(d.count).toBe(1);
+    expect(d.slots[0].rows[0].id).toBe('id-10:00');
+  });
+
+  it('expands a recurring anchor onto its occurrence day', () => {
+    // weekly review anchored 2026-07-03 → an occurrence lands 2026-07-10 with a 19:00 time
+    const d = dayView([{ id: 'r', name: 'weekly review', label: 'Insight', kind: 'review', date: '2026-07-03', recur: 'weekly', time: '19:00' }], DAY, DAY);
+    expect(d.slots.map((s) => s.hour)).toEqual([19]);
+    expect(d.slots[0].rows[0].name).toBe('weekly review');
+    // a week the anchor does NOT hit shows nothing
+    expect(dayView([{ id: 'r', kind: 'review', date: '2026-07-03', recur: 'weekly', time: '19:00' }], '2026-07-09', '2026-07-09').empty).toBe(true);
+  });
+
+  it('marks isToday only when the day equals the playhead date', () => {
+    expect(dayView([], DAY, DAY).isToday).toBe(true);
+    expect(dayView([], DAY, '2026-07-09').isToday).toBe(false);
+  });
+
+  it('ignores a malformed time (treats it as untimed)', () => {
+    const d = dayView([{ id: 'b', name: 'bad', label: 'Idea', kind: 'due', date: DAY, time: '25:00' }], DAY, DAY);
+    expect(d.slots).toEqual([]);
+    expect(d.untimed.map((r) => r.id)).toEqual(['b']);
+  });
+
+  it('empty day → empty flag, safe shape; undefined items tolerated', () => {
+    expect(dayView([], DAY, DAY)).toMatchObject({ slots: [], untimed: [], count: 0, empty: true });
+    expect(dayView(undefined, DAY, DAY).empty).toBe(true);
   });
 });
 

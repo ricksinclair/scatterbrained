@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectKind, expandRoots, isWithinRoots, pickPrimarySource, excerptAround, TEXT_KINDS } from '../lib/source.js';
+import { detectKind, expandRoots, expandHome, isWithinRoots, pickPrimarySource, excerptAround, TEXT_KINDS } from '../lib/source.js';
 
 describe('detectKind', () => {
   it('maps extensions to typed kinds, unknown otherwise', () => {
@@ -96,5 +96,35 @@ describe('excerptAround', () => {
     const big = Array.from({ length: 100 }, (_, i) => 'row ' + i).join('\n');
     const r = excerptAround(big, ['a', 'of'], { maxLines: 10 });   // short kws dropped → head
     expect(r.text.split('\n').length).toBe(10);
+  });
+});
+
+// ── expandHome ──────────────────────────────────────────────────────────────
+// A Source's file_path is written by hand as often as by document-index.js, and hands type
+// `~/Projects/...`. path.isAbsolute('~/x') is FALSE, so a tilde path was treated as REPO-
+// RELATIVE and resolved to <repo>/~/Projects/... — a path that cannot exist. 40 of 393
+// Sources in the live graph carry tilde paths; every one of their viewers said
+// "Source file not found" while the file sat happily on disk. expandRoots already expanded
+// `~`; absSrc did not. One helper, both callers.
+describe('expandHome', () => {
+  it('expands a bare ~ and ~/ prefix against the home dir', () => {
+    expect(expandHome('~', '/home/demo')).toBe('/home/demo');
+    expect(expandHome('~/Projects/x.md', '/home/demo')).toBe('/home/demo/Projects/x.md');
+  });
+  it('leaves absolute and relative paths alone', () => {
+    expect(expandHome('/abs/x.md', '/home/demo')).toBe('/abs/x.md');
+    expect(expandHome('docs/x.md', '/home/demo')).toBe('docs/x.md');
+  });
+  it('does NOT expand ~user — that is another account, not this home dir', () => {
+    expect(expandHome('~alice/secrets', '/home/demo')).toBe('~alice/secrets');
+  });
+  it('never yields an escape hatch: ~/../etc still normalizes under the caller, not above it', () => {
+    // expandHome is purely lexical; the sandbox check (isWithinRoots on the realpath) is what
+    // guards. This pins that expandHome itself introduces no traversal beyond joining home.
+    expect(expandHome('~/../etc/passwd', '/home/demo')).toBe('/home/etc/passwd');
+  });
+  it('is safe on empty / nullish input', () => {
+    expect(expandHome('', '/home/demo')).toBe('');
+    expect(expandHome(undefined, '/home/demo')).toBe('');
   });
 });

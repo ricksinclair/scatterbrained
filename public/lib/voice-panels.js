@@ -25,6 +25,21 @@ export function renderAgendaBody(digest = {}) {
   return secs || '<div class="vpn-empty">Nothing due or up for review in the next 30 days.</div>';
 }
 
+// The day-view hour rail as a voice-panel body: timed items under their hour, an untimed tray,
+// from the same voiceToday payload get_briefing scope:'today' returns ({date, slots:[{label,items}],
+// untimed}). The spoken answer and the on-screen Day view render the same rows.
+export function renderTodayBody(day = {}) {
+  const row = (it) =>
+    `<div class="vpn-row" data-node="${esc(it.id || '')}">` +
+    (it.time ? `<span class="vpn-time">${esc(it.time)}</span>` : '') +
+    `<span class="vpn-name">${esc(it.name)}</span><span class="vpn-chip">${esc(it.kind || it.label || '')}</span></div>`;
+  const slots = (day.slots || []).map((s) =>
+    `<div class="vpn-sec"><div class="vpn-sec-t">${esc(s.label)}</div>${(s.items || []).map(row).join('')}</div>`).join('');
+  const tray = (day.untimed || []).length
+    ? `<div class="vpn-sec"><div class="vpn-sec-t">sometime today</div>${day.untimed.map(row).join('')}</div>` : '';
+  return (slots + tray) || '<div class="vpn-empty">Nothing left on today’s schedule.</div>';
+}
+
 export function renderSearchBody(results = []) {
   if (!results.length) return '<div class="vpn-empty">No matches.</div>';
   return results.slice(0, 12).map((r) =>
@@ -59,7 +74,7 @@ export function renderNodeBody(signals, data, components = null) {
   return parts.map((p) => `<div class="vpn-comp">${p.html}</div>`).join('') || '<div class="vpn-empty">Nothing to show for this node.</div>';
 }
 
-const KIND_ICON = { agenda: '◷', node: '◉', search: '⌕', viz: '◔' };
+const KIND_ICON = { agenda: '◷', today: '☀', node: '◉', search: '⌕', viz: '◔' };
 
 // The card wrapper (open state) and its collapsed chip. `replyTo` ties the card to the
 // utterance that produced it; positional placement under the assistant turn does the rest.

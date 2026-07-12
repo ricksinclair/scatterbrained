@@ -9,6 +9,7 @@
 import { statusText, computeDoi, placeLabels, smartLabel, collideRadius, particlesForZoom } from '/lib/graph.js';
 import { composeView, keyFacts, resurfaceState, miniMarkdown, dueLabel } from '/lib/registry.js';
 import { detectCandidates } from '/lib/protected-facts.js';
+import { shouldAnnounce, announceCopy } from '/lib/whatsnew.js';
 import { deriveNodeView } from '/lib/node-view.js';
 import { initTour } from '/lib/tour-ui.js';
 import { initStaleBanner } from '/lib/stale-banner-ui.js';
@@ -27,7 +28,8 @@ import { fieldRowsFor, membersForField, relateArgs } from '/lib/fields.js';
 import { initTimeLens } from '/lib/time-lenses.js';
 import { initDocsLens } from '/lib/docs-ui.js';
 import { isCollapsed as isColRaw, toggleCollapsed as togColRaw } from '/lib/collapse.js';
-import { KIND_META, RECUR_META, RECUR_KINDS } from '/lib/schedule.js';
+import { KIND_META, RECUR_META, RECUR_KINDS, TIME_FIELDS } from '/lib/schedule.js';
+import { playheadISO, sliderToISO, isoToSlider, isLive } from '/lib/timestate.js';
 import { initCodebase } from '/lib/codebase-ui.js';
 import { initAgents } from '/lib/agents-ui.js';
 import { initVoice } from '/lib/voice-ui.js';
@@ -93,6 +95,14 @@ const activeTypes = new Set();
 let staleOnly = false;
 const isFiltered = () => activeTypes.size > 0 || staleOnly;
 let tMin = 0, tMax = 1, tv = 100;
+// The shared playhead (DESIGN-temporal §1.1): the constellation slider publishes its date here and
+// the Time lens (Agenda + Day scope) reads it, so scrubbing the graph to a past date reads that date
+// AS OF everywhere. null = live/now. The constellation's own render still uses selT() (epoch-ms) —
+// this mirrors the same position as a date, the one source of "when" the lenses stand on.
+const timeState = { atISO: null };
+const pad2 = (n) => String(n).padStart(2, '0');
+const isoToday = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+const playheadDate = () => playheadISO(timeState, isoToday());
 let focusId = null, focusDoi = {};
 let didInitialFit = false;
 let lastMx = 0, lastMy = 0, idleTimer = null;
@@ -734,6 +744,13 @@ function renderScheduleSection() {
       RECUR_KINDS.map((r) => `<option value="${r}"${r === cur ? ' selected' : ''}>${esc(RECUR_META[r].label)}</option>`)).join('');
     return `<select class="sch-recur" data-recur="${esc(k)}" aria-label="${esc(KIND_META[k].label)} recurrence"${node[k] ? '' : ' disabled'}>${opts}</select>`;
   };
+  // Optional time-of-day (day view): an <input type=time> beside the date. Disabled until a
+  // date is set — a time needs a day (the same rule lint:graph enforces). Empty = "sometime
+  // today"; the day view sinks untimed items to the end of the day.
+  const timeInput = (k) => {
+    const cur = node[TIME_FIELDS[k]] || '';
+    return `<input type="time" class="sch-time" data-time="${esc(k)}" value="${esc(cur)}" aria-label="${esc(KIND_META[k].label)} time"${node[k] ? '' : ' disabled'}>`;
+  };
   sec.innerHTML = '<button class="insp-sec-h" type="button"><span class="insp-sec-t">Schedule</span><i class="insp-chev" aria-hidden="true">›</i></button>' +
     '<div class="insp-sec-b">' + order.map((k) => {
       const val = node[k] || '';
@@ -741,6 +758,7 @@ function renderScheduleSection() {
       const overdue = val && Date.parse(val + 'T00:00:00') < Date.now();
       return `<div class="sch-row" data-kind="${esc(k)}"><span class="sch-label">${esc(KIND_META[k].label)}</span>` +
         `<input type="date" class="sch-date" data-schedule="${esc(k)}" value="${esc(val)}" aria-label="${esc(KIND_META[k].label)} date">` +
+        timeInput(k) +
         recurSelect(k) +
         (dl ? `<span class="sch-due${overdue ? ' overdue' : ''}">${esc(dl)}</span>` : '') + '</div>';
     }).join('') + '</div>';
@@ -990,6 +1008,9 @@ function handleCard(action) {
     if (rx) { e.preventDefault(); removeEdge(rx.dataset.unrel, rx.dataset.name); return; }
     const nav = e.target.closest('.nav-node');
     if (nav) { e.preventDefault(); selectByIdOrName(nav.dataset.id, nav.dataset.name); return; }
+    // History "stand here" (DESIGN-temporal §3.1): rewind the constellation to this version's date.
+    const stand = e.target.closest('[data-standhere]');
+    if (stand) { e.preventDefault(); jumpPlayhead(stand.dataset.standhere); return; }
     const gp = e.target.closest('[data-gp-action="link-project"]');
     if (gp) {
       // Goal degraded-state on-ramp: open the "Edit attributes" section and focus the existing
@@ -1029,17 +1050,19 @@ function handleCard(action) {
 // together (the setter clears the cadence when the date clears, and preserves the other
 // field on either change), so we always read both from the row before sending.
 document.getElementById('i-schedule').addEventListener('change', async (e) => {
-  const ctl = e.target.closest('[data-schedule], [data-recur]'); if (!ctl || !current) return;
+  const ctl = e.target.closest('[data-schedule], [data-recur], [data-time]'); if (!ctl || !current) return;
   const row = ctl.closest('.sch-row'); if (!row) return;
   const kind = row.dataset.kind;
   const when = row.querySelector('.sch-date').value;
   const every = row.querySelector('.sch-recur').value;
+  const time = row.querySelector('.sch-time').value;
   try {
-    const r = await fetch('/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.n.id, kind, when, every }) }).then((x) => x.json());
+    const r = await fetch('/api/schedule', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.n.id, kind, when, every, time }) }).then((x) => x.json());
     if (r.error) { ctl.title = r.error; return; }
     current.signals[kind] = r.value || '';
     current.signals[kind.replace(/_at$/, '_every')] = r.every || '';
-    rerenderActive();   // re-render: refresh the due label + enable/disable the cadence select
+    current.signals[TIME_FIELDS[kind]] = r.time || '';
+    rerenderActive();   // re-render: refresh the due label + enable/disable the cadence & time inputs
   } catch (err) { /* ignore */ }
 });
 // Goal target_date (#25 P1): commit the date input → narrow setter, then re-render.
@@ -1726,7 +1749,8 @@ function createPicker({ input, menu, chips, onPick, getExclude, filterLabel }) {
 })();
 
 // The Time lens (D1): Agenda | Quarters | Month in one overlay (lib/time-lenses.js).
-const timeUi = initTimeLens({ esc, rgba, colorOf, secCollapsed, secToggle, pauseMainGraph, resumeMainGraph, selectNode, refreshGraphData, requestClose: requestLensClose });
+const timeUi = initTimeLens({ esc, rgba, colorOf, secCollapsed, secToggle, pauseMainGraph, resumeMainGraph, selectNode, refreshGraphData, requestClose: requestLensClose,
+  playheadDate, playheadLive: () => isLive(timeState), resetPlayhead, jumpPlayhead });
 const docsUi = initDocsLens({ esc, openPerms: () => perms.open() });
 
 // ── Nav state machine (Stage C2): lib/nav.js owns the states; this block owns the side
@@ -1840,6 +1864,30 @@ document.querySelectorAll('.lens-head .lh-tab').forEach((b) => { b.onclick = () 
   document.addEventListener('mousedown', (e) => { if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) close(); });
   // popover-owned Esc, consumed so the global unwind doesn't also step a layer
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pop.hidden) { e.stopPropagation(); close(); } });
+})();
+
+// Version + one-time "what's new" (upgrades P2). /api/version is served by our own
+// local server and read once; the last-seen marker lives in localStorage, so the
+// announcement fires exactly once per upgrade, never on first run, and no network
+// beyond localhost is touched. Dev checkouts (version 'dev') stay silent.
+(async function initVersion() {
+  let v = null;
+  try { v = await fetch('/api/version').then((r) => r.json()); } catch { return; }
+  if (!v || !v.version || v.version === 'dev') return;
+  const line = document.getElementById('hp-version');
+  if (line) { line.textContent = `v${v.version}`; line.hidden = false; }
+  const KEY = 'scatterbrained.lastSeenVersion';
+  const last = localStorage.getItem(KEY);
+  localStorage.setItem(KEY, v.version);
+  if (!shouldAnnounce(last, v.version)) return;
+  const el = document.createElement('div');
+  el.className = 'tour-offer';
+  el.innerHTML = '<span class="tour-offer-t"></span><span class="tour-offer-btns">' +
+    '<a class="tour-offer-later" href="https://github.com/ricksinclair/scatterbrained/blob/main/CHANGELOG.md" target="_blank" rel="noopener">What&#8217;s new ↗</a>' +
+    '<button class="tour-offer-go">OK</button></span>';
+  el.querySelector('.tour-offer-t').textContent = announceCopy(v.version, v.tldr);
+  el.querySelector('.tour-offer-go').onclick = () => el.remove();
+  document.body.appendChild(el);
 })();
 
 // The ONE Escape handler (C2) — replaces the six scattered ones. Contextual poppers
@@ -2242,10 +2290,29 @@ function runSearch(q) {
 const timeEl = document.getElementById('time-slider');
 timeEl.addEventListener('input', () => {
   tv = +timeEl.value;
-  document.getElementById('time-date').textContent = tv >= 100 ? 'now' : new Date(selT()).toISOString().slice(0, 10);
+  timeState.atISO = sliderToISO(tv, tMin, tMax);   // publish the playhead date the lenses read
+  document.getElementById('time-date').textContent = timeState.atISO || 'now';
   Graph && Graph.linkDirectionalParticles(particleCount); poke();
 });
-document.getElementById('tb-now').onclick = () => { timeEl.value = 100; tv = 100; document.getElementById('time-date').textContent = 'now'; poke(); };
+// "⟲ now" / live: snap the playhead back to today. Shared with the Time lens's own reset.
+function resetPlayhead() {
+  timeEl.value = 100; tv = 100; timeState.atISO = null;
+  document.getElementById('time-date').textContent = 'now';
+  Graph && Graph.linkDirectionalParticles(particleCount); poke();
+}
+document.getElementById('tb-now').onclick = resetPlayhead;
+// Jump the playhead to a specific ISO date (a "named stop": a quarter start, a history version, a
+// day). Moves the timebar slider to that date and rewinds the constellation — the discrete-jump
+// counterpart to the continuous scrub (DESIGN-temporal §2). A date at/after the newest node (or
+// missing) resolves to live via sliderToISO. Lenses and the inspector History call this.
+function jumpPlayhead(iso) {
+  if (!iso) { resetPlayhead(); return; }
+  const sv = isoToSlider(iso, tMin, tMax);
+  timeEl.value = sv; tv = sv;
+  timeState.atISO = sliderToISO(tv, tMin, tMax);
+  document.getElementById('time-date').textContent = timeState.atISO || 'now';
+  Graph && Graph.linkDirectionalParticles(particleCount); poke();
+}
 
 document.getElementById('z-in').onclick = () => { userCam = true; Graph.zoom(Graph.zoom() * 1.3, 250); poke(); };
 document.getElementById('z-out').onclick = () => { userCam = true; Graph.zoom(Graph.zoom() / 1.3, 250); poke(); };

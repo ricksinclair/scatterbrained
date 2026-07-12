@@ -12,7 +12,7 @@ import { addMessage, setGhost, markInterrupted, renderThread, spokenSplitHtml, a
 import { renderGlyph, renderOrb, orbCaption, orbTitle, subtitleWindow, brainEmptyState } from './voice-presence.js';
 import { esc } from './dom.js';
 import { sttAvailable, createSTT, createRecorderSTT, createTTS, createServerTTS, pickVoice } from './voice-providers.js';
-import { renderAgendaBody, renderSearchBody, renderNodeBody, renderVizBody } from './voice-panels.js';
+import { renderAgendaBody, renderTodayBody, renderSearchBody, renderNodeBody, renderVizBody } from './voice-panels.js';
 import { deriveNodeView } from './node-view.js';
 import { consentView, pickerOptions } from './model-consent.js';
 
@@ -323,6 +323,10 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
         const d = await (await fetch('/api/digest' + (spec.project ? '?project=' + encodeURIComponent(spec.project) : ''))).json();
         title = title || (spec.project ? `What's due · ${spec.project}` : "What's due");
         html = renderAgendaBody(d);
+      } else if (spec.kind === 'today') {
+        const d = await (await fetch('/api/day' + (spec.since_now === false ? '?since_now=0' : ''))).json();
+        title = title || 'Later today';
+        html = renderTodayBody(d);
       } else if (spec.kind === 'search') {
         const s = await (await fetch('/api/search?q=' + encodeURIComponent(spec.q))).json();
         title = title || `Search · ${spec.q}`;
@@ -351,7 +355,7 @@ export function initVoice({ getSelectedId = () => null, getUi = () => null, onNa
     if (openBtn) {
       const card = cardById(messages, openBtn.dataset.panelOpen);
       if (!card) return;
-      if (card.panelKind === 'agenda') onNavigate({ lens: 'time' });
+      if (card.panelKind === 'agenda' || card.panelKind === 'today') onNavigate({ lens: 'time' });
       else if (card.panelKind === 'search') { const q = document.getElementById('q'); if (q) q.focus(); }
       // ↗ always PROMOTES: a node card renders the same compact composition as the inspector,
       // so "open the full view" opens the report (the next altitude up), not the inspector.

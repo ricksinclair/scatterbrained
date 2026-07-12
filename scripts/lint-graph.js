@@ -152,6 +152,18 @@ const CHECKS = [
       RETURN labels(s) AS labels, coalesce(s.title, s.file_path, '<untitled>') AS key`,
   },
   {
+    name: 'project-without-human',
+    severity: 'ERROR',
+    hint: 'Every Project must connect to >=1 Person or Organization — who works on it, who it is for, or who it depends on. A project reachable only through its own Insights and Sources is an island: it never surfaces from a person query, so nobody can ask "what is you working on?" and find it. Usually the fix is (:Person {name:"Ulric Todman"})-[:COLLABORATES_ON]->(project). A bi-temporally invalidated edge (valid_until set) does not count.',
+    cypher: `
+      MATCH (p:Project)
+      WHERE NOT EXISTS {
+        MATCH (p)-[r]-(x)
+        WHERE (x:Person OR x:Organization) AND r.valid_until IS NULL
+      }
+      RETURN labels(p) AS labels, p.name AS key`,
+  },
+  {
     name: 'duplicate-natural-key',
     severity: 'WARN',
     hint: 'Two nodes share a natural key — likely a CREATE that should have been MERGE.',
@@ -263,6 +275,16 @@ const CHECKS = [
         AND NOT (t + '|' + sa + '>' + tb) IN $relShapes
       WITH t, sa, tb, count(*) AS c
       RETURN ['(rel)'] AS labels, t + ': ' + sa + ' -> ' + tb + ' ×' + toString(c) AS key`,
+  },
+  {
+    name: 'orphan-schedule-time',
+    severity: 'ERROR',
+    hint: 'A node carries due_time/review_time with no matching due_at/review_at (day view). A time with no day is a fragment, not a schedule — it can never render on the hour rail. Set the anchor date via the Studio Schedule control, or clear the stray time.',
+    cypher: `
+      MATCH (n)
+      WHERE (n.due_time IS NOT NULL AND n.due_at IS NULL)
+         OR (n.review_time IS NOT NULL AND n.review_at IS NULL)
+      RETURN labels(n) AS labels, coalesce(n.name, n.title, n.summary, n.id, '<unnamed>') AS key`,
   },
   {
     name: 'criterion-invalid',

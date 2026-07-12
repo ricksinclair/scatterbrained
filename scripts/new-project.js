@@ -30,6 +30,11 @@ import { createWorkspace, manifestBlock } from './setup-notion.js';
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const today = new Date().toISOString().slice(0, 10);
 
+// The owner edge is not optional. Without it a new project is an island the moment it is
+// scaffolded — reachable through its own Goal and Source, but never from "what is you working
+// on?". lint:graph's `project-without-human` fails on exactly that.
+const OWNER = 'Ulric Todman';
+
 const GRAPH = `
   MERGE (p:Project {name:$name}) ON CREATE SET p.created_at = datetime()
   SET p.status='active', p.domain=$domain, p.description=$goal,
@@ -37,11 +42,13 @@ const GRAPH = `
   MERGE (g:Goal {name:$goalName}) ON CREATE SET g.created_at = datetime()
   SET g.status='active', g.timeframe=$timeframe, g.description=$goal
   MERGE (g)-[:ACHIEVED_BY]->(p)
+  MERGE (owner:Person {name:$owner}) ON CREATE SET owner.created_at = datetime()
+  MERGE (owner)-[r:COLLABORATES_ON]->(p) ON CREATE SET r.created_at = datetime()
   MERGE (s:Source {title:$name + ' — Workspace'}) ON CREATE SET s.created_at = datetime()
   SET s.source_kind='notion_workspace', s.notion_id=$workspaceId, s.status='active',
       s.url=$workspaceUrl, s.last_synced_at=datetime(), s.tags=$tags
   MERGE (s)-[:INFORMS]->(p)
-  RETURN p.name AS project, g.name AS goal`;
+  RETURN p.name AS project, g.name AS goal, owner.name AS owner`;
 
 export function claudeMd(name, workspaceUrl, e) {
   // List only the databases that were actually scaffolded (Problem Tests is opt-in),
@@ -231,8 +238,10 @@ async function main() {
   if (!dryRun) {
     const driver = getDriver();
     try {
-      const recs = await run(driver, GRAPH, { name, domain, goal, repoUrl, workspaceUrl, workspaceId, tags, goalName: goal, timeframe });
-      graphResult = recs.length ? `Project "${toPlain(recs[0].get('project'))}" + Goal registered` : 'no rows';
+      const recs = await run(driver, GRAPH, { name, domain, goal, repoUrl, workspaceUrl, workspaceId, tags, goalName: goal, timeframe, owner: OWNER });
+      graphResult = recs.length
+        ? `Project "${toPlain(recs[0].get('project'))}" + Goal registered, owner ${toPlain(recs[0].get('owner'))}`
+        : 'no rows';
     } finally { await driver.close(); }
     console.error('  ✓ graph: ' + graphResult);
   }

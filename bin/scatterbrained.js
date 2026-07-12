@@ -6,18 +6,25 @@
 //
 //   studio    launch the Studio (auto-starts Neo4j + demo graph)
 //   capture   drop a note or a web link into a running Studio
-//   status    is the Studio up? what's in the graph?
+//   status    is the Studio up? what's in the graph? am I on the newest release?
+//   backup    export the whole graph to a JSON file (your pre-upgrade safety net)
 //
 // Zero deps, Node stdlib only (http). For the full setup — docker-compose Neo4j,
 // schema, demo graph, and the whole toolkit — clone the repo:
 // https://github.com/ricksinclair/scatterbrained
 import { spawnSync } from 'node:child_process';
 import http from 'node:http';
+import https from 'node:https';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { captureRequest, studioBaseUrl } from '../lib/cli-capture.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const VERSION = (() => {
+  try { return JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || null; }
+  catch { return null; }
+})();
 
 const HELP = `scatterbrained — a second brain you can see
 
@@ -26,7 +33,10 @@ Usage:  scatterbrained <command> [args]
 Commands:
   studio                 launch the Studio (auto-starts Neo4j + a demo graph)
   capture "<text|url>"   drop a note or a web link into the running Studio
-  status                 is the Studio up? and what's in the graph right now?
+  status                 is the Studio up? what's in the graph? newest release?
+  backup [--output <f>]  export the whole graph to a JSON file (default:
+                         ./scatterbrained-backup-<date>.json) — restore with the
+                         repo toolkit's \`npm run import\`
 
 Capture a note anchored to a node:  scatterbrained capture "…" --on <nodeId>
 
@@ -92,7 +102,31 @@ async function capture(args) {
   }
 }
 
+// Registry freshness — a single anonymous dist-tags GET, ONLY here (an explicit
+// `status` invocation): the Studio itself never touches the network beyond localhost.
+// Best-effort: offline / slow / registry-down all resolve to null silently.
+function newestPublished(timeoutMs = 2500) {
+  return new Promise((resolve) => {
+    const req = https.get('https://registry.npmjs.org/-/package/scatterbrained/dist-tags',
+      { timeout: timeoutMs }, (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
+      });
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', () => resolve(null));
+  });
+}
+
 async function status() {
+  if (VERSION) {
+    console.log(`  ● Scatterbrained: v${VERSION}`);
+    const tags = await newestPublished();
+    const newest = tags && (tags.alpha || tags.latest);
+    if (newest && newest !== VERSION) {
+      console.log(`    newest published: v${newest} — upgrade with \`npm i -g scatterbrained@alpha\` (npx users get it automatically)`);
+    }
+  }
   let res;
   try { res = await request('/api/health', null); }
   catch (err) {
@@ -126,6 +160,21 @@ const [cmd, ...rest] = process.argv.slice(2);
 if (!cmd || cmd === 'help' || cmd === '--help' || cmd === '-h') {
   process.stdout.write(HELP);
   process.exit(cmd ? 0 : 1);
+}
+
+if (cmd === '--version' || cmd === '-v' || cmd === 'version') {
+  console.log(VERSION || 'unknown');
+  process.exit(0);
+}
+
+if (cmd === 'backup') {
+  // Wraps the toolkit's export (ships in the package) with a cwd-relative default,
+  // so npx users get a visible file — the package's own dir is hidden in npx's cache.
+  const oi = rest.indexOf('--output');
+  const out = path.resolve(oi >= 0 && rest[oi + 1] ? rest[oi + 1]
+    : `scatterbrained-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts/export-graph.js'), '--output', out], { stdio: 'inherit' });
+  process.exit(res.status ?? 1);
 }
 
 if (cmd === 'studio') {

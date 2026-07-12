@@ -3,6 +3,13 @@
 // Safe to re-run: uses CREATE CONSTRAINT IF NOT EXISTS.
 // Node creation happens via MERGE in the application scripts; this file
 // establishes uniqueness constraints (which also create backing indexes).
+//
+// UPGRADE CONTRACT: schema changes must be ADDITIVE ONLY (new IF NOT EXISTS
+// constraints/indexes). The Studio re-applies this file on every start against
+// graphs created by any earlier version — a rename or drop here would need a
+// versioned migration lane, which deliberately doesn't exist yet. Renaming a
+// label/property = new addition here + data migration handled where the change
+// ships, never a destructive edit to this file.
 // ============================================================================
 
 // ---------------------------------------------------------------------------

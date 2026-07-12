@@ -10,7 +10,39 @@ can follow, then the technical details underneath.
 > believed six months ago and why, with every claim tracing back to its source. No cloud,
 > no subscription — it's yours.
 
-## [Unreleased]
+## [0.2.0-alpha.6] — Know your version, one-command backup, one clock everywhere (2026-07-12)
+
+**TL;DR (explain-like-I'm-5):** You can now always tell **what version you're running** — it's at
+the bottom of the Help menu, and `scatterbrained status` will mention when a newer release is out
+(that check happens only when *you* run the command — the app itself never phones home). Upgrading
+is boring now, the good kind of boring: `scatterbrained backup` saves your whole graph to one file
+first, and after an upgrade the Studio tells you **what's new — once** — then gets out of the way.
+Time also became one clock: the calendar, the agenda, the day view, and the voice assistant all
+look at the same moment, so scrubbing to last March moves *everything* to last March.
+
+**Technical:**
+
+### Added
+- **Version, surfaced.** `/api/version` returns the package version plus the newest release's
+  TL;DR (parsed from the bundled CHANGELOG by the tested `whatsnew.js`); the Help menu shows
+  `v<version>`; after an upgrade a one-time bottom toast announces the change (last-seen marker
+  in localStorage — zero network, the changelog ships in the package).
+- **`scatterbrained backup [--output <f>]`** — exports the whole graph to a JSON file
+  (default `./scatterbrained-backup-<date>.json`), wrapping the toolkit's export so `npx` users
+  get a visible file without a repo clone. Restore with the repo toolkit's `npm run import`.
+- **`scatterbrained status` knows about releases** — prints the installed version and,
+  best-effort, the newest published one with the upgrade command; plus `--version`/`-v`.
+  The registry check runs *only* on explicit `status` invocation, never from the Studio.
+- **One playhead** (temporal coherence, from canonical): the calendar, agenda, day view, and
+  voice assistant share the same temporal playhead with §3 jump-points; the day-view voice panel
+  answers `get_briefing({scope:'today'})` with the later-today hour list; the agenda gains a Day
+  scope control; `/api/node` returns `due_time`/`review_time`.
+
+### Changed
+- **The upgrade contract is now enforced by tests** (`test/cli/upgrade-safety.test.js`): every
+  schema `CREATE` must be `IF NOT EXISTS` (additive-only, documented in `seed-schema.cypher`),
+  and the demo seed must stay gated on fresh-container + empty-graph so an upgrade can never
+  re-seed over user data.
 
 ### Docs
 - **Upgrading, spelled out.** New "Upgrading" sections in the README and getting-started: your

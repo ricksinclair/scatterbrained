@@ -34,9 +34,11 @@ import { IDENTITY_LABELS as ALIAS_LABELS, NAME_FIELDS as ALIAS_NAME_FIELDS, bran
 import { keysLookAlike } from './scripts/lib/identity.js';
 import { searchGraph, demoteSuperseded } from './scripts/search.js';
 import { REL_TYPES, REL_SHAPES, isValidRelType, isValidRelShape, isProvenanceRelType } from './scripts/lib/vocab.js';
-import { isScheduleKind, isIsoDate, isRecurKind } from './public/lib/schedule.js';
+import { isScheduleKind, isIsoDate, isRecurKind, isHhMm, TIME_FIELDS } from './public/lib/schedule.js';
+import { dayView } from './public/lib/agenda.js';
 import { effectiveDate, recurLabel } from './public/lib/recurrence.js';
 import { detectCandidates, normalizeValue, isProtectedFactKind, checkRewrite } from './public/lib/protected-facts.js';
+import { parseChangelogTldr } from './public/lib/whatsnew.js';
 import { NOTE_CYCLE_STATES } from './public/lib/docnotes.js';
 import { VERIFY_STATES, shapeCriteriaLane } from './public/lib/criteria.js';
 import { isWebUrl, isVideoUrl } from './public/lib/links.js';
@@ -59,7 +61,7 @@ import { sttAvailable as sttLocalAvailable, transcribe as sttTranscribe, install
 import { addSession, markCaptured, pruneSessions, sessionsView } from './lib/agent-sessions.js';
 import { resolveReviewProject } from './lib/review-project.js';
 import { cleanTranscript } from './lib/ansi.js';
-import { detectKind, expandRoots, isWithinRoots, pickPrimarySource, excerptAround, TEXT_KINDS } from './lib/source.js';
+import { detectKind, expandRoots, expandHome, isWithinRoots, pickPrimarySource, excerptAround, TEXT_KINDS } from './lib/source.js';
 import { buildModuleGraph, repoInsights, langOf, resolveImport } from './lib/codebase.js';
 import { parseImportBindings, callSites } from './public/lib/symbols.js';
 import { walkRepo } from './lib/repo-index.js';
@@ -102,7 +104,22 @@ let SOURCE_ROOTS = [];
 const REPO_ROOT = [path.join(__dirname, '..'), __dirname]
   .find((b) => { try { return fs.existsSync(path.join(b, 'examples', 'demo-files')); } catch { return false; } }) || path.join(__dirname, '..');
 const DEMO_DIR = path.join(REPO_ROOT, 'examples', 'demo-files');
-const absSrc = (fp) => { const s = String(fp || ''); return s && !path.isAbsolute(s) ? path.resolve(REPO_ROOT, s) : s; };
+// Version + newest release's TL;DR for /api/version — read once at startup. Both files
+// sit beside server.js in the published package; a canonical dev checkout has neither,
+// so this degrades to {version:'dev', tldr:null}. Zero network: the CHANGELOG ships in
+// the tarball, so "what's new" never phones home.
+const VERSION_INFO = (() => {
+  const read = (f) => { try { return fs.readFileSync(path.join(__dirname, f), 'utf8'); } catch { return null; } };
+  let version = 'dev';
+  try { version = JSON.parse(read('package.json')).version || 'dev'; } catch { /* dev checkout */ }
+  return { version, tldr: parseChangelogTldr(read('CHANGELOG.md')) };
+})();
+// Expand `~` FIRST: path.isAbsolute('~/x') is false, so a tilde path would otherwise be
+// treated as repo-relative and resolved to <repo>/~/Projects/… — a path that cannot exist.
+// Hand-MERGEd Sources routinely store `~/…` (40 of 393 in the live graph did), and every
+// one of their viewers reported "Source file not found" for a file sitting on disk.
+// The read sandbox is unaffected: isWithinRoots(realOf(...)) still gates every read.
+const absSrc = (fp) => { const s = expandHome(String(fp || ''), os.homedir()); return s && !path.isAbsolute(s) ? path.resolve(REPO_ROOT, s) : s; };
 // Resolve symlinks before a sandbox check or read, so a symlink INSIDE an allowlisted root can't
 // point outside it (path.resolve is purely lexical — it normalizes `..` but follows no links).
 // realpath throws on a missing path → fall back to the lexical path so the endpoints' normal
@@ -562,6 +579,7 @@ const Q_NODE = `
          n.timeframe AS timeframe, toString(n.target_date) AS target_date,
          toString(n.due_at) AS due_at, toString(n.review_at) AS review_at,
          n.due_every AS due_every, n.review_every AS review_every,
+         n.due_time AS due_time, n.review_time AS review_time,
          n.status AS status, n.jurisdiction AS jurisdiction,
          n.source_kind AS source_kind, n.file_path AS file_path, n.url AS url, n.tags AS tags,
          n { .*, embedding: NULL } AS props,
@@ -759,6 +777,9 @@ async function api(pathname, params) {
     const ids = nodes.map((n) => n.id);
     const links = rows(await run(driver, Q_LINKS, { ids }));
     return { nodes, links, truncated: nodes.length >= limit };
+  }
+  if (pathname === '/api/version') {
+    return VERSION_INFO;
   }
   if (pathname === '/api/health') {
     const [h] = rows(await run(driver, Q_HEALTH));
@@ -981,6 +1002,10 @@ async function api(pathname, params) {
   if (pathname === '/api/digest') {
     // The bucketed intention clock — the agenda panel + local-mode chips read this.
     return voiceDigest(params.project ? String(params.project) : null);
+  }
+  if (pathname === '/api/day') {
+    // Today's hour rail — the day-view voice panel reads this; same rows as get_briefing scope:'today'.
+    return voiceToday({ sinceNow: params.since_now !== '0' && params.since_now !== 'false' });
   }
   if (pathname === '/api/voice/tts/ping') {
     // The local-TTS lane (Kokoro-82M): available → the browser prefers it over Web Speech.
@@ -1354,6 +1379,32 @@ async function voiceDigest(project = null) {
   return { now: today, due: buckets };
 }
 
+// The day scope of get_briefing ("what's scheduled for later today?"). Reads the SAME rows the
+// day view renders — calendar() over [today, today] → the pure dayView — so the spoken answer and
+// the on-screen hour rail can never disagree. Local wall-clock (the Studio runs on the user's
+// machine; times are wall-clock by design — no timezone field). since_now (default) keeps only
+// timed items at or after the current time, plus the untimed "sometime today" tray (still ahead).
+async function voiceToday({ sinceNow = true } = {}) {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  const today = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const nowTime = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const { items } = await calendar({ from: today, to: today });
+  const dv = dayView(items, today, today);
+  const slim = (r) => ({ id: r.id, name: r.name, label: r.label, kind: r.kind, time: r.time });
+  let slots = dv.slots;
+  if (sinceNow) slots = slots
+    .map((s) => ({ ...s, rows: s.rows.filter((r) => r.time >= nowTime) }))
+    .filter((s) => s.rows.length);
+  const timed = slots.flatMap((s) => s.rows.map(slim));
+  const untimed = dv.untimed.map(slim);
+  return {
+    scope: 'today', date: today, now_time: nowTime, since_now: sinceNow,
+    slots: slots.map((s) => ({ hour: s.hour, label: s.label, items: s.rows.map(slim) })),
+    untimed, count: timed.length + untimed.length,
+  };
+}
+
 // Shared read-only Cypher runner (query_graph tool + show_panel kind:viz + a Lens's live re-run).
 // A READ session + executeRead makes Neo4j reject any write clause server-side; 50-row cap, 10s
 // timeout. Returns { rows, truncated } or { error } (message capped for a spoken/echoed context).
@@ -1470,9 +1521,10 @@ const MCP_TOOLS = [
   // ── Phase 4: the project toolset — reports + narrow actions, nothing speculative ──
   {
     name: 'get_briefing',
-    description: 'The project pulse: what is overdue / due today / due this week / upcoming (30-day intention clock), review-queue counts (superseded, orphans), and what is new. Ground every spoken agenda claim in this.',
-    inputSchema: { type: 'object', properties: { project: { type: 'string', description: 'optional project-name filter' } }, required: [] },
+    description: 'The project pulse: what is overdue / due today / due this week / upcoming (30-day intention clock), review-queue counts (superseded, orphans), and what is new. Ground every spoken agenda claim in this. scope:"today" instead answers "what is scheduled for later today?" — today\'s timed items (hour by hour) plus the untimed "sometime today" tray, the same rows the Day view renders; since_now (default true) keeps only what is still ahead in the day.',
+    inputSchema: { type: 'object', properties: { project: { type: 'string', description: 'optional project-name filter (ignored for scope:"today")' }, scope: { enum: ['default', 'today'], description: 'default = the 30-day pulse; today = later-today hour list' }, since_now: { type: 'boolean', description: 'scope:"today" only — keep only items at/after the current time (default true)' } }, required: [] },
     handler: async (args) => {
+      if (args.scope === 'today') return await voiceToday({ sinceNow: args.since_now !== false });
       const digest = await voiceDigest(args.project || null);
       const [sup, orph, wnew] = await Promise.all([run(driver, Q_SUPERSEDED), run(driver, Q_ORPHAN_LIST), run(driver, Q_WHATSNEW)]);
       return {
@@ -1504,6 +1556,7 @@ const MCP_TOOLS = [
         node: {
           id: node.id, name: node.name, label: node.label, desc: node.desc, status: node.status,
           tags: node.tags, created_at: node.created_at, due_at: node.due_at, review_at: node.review_at,
+          due_time: node.due_time, review_time: node.review_time,
           target_date: node.target_date, superseded: !!node.valid_until,
           edges: (node.edges || []).slice(0, 40).map((e) => ({ type: e.type, dir: e.dir, name: e.name, label: e.label, id: e.id })),
         },
@@ -1537,8 +1590,8 @@ const MCP_TOOLS = [
   },
   {
     name: 'show_panel',
-    description: 'Render a rich card inline in the conversation while you speak — show while you tell. kind:"agenda" (what\'s due, optional project filter), kind:"node" (a node id from search_nodes, optional components subset), kind:"search" (result list for q), kind:"viz" (a CHART of graph data — pass a read-only cypher to run live, OR rows you already have from query_graph/get_graph_stats; an optional spec {kind:bar|histogram|line|scatter,…} styles it, else a sensible default is chosen). Errors echo the allowed values.',
-    inputSchema: { type: 'object', properties: { kind: { enum: ['agenda', 'node', 'search', 'viz'] }, title: { type: 'string' }, node_id: { type: 'string' }, components: { type: 'array', description: 'optional subset of the voice-panel component set' }, q: { type: 'string' }, project: { type: 'string' }, cypher: { type: 'string', description: 'viz: a read-only Cypher to run for the chart data' }, rows: { type: 'array', description: 'viz: result objects to chart (instead of cypher)' }, params: { type: 'object', description: 'viz: parameters for the cypher' }, spec: { type: 'object', description: 'viz: an explicit chart spec; omit to auto-pick' } }, required: ['kind'] },
+    description: 'Render a rich card inline in the conversation while you speak — show while you tell. kind:"agenda" (what\'s due, optional project filter), kind:"today" (the hour rail for later today — pairs with get_briefing scope:"today"; since_now defaults true), kind:"node" (a node id from search_nodes, optional components subset), kind:"search" (result list for q), kind:"viz" (a CHART of graph data — pass a read-only cypher to run live, OR rows you already have from query_graph/get_graph_stats; an optional spec {kind:bar|histogram|line|scatter,…} styles it, else a sensible default is chosen). Errors echo the allowed values.',
+    inputSchema: { type: 'object', properties: { kind: { enum: ['agenda', 'today', 'node', 'search', 'viz'] }, title: { type: 'string' }, node_id: { type: 'string' }, components: { type: 'array', description: 'optional subset of the voice-panel component set' }, q: { type: 'string' }, project: { type: 'string' }, since_now: { type: 'boolean', description: 'today: keep only items still ahead (default true)' }, cypher: { type: 'string', description: 'viz: a read-only Cypher to run for the chart data' }, rows: { type: 'array', description: 'viz: result objects to chart (instead of cypher)' }, params: { type: 'object', description: 'viz: parameters for the cypher' }, spec: { type: 'object', description: 'viz: an explicit chart spec; omit to auto-pick' } }, required: ['kind'] },
     handler: async (args) => {
       const v = validatePanel(args);
       if (v.error) return { isError: true, ...v.error };
@@ -1934,7 +1987,7 @@ async function setGoalTargetDate({ id, date } = {}) {
 // NARROW: `kind` must be in the closed SCHEDULE_KINDS set (due_at/review_at) so the only
 // property name reaching the query is an allowlisted identifier (never user text); `when`
 // is ISO-validated. The writer half of the intention clock the calendar + agenda read.
-async function setSchedule({ id, kind, when, every } = {}) {
+async function setSchedule({ id, kind, when, every, time } = {}) {
   const nid = String(id || '');
   if (!nid) return { error: 'id required' };
   if (!isScheduleKind(kind)) return { error: 'kind must be due_at or review_at' };
@@ -1944,18 +1997,25 @@ async function setSchedule({ id, kind, when, every } = {}) {
   // Stored beside the anchor as due_every / review_every; clearing the date clears its cadence.
   const ev = (every == null || every === '') ? null : String(every);
   if (ev !== null && !isRecurKind(ev)) return { error: 'every must be a cadence (daily…yearly) or empty' };
+  // optional time-of-day (day view): a strict 'HH:MM' 24h wall-clock or empty to clear. Stored
+  // beside the anchor as due_time / review_time; clearing the date clears its time (a time with
+  // no day is a fragment, not a schedule — lint:graph enforces the same rule server-side).
+  const tm = (time == null || time === '') ? null : String(time);
+  if (tm !== null && !isHhMm(tm)) return { error: 'time must be HH:MM 24h (or empty to clear)' };
   // `kind` is allowlisted (isScheduleKind) so the derived property names are safe identifiers,
   // never user text — same trust-boundary posture as the single-prop setter it extends.
   const everyProp = kind.replace(/_at$/, '_every');   // due_at→due_every, review_at→review_every
+  const timeProp = TIME_FIELDS[kind];                  // due_at→due_time,  review_at→review_time
   const recs = await run(driver,
     `MATCH (n) WHERE elementId(n) = $id
      SET n.\`${kind}\` = CASE WHEN $d IS NULL THEN null ELSE date($d) END,
-         n.\`${everyProp}\` = CASE WHEN $d IS NULL THEN null ELSE $ev END
-     RETURN toString(n.\`${kind}\`) AS value, n.\`${everyProp}\` AS every`,
-    { id: nid, d, ev });
+         n.\`${everyProp}\` = CASE WHEN $d IS NULL THEN null ELSE $ev END,
+         n.\`${timeProp}\` = CASE WHEN $d IS NULL THEN null ELSE $tm END
+     RETURN toString(n.\`${kind}\`) AS value, n.\`${everyProp}\` AS every, n.\`${timeProp}\` AS time`,
+    { id: nid, d, ev, tm });
   if (!recs.length) return { error: 'node not found' };
   const rec = toPlain(recs[0].toObject());
-  return { ok: true, kind, value: rec.value, every: rec.every };
+  return { ok: true, kind, value: rec.value, every: rec.every, time: rec.time };
 }
 
 // First-run onboarding (#6): bootstrap ONE root owner node on a fresh/empty graph so every later
@@ -2153,34 +2213,36 @@ async function calendar({ from, to } = {}) {
   const t = /^\d{4}-\d{2}-\d{2}$/.test(String(to)) ? String(to) : null;
   if (!f || !t) return { items: [] };
   // `recur` (due_every/review_every, rank 8) rides along on the due/review rows so the client
-  // can expand occurrences within the window; null on the record-time / target branches. Every
-  // UNION branch returns the same columns (date, kind, id, name, label, recur).
+  // can expand occurrences within the window; null on the record-time / target branches. `time`
+  // (due_time/review_time, day view) rides along the same way so the hour rail can place a timed
+  // item; null everywhere it has no meaning. Every UNION branch returns the same columns
+  // (date, kind, id, name, label, recur, time).
   const q = `
     MATCH (n) WHERE n.created_at IS NOT NULL AND date(n.created_at) >= date($from) AND date(n.created_at) <= date($to)
     RETURN toString(date(n.created_at)) AS date, 'created' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, null AS recur
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, null AS recur, null AS time
     UNION
     MATCH (n) WHERE n.valid_until IS NOT NULL AND date(n.valid_until) >= date($from) AND date(n.valid_until) <= date($to)
     RETURN toString(date(n.valid_until)) AS date, 'expiry' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, null AS recur
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, null AS recur, null AS time
     UNION
     MATCH (g:Goal) WHERE g.target_date IS NOT NULL AND date(g.target_date) >= date($from) AND date(g.target_date) <= date($to)
     RETURN toString(g.target_date) AS date, 'target' AS kind, elementId(g) AS id,
-           coalesce(g.name, g.title) AS name, 'Goal' AS label, null AS recur
+           coalesce(g.name, g.title) AS name, 'Goal' AS label, null AS recur, null AS time
     UNION
     MATCH (n) WHERE n.due_at IS NOT NULL AND date(n.due_at) <= date($to)
       AND (n.due_every IS NOT NULL OR date(n.due_at) >= date($from))
     RETURN toString(date(n.due_at)) AS date, 'due' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, n.due_every AS recur
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, n.due_every AS recur, n.due_time AS time
     UNION
     MATCH (n) WHERE n.review_at IS NOT NULL AND date(n.review_at) <= date($to)
       AND (n.review_every IS NOT NULL OR date(n.review_at) >= date($from))
     RETURN toString(date(n.review_at)) AS date, 'review' AS kind, elementId(n) AS id,
            coalesce(n.name, n.title, n.summary, n.id) AS name,
-           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, n.review_every AS recur`;
+           [l IN labels(n) WHERE l <> 'Embeddable'][0] AS label, n.review_every AS recur, n.review_time AS time`;
   return { items: rows(await run(driver, q, { from: f, to: t })) };
 }
 

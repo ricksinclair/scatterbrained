@@ -23,6 +23,9 @@ describe('validatePanel', () => {
     expect(validatePanel({ kind: 'agenda' })).toEqual({ spec: { kind: 'agenda' } });
     expect(validatePanel({ kind: 'agenda', project: 'Scatterbrained' }).spec.project).toBe('Scatterbrained');
     expect(validatePanel({ kind: 'search', q: '  voice  ' }).spec.q).toBe('voice');
+    expect(validatePanel({ kind: 'today' })).toEqual({ spec: { kind: 'today' } });
+    expect(validatePanel({ kind: 'today', since_now: false }).spec.since_now).toBe(false);
+    expect(validatePanel({ kind: 'today', since_now: 'yes' }).error.code).toBe('bad_params');
     const node = validatePanel({ kind: 'node', node_id: 'abc', components: ['markdown', 'relations', 'markdown'] });
     expect(node.spec.components).toEqual(['markdown', 'relations']);   // deduped
   });
