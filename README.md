@@ -16,7 +16,8 @@ See → Understand → Act, all on your own machine, no cloud.
 - **Constellation** — your whole graph as a force-directed map; focus, search, filter, time-travel.
 - **Composable inspector** — click any node and the panel *builds itself* from what the node is:
   sources (provenance), typed relations, body/excerpt, and history.
-- **Protected facts** — pin a verified number, amount, date, or citation; a later rewrite can't
+- **Protected facts** — pin anything you've verified and want locked in — a number is the obvious
+  example, but a date, a citation, a name, an exact phrase all work; a later rewrite can't
   silently change it — the change is queued for your approval, bi-temporally (history kept;
   removals are reversible from a "retired" list).
 - **Graph-native code review** — review a repo frozen at a commit; line comments live in the graph.

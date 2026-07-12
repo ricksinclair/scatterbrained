@@ -23,6 +23,11 @@ can follow, then the technical details underneath.
   32k by default (`SLIPWAY_NUM_CTX`). Also documented that the optional semantic-search lane
   fetches its embedding model (`Xenova/bge-small-en-v1.5`, ~30 MB) from Hugging Face once, then
   embeds fully on-device. New getting-started glossary entries for Hugging Face and Ollama.
+- **Protected facts: numbers are the example, not the definition.** The README, site, tour, and
+  built-in manual no longer describe protected facts as "a number, date, or citation" — a pin
+  takes **any value you want locked in** (a name, an identifier, an exact phrase); numbers,
+  dates, amounts, and citations are just the kinds the detector can auto-suggest. The feature
+  always worked this way (`kind` falls back to `other`); the docs undersold it.
 
 ## [0.2.0-alpha.4] — Talk to your map, fully on your own machine (2026-07-09)
 

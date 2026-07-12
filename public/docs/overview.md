@@ -21,8 +21,9 @@ Your knowledge is **one graph, viewed at many altitudes**:
   saved chart lenses (live queries). Same graph, different zoom.
 - **Bi-temporal honesty.** Facts are never silently deleted. A superseded fact
   gets `valid_until` and `superseded_by` — history is kept, and current views
-  simply skip what's expired. Protected facts go further: a pinned number,
-  date, or citation can't be rewritten without your explicit approval.
+  simply skip what's expired. Protected facts go further: any pinned value —
+  a number is the classic example, but a date, a citation, a name, an exact
+  phrase all work — can't be rewritten without your explicit approval.
 
 ## The loop
 

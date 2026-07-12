@@ -34,7 +34,9 @@ it exists, where it lives, and what it informed.**
 
 ## Protected facts
 
-A verified number, date, amount, or citation can be **pinned** to a node.
+Any value worth locking in can be **pinned** to a node. Numbers, dates,
+amounts, and citations are the examples the detector auto-suggests from the
+text, but a pin takes any string — a name, an identifier, an exact phrase.
 After that, no rewrite — an LLM polish, a sync pass, a hand edit — can
 silently change it: the change is queued in *Needs review* for your explicit
 approval, and history is kept either way. Pin the things you'd be angry to
